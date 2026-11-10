@@ -1,0 +1,19 @@
+TAREA: Escribe pruebas JUnit nuevas para la clase $clase.
+  - No modifiques las pruebas existentes.
+  - Usa solo la API pública de la clase.
+  - Cada prueba verifica un comportamiento con aserciones explícitas.
+  - Devuelve un único archivo Java compilable, dentro de un bloque ```java.
+  - El archivo declara el paquete `$paquete` y la clase pública `$clase_test`.
+  - Usa JUnit 4 (org.junit.Test y org.junit.Assert) y solo clases del proyecto o de Java 11.
+
+CONTEXTO COMÚN
+Código de la clase `$clase`:
+```java
+$codigo_clase
+```
+
+Clase de prueba existente `$test_original`:
+```java
+$codigo_test
+```
+$bloque

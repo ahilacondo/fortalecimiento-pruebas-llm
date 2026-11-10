@@ -1,0 +1,10 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+$errores
+
+Archivo anterior:
+```java
+$codigo_previo
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `$paquete` y la clase pública `$clase_test`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

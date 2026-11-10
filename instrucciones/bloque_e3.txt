@@ -1,0 +1,7 @@
+
+BLOQUE E3. Registro de ejecución de la suite:
+$registro
+
+Comportamientos que las pruebas existentes no verifican (resultado de la fase 1):
+$lista
+Genera pruebas para esa lista (fase 2).

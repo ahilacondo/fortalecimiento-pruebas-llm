@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Secretos: NUNCA subir la clave de la API
+.env
+# Datos simulados y salidas locales
+resultados/*simulad*
+analisis/salida/
+# Trabajo local de Defects4J (miles de archivos)
+d4j_trabajo/
+
+# Las instrucciones enviadas a Claude pesan mucho y se regeneran con el código
+resultados/registros/**/*_prompt.txt

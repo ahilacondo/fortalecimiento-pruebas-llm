@@ -1,0 +1,11 @@
+caso,clase,motivo
+Lang-6,org.apache.commons.lang3.text.translate.CharSequenceTranslator,no existe la clase de prueba CharSequenceTranslatorTest
+Cli-10,org.apache.commons.cli.Parser,no existe la clase de prueba ParserTest
+Cli-3,org.apache.commons.cli.TypeHandler,no existe la clase de prueba TypeHandlerTest
+Cli-39,org.apache.commons.cli.TypeHandler,no existe la clase de prueba TypeHandlerTest
+Cli-14,org.apache.commons.cli2.option.GroupImpl,no existe la clase de prueba GroupImplTest
+Cli-7,org.apache.commons.cli2.builder.PatternBuilder,no existe la clase de prueba PatternBuilderTest
+Cli-4,org.apache.commons.cli.Parser,no existe la clase de prueba ParserTest
+Cli-1,org.apache.commons.cli.CommandLine,no existe la clase de prueba CommandLineTest
+Codec-12,org.apache.commons.codec.binary.BaseNCodecInputStream,no existe la clase de prueba BaseNCodecInputStreamTest
+Csv-3,org.apache.commons.csv.Lexer,no existe la clase de prueba LexerTest

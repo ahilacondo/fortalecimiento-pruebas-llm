@@ -1,0 +1,11 @@
+proyecto,fallo,clase
+Lang,29,org.apache.commons.lang3.SystemUtils
+Lang,36,org.apache.commons.lang3.math.NumberUtils
+Lang,63,org.apache.commons.lang.time.DurationFormatUtils
+Lang,41,org.apache.commons.lang.ClassUtils
+Lang,30,org.apache.commons.lang3.StringUtils
+Lang,10,org.apache.commons.lang3.time.FastDateParser
+Lang,62,org.apache.commons.lang.Entities
+Lang,32,org.apache.commons.lang3.builder.HashCodeBuilder
+Lang,26,org.apache.commons.lang3.time.FastDateFormat
+Lang,33,org.apache.commons.lang3.ClassUtils

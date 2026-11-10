@@ -1,0 +1,16 @@
+FASE 1. Analiza el código de la clase `$clase`, la clase de prueba existente y el registro de ejecución de la suite.
+Lista como máximo $max comportamientos de la clase que las pruebas existentes no verifican.
+Responde solo con una lista numerada, una línea por elemento, sin código.
+
+Código de la clase:
+```java
+$codigo_clase
+```
+
+Clase de prueba existente `$test_original`:
+```java
+$codigo_test
+```
+
+Registro de ejecución de la suite:
+$registro

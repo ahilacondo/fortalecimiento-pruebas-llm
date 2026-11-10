@@ -1,0 +1,11 @@
+proyecto,fallo,clase
+Codec,9,org.apache.commons.codec.binary.Base64
+Codec,6,org.apache.commons.codec.binary.Base64InputStream
+Codec,4,org.apache.commons.codec.binary.Base64
+Codec,18,org.apache.commons.codec.binary.StringUtils
+Codec,15,org.apache.commons.codec.language.Soundex
+Codec,3,org.apache.commons.codec.language.DoubleMetaphone
+Codec,2,org.apache.commons.codec.binary.Base64
+Codec,16,org.apache.commons.codec.binary.Base32
+Codec,17,org.apache.commons.codec.binary.StringUtils
+Codec,10,org.apache.commons.codec.language.Caverphone

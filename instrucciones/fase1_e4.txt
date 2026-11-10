@@ -1,0 +1,16 @@
+FASE 1. Contrasta la documentación (Javadoc) de la clase `$clase` con la clase de prueba existente.
+Lista como máximo $max requisitos de la documentación que las pruebas existentes no verifican.
+Responde solo con una lista numerada, una línea por elemento, sin código.
+
+Documentación (Javadoc) de la clase:
+$javadoc
+
+Código de la clase:
+```java
+$codigo_clase
+```
+
+Clase de prueba existente `$test_original`:
+```java
+$codigo_test
+```

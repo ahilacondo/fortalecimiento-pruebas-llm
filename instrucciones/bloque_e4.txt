@@ -1,0 +1,7 @@
+
+BLOQUE E4. Documentación (Javadoc) de la clase:
+$javadoc
+
+Requisitos de la documentación que las pruebas existentes no verifican (resultado de la fase 1):
+$lista
+Genera pruebas para esos requisitos (fase 2).

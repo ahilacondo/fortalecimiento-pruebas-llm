@@ -1,0 +1,3 @@
+
+BLOQUE E2. Líneas y ramas que la suite no ejecuta:
+$informe
