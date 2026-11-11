@@ -1,0 +1,8 @@
+1. Las constantes de propiedades de texto (por ejemplo FILE_SEPARATOR, LINE_SEPARATOR, PATH_SEPARATOR, USER_NAME y OS_ARCH) no se comparan con el valor que devuelve la propiedad del sistema correspondiente.
+2. getSystemProperty devuelve null y escribe un mensaje en System.err cuando se lanza una SecurityException; no hay ninguna prueba de este camino.
+3. USER_COUNTRY toma user.region como valor de respaldo cuando user.country es null, y ese caso no se verifica.
+4. JAVA_VERSION_TRIMMED elimina los caracteres no numéricos iniciales y devuelve null si JAVA_VERSION es null; ninguna prueba cubre estos casos.
+5. JAVA_VERSION_FLOAT y JAVA_VERSION_INT no se comparan con el valor esperado derivado de JAVA_VERSION; las pruebas existentes solo hacen comparaciones relativas (mayor o igual, con desplazamientos).
+6. La conversión a entero (toJavaVersionInt) nunca se prueba, y la coincidencia por prefijo de versiones no distingue casos como "1.1" frente a "1.10".
+7. Varias constantes de sistema operativo no tienen prueba: IS_OS_AIX, IS_OS_HP_UX, IS_OS_IRIX, las variantes de Windows (2000, 95, 98, ME, NT, XP, Vista y 7), y la composición de IS_OS_UNIX para AIX, HP-UX e Irix.
+8. isOSMatch devuelve false cuando solo la versión del sistema operativo es null con un nombre no nulo; las pruebas solo cubren el caso con ambos valores null o con un nombre vacío.

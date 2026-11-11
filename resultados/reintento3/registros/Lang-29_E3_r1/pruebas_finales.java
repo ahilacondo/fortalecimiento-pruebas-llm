@@ -1,0 +1,403 @@
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.PrintStream;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.Permission;
+import java.util.Arrays;
+import java.util.PropertyPermission;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link SystemUtils}. No modifican ni sustituyen a {@code SystemUtilsTest}.
+ */
+public class SystemUtilsLLMTest {
+
+    private static final String FORBIDDEN_PROPERTY = "llm.test.forbidden.property";
+    private static final String ALLOWED_PROPERTY = "llm.test.allowed.property";
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private static String osName() {
+        return System.getProperty("os.name");
+    }
+
+    private static String osVersion() {
+        return System.getProperty("os.version");
+    }
+
+    private static boolean nameStartsWith(String prefix) {
+        String n = osName();
+        return n != null && n.startsWith(prefix);
+    }
+
+    private static boolean nameAndVersionMatch(String namePrefix, String versionPrefix) {
+        String n = osName();
+        String v = osVersion();
+        return n != null && v != null && n.startsWith(namePrefix) && v.startsWith(versionPrefix);
+    }
+
+    /** Devuelve los primeros {@code max} grupos numéricos de {@code v}. */
+    private static int[] firstNumbers(String v, int max) {
+        if (v == null) {
+            return new int[0];
+        }
+        int[] tmp = new int[max];
+        int n = 0;
+        Matcher m = Pattern.compile("\\d+").matcher(v);
+        while (n < max && m.find()) {
+            tmp[n++] = Integer.parseInt(m.group());
+        }
+        return Arrays.copyOf(tmp, n);
+    }
+
+    private static float expectedJavaVersionFloat(String v) {
+        int[] parts = firstNumbers(v, 3);
+        if (parts.length == 0) {
+            return 0f;
+        }
+        if (parts.length == 1) {
+            return parts[0];
+        }
+        StringBuilder b = new StringBuilder();
+        b.append(parts[0]).append('.');
+        for (int i = 1; i < parts.length; i++) {
+            b.append(parts[i]);
+        }
+        return Float.parseFloat(b.toString());
+    }
+
+    private static int expectedJavaVersionInt(String v) {
+        int[] parts = firstNumbers(v, 3);
+        int r = 0;
+        if (parts.length >= 1) {
+            r += parts[0] * 100;
+        }
+        if (parts.length >= 2) {
+            r += parts[1] * 10;
+        }
+        if (parts.length >= 3) {
+            r += parts[2];
+        }
+        return r;
+    }
+
+    private static String invokeGetSystemProperty(String name) throws Exception {
+        Method m = SystemUtils.class.getDeclaredMethod("getSystemProperty", String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, name);
+    }
+
+    /** SecurityManager que deniega solo la lectura de {@link #FORBIDDEN_PROPERTY}. */
+    private static class DenyForbiddenPropertySecurityManager extends SecurityManager {
+        @Override
+        public void checkPermission(Permission perm) {
+            if (perm instanceof PropertyPermission
+                    && perm.getName().equals(FORBIDDEN_PROPERTY)
+                    && perm.getActions().contains("read")) {
+                throw new SecurityException("lectura denegada en la prueba");
+            }
+        }
+
+        @Override
+        public void checkPermission(Permission perm, Object context) {
+            checkPermission(perm);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Constantes de propiedades de texto
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFileSeparatorMatchesSystemProperty() {
+        assertEquals(System.getProperty("file.separator"), SystemUtils.FILE_SEPARATOR);
+        assertEquals(File.separator, SystemUtils.FILE_SEPARATOR);
+    }
+
+    @Test
+    public void testLineSeparatorMatchesSystemProperty() {
+        assertEquals(System.getProperty("line.separator"), SystemUtils.LINE_SEPARATOR);
+    }
+
+    @Test
+    public void testPathSeparatorMatchesSystemProperty() {
+        assertEquals(System.getProperty("path.separator"), SystemUtils.PATH_SEPARATOR);
+    }
+
+    @Test
+    public void testUserNameMatchesSystemProperty() {
+        assertEquals(System.getProperty("user.name"), SystemUtils.USER_NAME);
+    }
+
+    @Test
+    public void testOsArchMatchesSystemProperty() {
+        assertEquals(System.getProperty("os.arch"), SystemUtils.OS_ARCH);
+    }
+
+    // ------------------------------------------------------------------
+    // 2. getSystemProperty con SecurityException
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetSystemPropertyReturnsValueWithoutSecurityManager() throws Exception {
+        System.setProperty(ALLOWED_PROPERTY, "valor-permitido");
+        try {
+            assertEquals("valor-permitido", invokeGetSystemProperty(ALLOWED_PROPERTY));
+        } finally {
+            System.clearProperty(ALLOWED_PROPERTY);
+        }
+    }
+
+    @Test
+    public void testGetSystemPropertyReturnsNullAndWritesToStderrOnSecurityException() throws Exception {
+        SecurityManager previous = System.getSecurityManager();
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream capturing = new PrintStream(errBuffer, true, StandardCharsets.UTF_8.name());
+        System.setProperty(FORBIDDEN_PROPERTY, "secreto");
+        String value;
+        try {
+            System.setErr(capturing);
+            System.setSecurityManager(new DenyForbiddenPropertySecurityManager());
+            value = invokeGetSystemProperty(FORBIDDEN_PROPERTY);
+        } finally {
+            System.setSecurityManager(previous);
+            System.setErr(originalErr);
+            System.clearProperty(FORBIDDEN_PROPERTY);
+        }
+        capturing.flush();
+        String err = errBuffer.toString(StandardCharsets.UTF_8.name());
+
+        assertNull(value);
+        assertTrue("El mensaje de error debe mencionar la propiedad: " + err,
+                err.contains("Caught a SecurityException reading the system property '" + FORBIDDEN_PROPERTY + "'"));
+    }
+
+    // ------------------------------------------------------------------
+    // 3. USER_COUNTRY con respaldo en user.region
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testUserCountryFallsBackToUserRegionWhenCountryIsNull() {
+        String country = System.getProperty("user.country");
+        String region = System.getProperty("user.region");
+        if (country == null) {
+            assertEquals(region, SystemUtils.USER_COUNTRY);
+        } else {
+            assertEquals(country, SystemUtils.USER_COUNTRY);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4. JAVA_VERSION_TRIMMED
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testJavaVersionTrimmedRemovesLeadingNonDigits() {
+        String version = SystemUtils.JAVA_VERSION;
+        String trimmed = SystemUtils.JAVA_VERSION_TRIMMED;
+        if (version == null) {
+            assertNull(trimmed);
+            return;
+        }
+        int idx = -1;
+        for (int i = 0; i < version.length(); i++) {
+            char ch = version.charAt(i);
+            if (ch >= '0' && ch <= '9') {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            assertNull(trimmed);
+        } else {
+            assertEquals(version.substring(idx), trimmed);
+        }
+    }
+
+    @Test
+    public void testJavaVersionTrimmedStartsWithDigitWhenPresent() {
+        String trimmed = SystemUtils.JAVA_VERSION_TRIMMED;
+        if (trimmed != null) {
+            assertTrue("Debe empezar por un dígito: " + trimmed,
+                    Character.isDigit(trimmed.charAt(0)));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. JAVA_VERSION_FLOAT y JAVA_VERSION_INT frente a JAVA_VERSION
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testJavaVersionFloatMatchesExpectedFromJavaVersion() {
+        String version = SystemUtils.JAVA_VERSION;
+        assertEquals(expectedJavaVersionFloat(version), SystemUtils.JAVA_VERSION_FLOAT, 0.0001f);
+    }
+
+    @Test
+    public void testJavaVersionIntMatchesExpectedFromJavaVersion() {
+        String version = SystemUtils.JAVA_VERSION;
+        assertEquals(expectedJavaVersionInt(version), SystemUtils.JAVA_VERSION_INT);
+    }
+
+    @Test
+    public void testJavaVersionFloatAndIntAreZeroWhenJavaVersionIsNull() {
+        if (SystemUtils.JAVA_VERSION == null) {
+            assertEquals(0f, SystemUtils.JAVA_VERSION_FLOAT, 0f);
+            assertEquals(0, SystemUtils.JAVA_VERSION_INT);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Conversión a entero y coincidencia por prefijo de versión
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToJavaVersionIntForOneDotOneIsOneHundredTen() {
+        assertEquals(110f, SystemUtils.toJavaVersionInt("1.1"), 0f);
+    }
+
+    @Test
+    public void testToJavaVersionIntForOneDotTenIsTwoHundred() {
+        assertEquals(200f, SystemUtils.toJavaVersionInt("1.10"), 0f);
+    }
+
+    @Test
+    public void testToJavaVersionIntIgnoresPatchAndUpdateParts() {
+        assertEquals(131f, SystemUtils.toJavaVersionInt("1.3.1"), 0f);
+        assertEquals(180f, SystemUtils.toJavaVersionInt("1.8.0_292"), 0f);
+    }
+
+    @Test
+    public void testToJavaVersionIntReturnsZeroForNullOrEmpty() {
+        assertEquals(0f, SystemUtils.toJavaVersionInt(null), 0f);
+        assertEquals(0f, SystemUtils.toJavaVersionInt(""), 0f);
+    }
+
+    @Test
+    public void testJavaVersionMatchIsPrefixBasedSoOneDotOneMatchesOneDotTen() {
+        // Comportamiento actual: coincidencia por prefijo de cadena; "1.10" empieza por "1.1".
+        assertTrue(SystemUtils.isJavaVersionMatch("1.10", "1.1"));
+    }
+
+    @Test
+    public void testJavaVersionMatchRejectsDifferentMajorWithCommonDigits() {
+        assertFalse(SystemUtils.isJavaVersionMatch("1.10", "1.2"));
+    }
+
+    // ------------------------------------------------------------------
+    // 7. Constantes de sistema operativo no cubiertas
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIsOsAixMatchesOsName() {
+        assertEquals(nameStartsWith("AIX"), SystemUtils.IS_OS_AIX);
+    }
+
+    @Test
+    public void testIsOsHpUxMatchesOsName() {
+        assertEquals(nameStartsWith("HP-UX"), SystemUtils.IS_OS_HP_UX);
+    }
+
+    @Test
+    public void testIsOsIrixMatchesOsName() {
+        assertEquals(nameStartsWith("Irix"), SystemUtils.IS_OS_IRIX);
+    }
+
+    @Test
+    public void testIsOsWindows2000MatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows", "5.0"), SystemUtils.IS_OS_WINDOWS_2000);
+    }
+
+    @Test
+    public void testIsOsWindows95MatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows 9", "4.0"), SystemUtils.IS_OS_WINDOWS_95);
+    }
+
+    @Test
+    public void testIsOsWindows98MatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows 9", "4.1"), SystemUtils.IS_OS_WINDOWS_98);
+    }
+
+    @Test
+    public void testIsOsWindowsMeMatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows", "4.9"), SystemUtils.IS_OS_WINDOWS_ME);
+    }
+
+    @Test
+    public void testIsOsWindowsNtMatchesOsName() {
+        assertEquals(nameStartsWith("Windows NT"), SystemUtils.IS_OS_WINDOWS_NT);
+        if (SystemUtils.IS_OS_WINDOWS_NT) {
+            assertTrue(SystemUtils.IS_OS_WINDOWS);
+            assertFalse(SystemUtils.IS_OS_UNIX);
+        }
+    }
+
+    @Test
+    public void testIsOsWindowsXpMatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows", "5.1"), SystemUtils.IS_OS_WINDOWS_XP);
+    }
+
+    @Test
+    public void testIsOsWindowsVistaMatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows", "6.0"), SystemUtils.IS_OS_WINDOWS_VISTA);
+    }
+
+    @Test
+    public void testIsOsWindows7MatchesNameAndVersion() {
+        assertEquals(nameAndVersionMatch("Windows", "6.1"), SystemUtils.IS_OS_WINDOWS_7);
+    }
+
+    @Test
+    public void testIsOsUnixCompositionIncludesAixHpUxAndIrix() {
+        boolean expected = nameStartsWith("AIX")
+                || nameStartsWith("HP-UX")
+                || nameStartsWith("Irix")
+                || nameStartsWith("Linux")
+                || nameStartsWith("LINUX")
+                || nameStartsWith("Mac OS X")
+                || nameStartsWith("Solaris")
+                || nameStartsWith("SunOS");
+        assertEquals(expected, SystemUtils.IS_OS_UNIX);
+    }
+
+    @Test
+    public void testIsOsUnixIsTrueWhenAixHpUxOrIrixIsDetected() {
+        if (SystemUtils.IS_OS_AIX || SystemUtils.IS_OS_HP_UX || SystemUtils.IS_OS_IRIX) {
+            assertTrue(SystemUtils.IS_OS_UNIX);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 8. isOSMatch con versión null y nombre no nulo
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIsOSMatchReturnsFalseWhenOsVersionIsNullAndNameIsNotNull() {
+        assertFalse(SystemUtils.isOSMatch("Linux", null, "Linux", "5"));
+    }
+
+    @Test
+    public void testIsOSMatchReturnsFalseWhenOsNameIsNullAndVersionIsNotNull() {
+        assertFalse(SystemUtils.isOSMatch(null, "5.1", "Windows", "5.1"));
+    }
+
+    @Test
+    public void testIsOSMatchReturnsTrueWhenNameAndVersionPrefixesMatch() {
+        assertTrue(SystemUtils.isOSMatch("Windows 10", "10.0", "Windows", "10.0"));
+    }
+}
