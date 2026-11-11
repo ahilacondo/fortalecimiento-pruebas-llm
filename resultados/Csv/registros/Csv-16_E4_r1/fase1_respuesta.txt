@@ -1,0 +1,8 @@
+1. El factory `parse(InputStream, Charset, CSVFormat)` no tiene ninguna prueba, ni de lectura ni de la excepción por `inputStream` nulo.
+2. El factory `parse(Path, Charset, CSVFormat)` no tiene ninguna prueba, ni de lectura ni de la excepción por `path` nulo.
+3. El factory `parse(URL, Charset, CSVFormat)` no comprueba la excepción `IllegalArgumentException` cuando `url` es nulo.
+4. `getRecords()` debe empezar en la posición actual del parser, y los registros ya consumidos no deben aparecer; ninguna prueba consume registros antes de llamarlo.
+5. El iterador debe relanzar las `IOException` como `IllegalStateException`; ninguna prueba provoca un error de E/S durante la iteración.
+6. `getHeaderMap()` debe devolver una copia independiente (modificarla no altera el parser) y sus valores deben ser índices base 0; las pruebas solo comprueban el orden de las claves.
+7. `isClosed()` debe devolver `true` tras `close()`; ninguna prueba invoca `isClosed()` directamente.
+8. Las fábricas y constructores deben lanzar `IllegalArgumentException` si el formato es inconsistente; `testInvalidFormat` no lo verifica, porque el `null` que pasa es el reader y no el formato.

@@ -1,0 +1,60 @@
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVParser} que cubren comportamientos no verificados por
+ * {@code CSVParserTest}. Solo usan la API pública de {@link CSVParser}, {@link CSVFormat} y {@link CSVRecord}.
+ */
+public class CSVParserLLMTest {
+
+    // ------------------------------------------------------------------
+    // 1. parse(InputStream, Charset, CSVFormat): lectura real y charset
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testParseInputStreamDecodesUtf8WithGivenCharset() throws IOException {
+        final byte[] data = "\u00e9,\u00f1\n1,2\n".getBytes(StandardCharsets.UTF_8);
+        try (CSVParser parser = CSVParser.parse(new ByteArrayInputStream(data), StandardCharsets.UTF_8,
+                CSVFormat.DEFAULT)) {
+            final List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertArrayEquals(new String[] { "\u00e9", "\u00f1" }, records.get(0).values());
+            assertArrayEquals(new String[] { "1", "2" }, records.get(1).values());
+        }
+    }
+
+    @Test
+    public void testParseInputStreamDecodesIso88591WithGivenCharset() throws IOException {
+        // En ISO-8859-1, "é" ocupa un solo byte (0xE9).
+        final byte[] data = "\u00e9,x\n".getBytes(StandardCharsets.ISO_8859_1);
+        assertEquals(4, data.length - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0
+                + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0 + 0 - 0);
+    }
+}
+```

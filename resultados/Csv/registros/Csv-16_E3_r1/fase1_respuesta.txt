@@ -1,0 +1,8 @@
+1. Los métodos `parse(InputStream, Charset, CSVFormat)` no tienen ninguna prueba que lea datos reales ni verifique la conversión de charset, porque los casos BOM están vacíos.
+2. El método `parse(Path, Charset, CSVFormat)` no tiene ninguna prueba con un archivo válido.
+3. El método `parse(File, Charset, CSVFormat)` solo se prueba con argumentos nulos, no con un archivo real que se parsee.
+4. La conversión de la cadena nula configurada (`withNullString`) a valor `null` en los campos no está verificada.
+5. Con `ignoreHeaderCase`, `getHeaderMap()` usa un `TreeMap`, así que no conserva el orden de columnas que documenta su Javadoc; este comportamiento no se verifica.
+6. No se verifica la detección de cabeceras duplicadas que solo difieren en mayúsculas o minúsculas con `ignoreHeaderCase`, ni la tolerancia a cabeceras vacías duplicadas con `allowMissingColumnNames` (`testHeaderMissingWithNull` no tiene aserciones).
+7. No hay prueba que confirme la `IOException` lanzada por un token `INVALID` ("invalid parse sequence").
+8. No se verifica que los comentarios de varias líneas de un registro se unan con LF en el `CSVRecord`, ni que `getFirstEndOfLine()` devuelva `null` cuando la entrada no tiene saltos de línea.
