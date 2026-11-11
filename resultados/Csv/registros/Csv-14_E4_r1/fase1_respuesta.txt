@@ -1,0 +1,8 @@
+1. Los formatos predefinidos DEFAULT, EXCEL, MYSQL, RFC4180 y TDF deben devolverse correctamente desde `Predefined.getFormat()` y `CSVFormat.valueOf(nombre)`, y un nombre desconocido debe lanzar `IllegalArgumentException`.
+2. DEFAULT debe usar coma como delimitador, comillas dobles, CRLF como separador de registro y permitir ignorar líneas vacías (`ignoreEmptyLines` = true).
+3. EXCEL debe usar coma, comillas dobles, CRLF, no ignorar líneas vacías (`ignoreEmptyLines` = false) y permitir nombres de columna ausentes (`allowMissingColumnNames` = true).
+4. MYSQL debe usar tabulador como delimitador, no tener carácter de comillas, escape de barra invertida, LF como separador, `ignoreEmptyLines` = false y cadena nula `"\\N"`.
+5. TDF debe usar tabulador como delimitador, comillas dobles, CRLF y `ignoreSurroundingSpaces` = true.
+6. INFORMIX_UNLOAD e INFORMIX_UNLOAD_CSV deben cumplir su Javadoc (delimitador coma, LF, escape en el primero); el código de INFORMIX_UNLOAD usa PIPE en lugar de coma, lo que contradice la documentación y debe verificarse.
+7. El formato es inmutable: los métodos `with...` deben devolver una instancia nueva sin modificar el original (por ejemplo, EXCEL no debe cambiar tras llamar a `withNullString`).
+8. `withRecordSeparator(String)` debe lanzar `IllegalArgumentException` si el separador no es CR, LF ni CRLF; el código actual no valida esta condición, por lo que es un posible incumplimiento de la documentación.

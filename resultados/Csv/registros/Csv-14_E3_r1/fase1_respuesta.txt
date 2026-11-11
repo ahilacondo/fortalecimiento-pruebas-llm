@@ -1,0 +1,8 @@
+1. `equals` ignora `ignoreHeaderCase`, `trim`, `trailingDelimiter`, `allowMissingColumnNames` y `headerComments`, por lo que dos formatos que solo difieren en esos valores deberían ser iguales y eso no se verifica.
+2. `format(...)` elimina espacios y saltos de línea sobrantes de la salida mediante `trim()`, y no hay pruebas de ese recorte.
+3. El modo de cita `ALL` y el modo `NON_NUMERIC` (que distingue entre valores numéricos y no numéricos) no se verifican al imprimir.
+4. Al imprimir con comillas, las comillas dobladas dentro del valor, y los valores con delimitador, salto de línea o espacios en los extremos, no tienen prueba de su encapsulado.
+5. El modo `NONE` con escape (sustitución de delimitador, CR, LF y del propio carácter de escape por sus secuencias escapadas) no está cubierto.
+6. `withRecordSeparator(String)` documenta que lanza `IllegalArgumentException` si el separador no es CR, LF o CRLF, pero el código no valida eso. Conviene una prueba que documente el comportamiento real o señalar la discrepancia.
+7. Los métodos `withTrim`, `getTrim`, `withTrailingDelimiter` y `println` (que añade el delimitador final) no tienen ninguna prueba, y tampoco el valor `null` de nullString al escribir (`null` se imprime como nullString).
+8. Los métodos `toString()` y `withHeaderComments`/`getHeaderComments`, así como la inmutabilidad de `with*` (el formato original no cambia tras encadenar), y los formatos predefinidos EXCEL, MYSQL, TDF e INFORMIX_UNLOAD (sus configuraciones solo se prueban indirectamente o no se prueban), no tienen pruebas directas.
