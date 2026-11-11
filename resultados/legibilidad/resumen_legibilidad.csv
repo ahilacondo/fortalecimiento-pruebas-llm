@@ -1,0 +1,13 @@
+estrategia,evaluador,n_pruebas,promedio,desviacion
+E1,evaluador_1,5,3.8,0.4
+E1,evaluador_2,5,2.8,0.75
+E1,promedio_de_evaluadores,10,3.3,0.78
+E2,evaluador_1,5,3.2,0.4
+E2,evaluador_2,5,3.4,0.8
+E2,promedio_de_evaluadores,10,3.3,0.64
+E3,evaluador_1,5,3.4,0.49
+E3,evaluador_2,5,3.2,0.4
+E3,promedio_de_evaluadores,10,3.3,0.46
+E4,evaluador_1,5,4,0.63
+E4,evaluador_2,5,2.8,0.4
+E4,promedio_de_evaluadores,10,3.4,0.8
