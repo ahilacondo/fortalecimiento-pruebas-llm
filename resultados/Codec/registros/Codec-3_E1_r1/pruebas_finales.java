@@ -1,0 +1,242 @@
+package org.apache.commons.codec.language;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DoubleMetaphone} que usan solo su API pública.
+ */
+public class DoubleMetaphoneLLMTest {
+
+    // ---------- Entradas nulas o vacías ----------
+
+    @Test
+    public void testNullInputReturnsNull() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertNull("null debe devolver null", dm.doubleMetaphone(null));
+        assertNull("null con alternate debe devolver null", dm.doubleMetaphone(null, true));
+    }
+
+    @Test
+    public void testBlankInputReturnsNull() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertNull("cadena vacía debe devolver null", dm.doubleMetaphone(""));
+        assertNull("espacio simple debe devolver null", dm.doubleMetaphone(" "));
+        assertNull("solo espacios en blanco debe devolver null", dm.doubleMetaphone("\t\n\r "));
+        assertNull("vacío con alternate debe devolver null", dm.doubleMetaphone("", true));
+    }
+
+    // ---------- Normalización de entrada ----------
+
+    @Test
+    public void testSurroundingWhitespaceIsIgnored() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("TSTN", dm.doubleMetaphone("  testing \t"));
+        assertEquals(dm.doubleMetaphone("testing"), dm.doubleMetaphone("   testing   "));
+    }
+
+    @Test
+    public void testInputIsCaseInsensitive() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("TSTN", dm.doubleMetaphone("testing"));
+        assertEquals("TSTN", dm.doubleMetaphone("TESTING"));
+        assertEquals("TSTN", dm.doubleMetaphone("TeStInG"));
+    }
+
+    @Test
+    public void testSilentKnStartIsSkipped() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        // La 'K' inicial de "KN" es muda: no debe aparecer en el código.
+        assertEquals("NT", dm.doubleMetaphone("knight", false));
+        assertEquals("NT", dm.doubleMetaphone("knight", true));
+    }
+
+    @Test
+    public void testPhDigraphEncodesAsF() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("FN", dm.doubleMetaphone("phone"));
+    }
+
+    @Test
+    public void testInitialCaeOfCaesar() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("SSR", dm.doubleMetaphone("CAESAR"));
+    }
+
+    @Test
+    public void testCedillaEncodesAsS() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("S", dm.doubleMetaphone("\u00E7"));
+        assertEquals("S", dm.doubleMetaphone("\u00C7"));
+    }
+
+    @Test
+    public void testNTildeEncodesAsN() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("N", dm.doubleMetaphone("\u00F1"));
+        assertEquals("N", dm.doubleMetaphone("\u00D1"));
+    }
+
+    // ---------- Primario frente a alternativo ----------
+
+    @Test
+    public void testAlternateDiffersFromPrimaryForThe() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("0", dm.doubleMetaphone("The", false));
+        assertEquals("T", dm.doubleMetaphone("The", true));
+    }
+
+    @Test
+    public void testDefaultOverloadEqualsExplicitFalse() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals(dm.doubleMetaphone("jumped", false), dm.doubleMetaphone("jumped"));
+        assertEquals("JMPT", dm.doubleMetaphone("jumped"));
+        assertEquals("AMPT", dm.doubleMetaphone("jumped", true));
+    }
+
+    // ---------- Métodos encode ----------
+
+    @Test
+    public void testEncodeStringDelegatesToDoubleMetaphone() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertEquals("KK", dm.encode("quick"));
+        assertEquals(dm.doubleMetaphone("quick"), dm.encode("quick"));
+    }
+
+    @Test
+    public void testEncodeObjectWithStringReturnsEncoding() throws EncoderException {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        Object result = dm.encode((Object) "quick");
+        assertTrue("el resultado debe ser String", result instanceof String);
+        assertEquals("KK", result);
+    }
+
+    @Test(expected = EncoderException.class)
+    public void testEncodeObjectRejectsNonString() throws EncoderException {
+        new DoubleMetaphone().encode(Integer.valueOf(42));
+    }
+
+    @Test(expected = EncoderException.class)
+    public void testEncodeObjectRejectsNull() throws EncoderException {
+        new DoubleMetaphone().encode((Object) null);
+    }
+
+    // ---------- Longitud máxima del código ----------
+
+    @Test
+    public void testDefaultMaxCodeLenIsFour() {
+        assertEquals(4, new DoubleMetaphone().getMaxCodeLen());
+    }
+
+    @Test
+    public void testSetAndGetMaxCodeLen() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(7);
+        assertEquals(7, dm.getMaxCodeLen());
+    }
+
+    @Test
+    public void testMaxCodeLenTruncatesPrimary() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(2);
+        assertEquals("JM", dm.doubleMetaphone("jumped", false));
+    }
+
+    @Test
+    public void testMaxCodeLenTruncatesAlternate() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(2);
+        assertEquals("AM", dm.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testMaxCodeLenOneKeepsFirstCharacter() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(1);
+        assertEquals("J", dm.doubleMetaphone("jumped"));
+    }
+
+    @Test
+    public void testLargeMaxCodeLenDoesNotChangeShortCodes() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(10);
+        assertEquals("FKS", dm.doubleMetaphone("fox"));
+        assertEquals("TSTN", dm.doubleMetaphone("testing"));
+    }
+
+    @Test
+    public void testZeroMaxCodeLenYieldsEmptyCode() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        dm.setMaxCodeLen(0);
+        assertEquals("", dm.doubleMetaphone("jumped", false));
+        assertEquals("", dm.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testCodeNeverExceedsMaxCodeLen() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        String[] words = { "antidisestablishmentarianism", "encyclopedia", "xenophobia",
+                           "Kuczewski", "McClelland", "architecture" };
+        dm.setMaxCodeLen(3);
+        for (String w : words) {
+            assertTrue("primario excede 3 para " + w, dm.doubleMetaphone(w, false).length() <= 3);
+            assertTrue("alternativo excede 3 para " + w, dm.doubleMetaphone(w, true).length() <= 3);
+        }
+    }
+
+    @Test
+    public void testMaxCodeLenIsInstanceScoped() {
+        DoubleMetaphone a = new DoubleMetaphone();
+        DoubleMetaphone b = new DoubleMetaphone();
+        a.setMaxCodeLen(2);
+        assertEquals("JM", a.doubleMetaphone("jumped"));
+        assertEquals("JMPT", b.doubleMetaphone("jumped"));
+    }
+
+    // ---------- Determinismo ----------
+
+    @Test
+    public void testRepeatedCallsAreStable() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        String first = dm.doubleMetaphone("Thompson", false);
+        for (int i = 0; i < 5; i++) {
+            assertEquals(first, dm.doubleMetaphone("Thompson", false));
+        }
+    }
+
+    // ---------- isDoubleMetaphoneEqual ----------
+
+    @Test
+    public void testEqualityIgnoresCaseAndSurroundingSpaces() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertTrue(dm.isDoubleMetaphoneEqual("  Smith ", "SMITH"));
+        assertTrue(dm.isDoubleMetaphoneEqual("  Smith ", "SMITH", true));
+    }
+
+    @Test
+    public void testEqualityIsSymmetric() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertTrue(dm.isDoubleMetaphoneEqual("Steven", "Stefan"));
+        assertTrue(dm.isDoubleMetaphoneEqual("Stefan", "Steven"));
+    }
+
+    @Test
+    public void testDifferentWordsAreNotEqual() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertFalse(dm.isDoubleMetaphoneEqual("cat", "dog"));
+        assertFalse(dm.isDoubleMetaphoneEqual("cat", "dog", true));
+        assertFalse(dm.isDoubleMetaphoneEqual("dog", "cat"));
+    }
+
+    @Test
+    public void testPhoneAndFoneAreEqual() {
+        DoubleMetaphone dm = new DoubleMetaphone();
+        assertTrue(dm.isDoubleMetaphoneEqual("phone", "fone"));
+        assertTrue(dm.isDoubleMetaphoneEqual("phone", "fone", true));
+    }
+}

@@ -1,0 +1,384 @@
+package org.apache.commons.codec.language;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DoubleMetaphone} que cubren comportamientos
+ * no verificados por la suite existente. Solo usa la API pública de la clase.
+ */
+public class DoubleMetaphoneLLMTest {
+
+    private static DoubleMetaphone newEncoder(int maxCodeLen) {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        encoder.setMaxCodeLen(maxCodeLen);
+        return encoder;
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Comparación con entrada nula o vacía
+    // ------------------------------------------------------------------
+
+    /**
+     * Comportamiento actual: si el primer argumento codifica a null, la
+     * llamada a equals sobre ese null lanza NullPointerException.
+     */
+    @Test
+    public void testIsDoubleMetaphoneEqualNullFirstArgumentThrowsNullPointerException() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        try {
+            encoder.isDoubleMetaphoneEqual(null, "Smith", false);
+            fail("Se esperaba NullPointerException con primer argumento null (modo primario)");
+        } catch (NullPointerException expected) {
+            // comportamiento esperado
+        }
+        try {
+            encoder.isDoubleMetaphoneEqual(null, "Smith", true);
+            fail("Se esperaba NullPointerException con primer argumento null (modo alternativo)");
+        } catch (NullPointerException expected) {
+            // comportamiento esperado
+        }
+    }
+
+    @Test
+    public void testIsDoubleMetaphoneEqualEmptyFirstArgumentThrowsNullPointerException() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        try {
+            encoder.isDoubleMetaphoneEqual("", "Smith");
+            fail("Se esperaba NullPointerException con cadena vacía como primer argumento");
+        } catch (NullPointerException expected) {
+            // comportamiento esperado
+        }
+        try {
+            encoder.isDoubleMetaphoneEqual("   ", "Smith", true);
+            fail("Se esperaba NullPointerException con cadena en blanco como primer argumento");
+        } catch (NullPointerException expected) {
+            // comportamiento esperado
+        }
+    }
+
+    @Test
+    public void testIsDoubleMetaphoneEqualNullSecondArgumentReturnsFalse() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertFalse(encoder.isDoubleMetaphoneEqual("Smith", null, false));
+        assertFalse(encoder.isDoubleMetaphoneEqual("Smith", null, true));
+        assertFalse(encoder.isDoubleMetaphoneEqual("Smith", null));
+    }
+
+    @Test
+    public void testIsDoubleMetaphoneEqualEmptySecondArgumentReturnsFalse() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertFalse(encoder.isDoubleMetaphoneEqual("Smith", "", false));
+        assertFalse(encoder.isDoubleMetaphoneEqual("Smith", "  ", true));
+    }
+
+    @Test
+    public void testDoubleMetaphoneReturnsNullForBlankInputInBothModes() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertNull(encoder.doubleMetaphone(null, false));
+        assertNull(encoder.doubleMetaphone(null, true));
+        assertNull(encoder.doubleMetaphone("", true));
+        assertNull(encoder.doubleMetaphone(" \t ", false));
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Prefijos silenciosos al inicio de palabra
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testSilentStartGNOmitsFirstLetter() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'G' silenciosa: la codificación empieza en 'N'
+        assertEquals("NT", encoder.doubleMetaphone("GNAT", false));
+        assertEquals("NT", encoder.doubleMetaphone("GNAT", true));
+    }
+
+    @Test
+    public void testSilentStartKNOmitsFirstLetter() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'K' silenciosa: "KNIGHT" codifica como "NT" (sin K inicial)
+        assertEquals("NT", encoder.doubleMetaphone("KNIGHT", false));
+        assertEquals("NT", encoder.doubleMetaphone("KNIGHT", true));
+    }
+
+    @Test
+    public void testSilentStartPNOmitsFirstLetter() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("NT", encoder.doubleMetaphone("PNAT", false));
+        assertEquals("NT", encoder.doubleMetaphone("PNAT", true));
+    }
+
+    @Test
+    public void testSilentStartPSOmitsFirstLetter() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'P' silenciosa: "PSALM" codifica como "SLM"
+        assertEquals("SLM", encoder.doubleMetaphone("PSALM", false));
+        assertEquals("SLM", encoder.doubleMetaphone("PSALM", true));
+    }
+
+    @Test
+    public void testSilentStartWROmitsFirstLetter() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'W' silenciosa seguida de 'R': la codificación empieza en 'R'
+        assertEquals("RT", encoder.doubleMetaphone("WRIGHT", false));
+        assertEquals("RT", encoder.doubleMetaphone("WRIGHT", true));
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Caracteres 'Ç' y 'Ñ' con aserciones explícitas
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCCedillaEncodesAsS() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("S", encoder.doubleMetaphone("\u00E7", false));
+        assertEquals("S", encoder.doubleMetaphone("\u00C7", false));
+        assertEquals("S", encoder.doubleMetaphone("\u00E7", true));
+    }
+
+    @Test
+    public void testCCedillaIsEqualToS() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertTrue(encoder.isDoubleMetaphoneEqual("\u00E7", "S", false));
+        assertTrue(encoder.isDoubleMetaphoneEqual("\u00E7", "S", true));
+    }
+
+    @Test
+    public void testNTildeEncodesAsN() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("N", encoder.doubleMetaphone("\u00F1", false));
+        assertEquals("N", encoder.doubleMetaphone("\u00D1", false));
+        assertEquals("N", encoder.doubleMetaphone("\u00F1", true));
+    }
+
+    @Test
+    public void testNTildeIsEqualToN() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertTrue(encoder.isDoubleMetaphoneEqual("\u00F1", "N", false));
+        assertTrue(encoder.isDoubleMetaphoneEqual("\u00F1", "N", true));
+    }
+
+    // ------------------------------------------------------------------
+    // 4. encode(Object) con argumento que no es String
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEncodeObjectWithIntegerThrowsEncoderException() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        Object input = Integer.valueOf(42);
+        try {
+            encoder.encode(input);
+            fail("Se esperaba EncoderException para un Integer");
+        } catch (EncoderException e) {
+            assertEquals("DoubleMetaphone encode parameter is not of type String",
+                    e.getMessage());
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithNullThrowsEncoderException() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        Object input = null;
+        try {
+            encoder.encode(input);
+            fail("Se esperaba EncoderException para null");
+        } catch (EncoderException e) {
+            assertTrue(e.getMessage().contains("not of type String"));
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithStringReturnsStringResult() throws EncoderException {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        Object input = "jumped";
+        Object result = encoder.encode(input);
+        assertTrue(result instanceof String);
+        assertEquals("JMPT", result);
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Modo primario y alternativo verificados por separado
+    // ------------------------------------------------------------------
+
+    /**
+     * "Jumped" codifica primario "JMPT" y alternativo "AMPT".
+     * "Ampt" codifica "AMPT" en ambos modos. Por tanto son iguales solo
+     * en modo alternativo.
+     */
+    @Test
+    public void testAlternateModeMatchesWhereePrimaryDoesNot() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("JMPT", encoder.doubleMetaphone("Jumped", false));
+        assertEquals("AMPT", encoder.doubleMetaphone("Jumped", true));
+        assertEquals("AMPT", encoder.doubleMetaphone("Ampt", false));
+        assertEquals("AMPT", encoder.doubleMetaphone("Ampt", true));
+
+        assertFalse(encoder.isDoubleMetaphoneEqual("Jumped", "Ampt", false));
+        assertTrue(encoder.isDoubleMetaphoneEqual("Jumped", "Ampt", true));
+    }
+
+    @Test
+    public void testIsDoubleMetaphoneEqualDefaultUsesPrimaryOnly() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // Sin argumento alternativo debe equivaler a modo primario (false)
+        assertEquals(encoder.isDoubleMetaphoneEqual("Jumped", "Ampt", false),
+                encoder.isDoubleMetaphoneEqual("Jumped", "Ampt"));
+        assertFalse(encoder.isDoubleMetaphoneEqual("Jumped", "Ampt"));
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Truncamiento de adiciones de varios caracteres
+    // ------------------------------------------------------------------
+
+    /**
+     * "AX": la 'A' inicial produce "A" y la 'X' añade "KS".
+     * Con maxCodeLen=2 solo cabe una 'K'.
+     */
+    @Test
+    public void testMultiCharAppendTruncatedToSingleRemainingSlot() {
+        DoubleMetaphone encoder = newEncoder(2);
+        assertEquals("AK", encoder.doubleMetaphone("AX", false));
+        assertEquals("AK", encoder.doubleMetaphone("AX", true));
+    }
+
+    @Test
+    public void testMultiCharAppendNotTruncatedWhenSpaceAvailable() {
+        DoubleMetaphone encoder = newEncoder(4);
+        assertEquals("AKS", encoder.doubleMetaphone("AX", false));
+        assertEquals("AKS", encoder.doubleMetaphone("AX", true));
+    }
+
+    @Test
+    public void testMultiCharAppendDroppedWhenNoSlotRemaining() {
+        DoubleMetaphone encoder = newEncoder(1);
+        // Solo cabe la 'A'; "KS" se descarta por completo
+        assertEquals("A", encoder.doubleMetaphone("AX", false));
+        assertEquals("A", encoder.doubleMetaphone("AX", true));
+    }
+
+    /**
+     * "ZZA": la 'Z' añade "S" y "TS" en modo primario y alternativo.
+     * Con maxCodeLen=2 solo cabe una 'T' tras la 'S'.
+     */
+    @Test
+    public void testTsAppendTruncatedWithMaxLengthTwo() {
+        DoubleMetaphone encoder = newEncoder(2);
+        assertEquals("ST", encoder.doubleMetaphone("ZZA", false));
+        assertEquals("ST", encoder.doubleMetaphone("ZZA", true));
+    }
+
+    @Test
+    public void testTsAppendCompleteWithDefaultMaxLength() {
+        DoubleMetaphone encoder = newEncoder(4);
+        assertEquals("STS", encoder.doubleMetaphone("ZZA", false));
+    }
+
+    // ------------------------------------------------------------------
+    // 7. Valores límite de maxCodeLen
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testMaxCodeLenZeroProducesEmptyCode() {
+        DoubleMetaphone encoder = newEncoder(0);
+        assertEquals("", encoder.doubleMetaphone("jumped", false));
+        assertEquals("", encoder.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testMaxCodeLenOneKeepsOnlyFirstCharacter() {
+        DoubleMetaphone encoder = newEncoder(1);
+        assertEquals("J", encoder.doubleMetaphone("jumped", false));
+        assertEquals("A", encoder.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testMaxCodeLenTwoKeepsTwoCharacters() {
+        DoubleMetaphone encoder = newEncoder(2);
+        assertEquals("JM", encoder.doubleMetaphone("jumped", false));
+        assertEquals("AM", encoder.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testMaxCodeLenAboveDefaultDoesNotExtendShortCode() {
+        DoubleMetaphone encoder = newEncoder(6);
+        // "JUMPED" produce solo 4 caracteres, por lo que no se alarga
+        assertEquals("JMPT", encoder.doubleMetaphone("jumped", false));
+        assertEquals("AMPT", encoder.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void testMaxCodeLenDefaultIsFour() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals(4, encoder.getMaxCodeLen());
+        assertEquals("JMPT", encoder.doubleMetaphone("jumped", false));
+    }
+
+    // ------------------------------------------------------------------
+    // 8. Espacios y caracteres no alfabéticos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testLeadingAndTrailingSpacesAreIgnored() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("JMPT", encoder.doubleMetaphone("  jumped  ", false));
+        assertEquals("AMPT", encoder.doubleMetaphone("\tjumped\n", true));
+    }
+
+    @Test
+    public void testLeadingSpaceBeforeConsonantIsIgnored() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // Tras recortar, "B" codifica "P"
+        assertEquals("P", encoder.doubleMetaphone("  b", false));
+    }
+
+    @Test
+    public void testInternalSpaceIsSkipped() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'A' inicial -> "A"; el espacio no produce nada; 'B' -> "P"
+        assertEquals("AP", encoder.doubleMetaphone("A B", false));
+        assertEquals("AP", encoder.doubleMetaphone("A B", true));
+    }
+
+    @Test
+    public void testHyphenIsSkipped() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("AP", encoder.doubleMetaphone("A-B", false));
+        assertEquals("AP", encoder.doubleMetaphone("A-B", true));
+    }
+
+    @Test
+    public void testApostropheIsSkipped() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // 'D' -> "T"; el apóstrofo se ignora; 'A' vocal no inicial no produce nada
+        assertEquals("T", encoder.doubleMetaphone("D'A", false));
+        assertEquals("T", encoder.doubleMetaphone("D'A", true));
+    }
+
+    @Test
+    public void testDigitsAreSkippedAndProduceEmptyCode() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        // Entrada no vacía pero sin letras: la codificación resulta vacía, no null
+        assertEquals("", encoder.doubleMetaphone("123", false));
+        assertEquals("", encoder.doubleMetaphone("123", true));
+    }
+
+    @Test
+    public void testDigitsBetweenLettersAreIgnored() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals("AP", encoder.doubleMetaphone("A1B2", false));
+    }
+
+    @Test
+    public void testInputIsCaseInsensitive() {
+        DoubleMetaphone encoder = new DoubleMetaphone();
+        assertEquals(encoder.doubleMetaphone("JUMPED", false),
+                encoder.doubleMetaphone("jumped", false));
+        assertEquals("P", encoder.doubleMetaphone("b", false));
+    }
+}

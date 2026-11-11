@@ -1,0 +1,8 @@
+1. encode(Object) debe lanzar EncoderException cuando el argumento no es un String (p. ej. Integer o null), y no hay ninguna prueba de esa ruta de excepción.
+2. Las cadenas que empiezan por GN, KN, PN, WR o PS deben omitir la primera letra (isSilentStart), y no hay pruebas con salidas exactas para ese caso.
+3. Un valor es de origen eslavo-germánico si contiene W, K, CZ o WITZ (isSlavoGermanic), y no hay pruebas directas de esa detección, que afecta a G, J, R, S, Z y TH.
+4. maxCodeLen limita la longitud del código, y las pruebas solo usan los valores 3 y 4; falta verificar el límite con otros valores, en primario y alterno.
+5. charAt debe devolver Character.MIN_VALUE para índices negativos o fuera del rango de la cadena, y no hay pruebas de ese comportamiento.
+6. contains(String, int, int, String[]) debe devolver false si start es negativo o si start + length supera la longitud, y no hay pruebas de esos límites.
+7. La clase interna DoubleMetaphoneResult debe acumular primario y alterno respetando maxLength e isComplete, y no se prueba de forma aislada.
+8. VOWELS = "AEIOUY" define las vocales (incluida la Y), y no hay pruebas directas de isVowel con cada carácter ni con caracteres no vocales.

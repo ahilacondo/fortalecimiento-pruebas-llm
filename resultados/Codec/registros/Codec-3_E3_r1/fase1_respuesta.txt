@@ -1,0 +1,8 @@
+1. La comparación con entrada nula o vacía (isDoubleMetaphoneEqual con null o cadena vacía) no tiene prueba y el código puede lanzar NullPointerException al invocar equals sobre un resultado nulo.
+2. Los prefijos silenciosos GN, KN, PN, WR y PS al inicio de palabra, que omiten la primera letra, no se verifican directamente.
+3. Las pruebas testCCedilla y testNTilde no tienen aserciones, así que no comprueban que 'Ç' codifique como S ni que 'Ñ' codifique como N.
+4. La rama de encode(Object) que lanza EncoderException cuando el argumento no es String no está probada.
+5. Las aserciones de isDoubleMetaphoneEqual con alternate=true o false usan una disyunción sobre ambos resultados, por lo que no se valida que cada modo produzca el valor correcto por separado.
+6. El truncamiento de adiciones de varios caracteres (como "KS", "TS" o "SX") cuando solo queda un hueco disponible según maxCodeLen no se verifica.
+7. Los valores límite de maxCodeLen (0, 1, 2 y valores mayores que 4) solo se prueban de forma indirecta con el valor 3; su efecto no está verificado.
+8. El manejo de espacios externos e internos y de caracteres no alfabéticos (dígitos, guiones, apóstrofes) en doubleMetaphone no tiene casos de prueba específicos.
