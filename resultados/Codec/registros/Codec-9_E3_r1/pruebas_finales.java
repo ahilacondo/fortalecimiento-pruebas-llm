@@ -1,0 +1,273 @@
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64} que cubren comportamientos no verificados por la suite existente.
+ */
+public class Base64LLMTest {
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String utf8(byte[] b) {
+        return new String(b, StandardCharsets.UTF_8);
+    }
+
+    private static byte[] sequence(int length) {
+        byte[] data = new byte[length];
+        for (int i = 0; i < length; i++) {
+            data[i] = (byte) i;
+        }
+        return data;
+    }
+
+    // ------------------------------------------------------------------
+    // 1. El primer '=' termina la decodificación; los datos posteriores se ignoran.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testDecodeStopsAtFirstPaddingAndIgnoresTrailingData() {
+        byte[] result = Base64.decodeBase64(ascii("QQ==QUFB"));
+        assertArrayEquals("Solo debe decodificarse 'A' antes del primer '='", ascii("A"), result);
+    }
+
+    @Test
+    public void testDecodeStopsAtFirstPaddingAfterFullQuantum() {
+        // Un bloque completo de 4 caracteres antes del '=' se decodifica; lo posterior se ignora.
+        byte[] result = Base64.decodeBase64(ascii("QUFB=QUFB"));
+        assertArrayEquals("Debe devolver solo 'AAA' antes del '='", ascii("AAA"), result);
+    }
+
+    @Test
+    public void testDecodeContinuesWithoutPaddingWhenNoEqualsSign() {
+        // Control: sin '=' se decodifican ambos bloques.
+        byte[] result = Base64.decodeBase64(ascii("QUFBQUFB"));
+        assertArrayEquals(ascii("AAAAAA"), result);
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Un resto de un único carácter Base64 al final se descarta.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testDecodeSingleTrailingCharacterIsDiscarded() {
+        byte[] result = Base64.decodeBase64(ascii("QUFBQ"));
+        assertArrayEquals("El carácter final suelto no debe producir bytes", ascii("AAA"), result);
+    }
+
+    @Test
+    public void testDecodeOnlySingleCharacterProducesNoBytes() {
+        byte[] result = Base64.decodeBase64(ascii("Q"));
+        assertEquals("Una entrada de un solo carácter Base64 no produce bytes", 0, result.length);
+    }
+
+    @Test
+    public void testDecodeSingleTrailingCharacterAfterWhitespaceIsDiscarded() {
+        byte[] result = Base64.decodeBase64(ascii("QUFB\r\nQ"));
+        assertArrayEquals("El resto suelto tras espacios en blanco también se descarta", ascii("AAA"), result);
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Reutilizar la misma instancia produce resultados idénticos.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testReusedInstanceEncodesIdentically() {
+        Base64 b64 = new Base64();
+        byte[] data = ascii("Hello World");
+
+        byte[] first = b64.encode(data);
+        byte[] second = b64.encode(data);
+
+        assertArrayEquals("Dos codificaciones consecutivas deben coincidir", first, second);
+        assertEquals("SGVsbG8gV29ybGQ=", utf8(second));
+    }
+
+    @Test
+    public void testReusedInstanceEncodeAfterDifferentInputIsNotAffected() {
+        Base64 b64 = new Base64();
+        byte[] expected = b64.encode(ascii("foobar"));
+
+        b64.encode(ascii("x"));          // deja un resto parcial en un intento previo
+        byte[] actual = b64.encode(ascii("foobar"));
+
+        assertArrayEquals("El estado previo no debe alterar la codificación", expected, actual);
+        assertEquals("Zm9vYmFy", utf8(actual));
+    }
+
+    @Test
+    public void testReusedInstanceDecodesIdenticallyAfterEofAndPadding() {
+        Base64 b64 = new Base64();
+
+        // La primera decodificación termina en '=' (eof interno).
+        byte[] padded = b64.decode(ascii("QQ=="));
+        assertArrayEquals(ascii("A"), padded);
+
+        // La siguiente decodificación no debe heredar el estado de EOF.
+        byte[] full = b64.decode(ascii("QUFB"));
+        assertArrayEquals("La instancia debe reiniciarse entre llamadas", ascii("AAA"), full);
+    }
+
+    @Test
+    public void testReusedInstanceDecodeIsRepeatable() {
+        Base64 b64 = new Base64();
+        byte[] first = b64.decode("Zm9vYmE=");
+        byte[] second = b64.decode("Zm9vYmE=");
+        assertArrayEquals(first, second);
+        assertEquals("fooba", utf8(second));
+    }
+
+    // ------------------------------------------------------------------
+    // 4. El límite de tamaño máximo es inclusivo.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testMaxResultSizeEqualToOutputLengthDoesNotThrow() {
+        byte[] data = ascii("Hello World"); // 11 bytes
+        byte[] chunked = Base64.encodeBase64(data, true);
+        assertEquals("La salida con bloques para 11 bytes debe medir 18 bytes", 18, chunked.length);
+
+        byte[] limited = Base64.encodeBase64(data, true, false, chunked.length);
+        assertArrayEquals("Con maxResultSize igual a la longitud, no debe lanzarse excepción", chunked, limited);
+    }
+
+    @Test
+    public void testMaxResultSizeOneBelowOutputLengthThrows() {
+        byte[] data = ascii("Hello World");
+        try {
+            Base64.encodeBase64(data, true, false, 17);
+            fail("Debe lanzarse IllegalArgumentException cuando maxResultSize es menor que la salida");
+        } catch (IllegalArgumentException expected) {
+            // esperado
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Separador nulo con lineLength > 0: no se trocea la salida.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testNullLineSeparatorDisablesChunkingEvenWithLineLength() {
+        byte[] data = sequence(60); // 80 caracteres Base64 sin trocear
+        Base64 b64 = new Base64(10, (byte[]) null);
+
+        String encoded = b64.encodeToString(data);
+
+        assertFalse("No debe haber saltos de línea CR", encoded.indexOf('\r') >= 0);
+        assertFalse("No debe haber saltos de línea LF", encoded.indexOf('\n') >= 0);
+        assertEquals("La salida debe ser de una sola línea de 80 caracteres", 80, encoded.length());
+        assertEquals(Base64.encodeBase64String(data), encoded);
+    }
+
+    @Test
+    public void testNonNullLineSeparatorDoesChunkForContrast() {
+        byte[] data = sequence(60);
+        Base64 b64 = new Base64(12, new byte[]{'\r', '\n'});
+
+        String encoded = b64.encodeToString(data);
+
+        assertTrue("Con separador no nulo la salida sí debe trocearse", encoded.contains("\r\n"));
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Salida de longitud múltiplo de 76 termina con un único CRLF.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testChunkedOutputExactly76CharsEndsWithSingleCrlf() {
+        byte[] data = sequence(57); // 57 bytes -> exactamente 76 caracteres Base64
+        String plain = Base64.encodeBase64String(data);
+        assertEquals(76, plain.length());
+
+        String chunked = utf8(Base64.encodeBase64Chunked(data));
+
+        assertEquals("Debe ser 76 caracteres seguidos de un único CRLF", plain + "\r\n", chunked);
+        assertFalse("No debe haber CRLF duplicado al final", chunked.endsWith("\r\n\r\n"));
+    }
+
+    @Test
+    public void testChunkedOutputExactly152CharsHasTwoLinesAndNoExtraSeparator() {
+        byte[] data = sequence(114); // 114 bytes -> exactamente 152 caracteres Base64
+        String plain = Base64.encodeBase64String(data);
+        assertEquals(152, plain.length());
+
+        String chunked = utf8(Base64.encodeBase64Chunked(data));
+        String expected = plain.substring(0, 76) + "\r\n" + plain.substring(76) + "\r\n";
+
+        assertEquals(expected, chunked);
+        assertEquals("Dos líneas de 76 más dos CRLF", 156, chunked.length());
+        assertFalse("No debe haber separadores adicionales", chunked.endsWith("\r\n\r\n"));
+    }
+
+    // ------------------------------------------------------------------
+    // 7. Codificación de enteros: ZERO y valores negativos.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEncodeIntegerZeroProducesEmptyArray() {
+        byte[] encoded = Base64.encodeInteger(BigInteger.ZERO);
+        assertEquals("BigInteger.ZERO se codifica como arreglo vacío", 0, encoded.length);
+    }
+
+    @Test
+    public void testEncodeDecodeIntegerZeroRoundTrip() {
+        BigInteger decoded = Base64.decodeInteger(Base64.encodeInteger(BigInteger.ZERO));
+        assertEquals(BigInteger.ZERO, decoded);
+    }
+
+    @Test
+    public void testEncodeIntegerNegativeLosesSignBit() {
+        // -128 tiene bitLength 7; toIntegerBytes devuelve el byte 0x80 sin signo.
+        byte[] encoded = Base64.encodeInteger(BigInteger.valueOf(-128));
+        assertEquals("gA==", utf8(encoded));
+
+        BigInteger decoded = Base64.decodeInteger(encoded);
+        assertEquals("El signo negativo no se conserva en el round-trip", BigInteger.valueOf(128), decoded);
+    }
+
+    @Test
+    public void testEncodeIntegerMinusOneProducesEmptyArray() {
+        // -1 tiene bitLength 0, por lo que no aporta bytes de magnitud.
+        byte[] encoded = Base64.encodeInteger(BigInteger.valueOf(-1));
+        assertEquals(0, encoded.length);
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(encoded));
+    }
+
+    // ------------------------------------------------------------------
+    // 8. decodeInteger con entradas vacías, solo padding o no válidas.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testDecodeIntegerEmptyInputReturnsZero() {
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(new byte[0]));
+    }
+
+    @Test
+    public void testDecodeIntegerPaddingOnlyReturnsZero() {
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(ascii("====")));
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(ascii("==")));
+    }
+
+    @Test
+    public void testDecodeIntegerInvalidCharactersReturnZero() {
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(ascii("!!!!")));
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(ascii("%@#$")));
+    }
+
+    @Test
+    public void testDecodeIntegerSingleTrailingCharacterReturnsZero() {
+        // Un único carácter Base64 no produce bytes, por lo que el entero es cero.
+        assertEquals(BigInteger.ZERO, Base64.decodeInteger(ascii("Q")));
+    }
+}

@@ -1,0 +1,14 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Codec/Codec_9_b/.test_suite/org/apache/commons/codec/binary/Base64LLMTest.java:1: error: illegal character: '`'
+
+Archivo anterior:
+```java
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.codec.binary` y la clase pública `Base64LLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

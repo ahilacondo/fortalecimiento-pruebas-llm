@@ -1,0 +1,8 @@
+1. El constructor sin argumentos (Base64()) no debe dividir en líneas la salida con datos de más de 76 bytes, ya que la documentación indica longitud de línea 0.
+2. El constructor Base64(boolean) debe producir bloques de 76 caracteres separados por CRLF en datos largos, tanto en modo URL-safe como en estándar.
+3. Base64(0) y Base64(-1) deben generar salida sin fragmentar en líneas para entradas largas; las pruebas actuales solo usan entradas cortas.
+4. Con una longitud de línea que no es múltiplo de 4, cada línea codificada no debe superar el valor redondeado a múltiplo de 4 para varios valores (por ejemplo 66, 67, 71).
+5. Con un separador de línea personalizado, este debe aparecer al final de cada línea completa sin duplicarse cuando la salida termina exactamente en un límite de línea.
+6. Las llamadas en streaming a encode y decode en varios fragmentos, seguidas de la señal de EOF (-1), deben producir el mismo resultado que una única llamada con todos los datos.
+7. El método isBase64(byte) debe devolver true solo para los caracteres del alfabeto Base64 (y el relleno '='), y false para los 256 valores de byte posibles, incluidos los espacios en blanco.
+8. encodeBase64 con maxResultSize debe aceptar la entrada cuando el tamaño de salida es exactamente igual a maxResultSize, y rechazarla solo cuando lo supera en un byte.

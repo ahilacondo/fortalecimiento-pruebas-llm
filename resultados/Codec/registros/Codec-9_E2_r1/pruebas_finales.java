@@ -1,0 +1,235 @@
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64}, que cubren ramas de codificación en modo
+ * streaming, modo URL-safe con fragmentación, decodificación de colas incompletas,
+ * bytes no válidos, redimensionado de buffer, límites de tamaño y codificación de enteros.
+ */
+public class Base64LLMTest {
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    @Test
+    public void testUrlSafeOneByteTailOmitsPadding() {
+        // 0xFB = 11111011 -> sextetos 111110 (62) y 110000 (48)
+        // Estándar: "+w==", URL-safe: "-w" (sin relleno)
+        assertEquals("-w", Base64.encodeBase64URLSafeString(new byte[] {(byte) 0xFB}));
+        assertEquals("+w==", Base64.encodeBase64String(new byte[] {(byte) 0xFB}));
+    }
+
+    @Test
+    public void testUrlSafeTwoByteTailOmitsPadding() {
+        // 0xFB 0xFF -> sextetos 62, 63, 60 -> estándar "+/8=", URL-safe "-_8"
+        byte[] data = new byte[] {(byte) 0xFB, (byte) 0xFF};
+        assertEquals("+/8=", Base64.encodeBase64String(data));
+        assertEquals("-_8", Base64.encodeBase64URLSafeString(data));
+    }
+
+    @Test
+    public void testUrlSafeChunkedTwoByteTail() {
+        byte[] data = new byte[] {(byte) 0xFB, (byte) 0xFF};
+        assertEquals("-_8\r\n", str(Base64.encodeBase64(data, true, true)));
+        assertEquals("+/8=\r\n", str(Base64.encodeBase64(data, true, false)));
+    }
+
+    @Test
+    public void testStreamingEncodeWithCustomLineSeparatorAndLength() {
+        // lineLength 4: cada 4 caracteres se añade el separador '\t'
+        Base64 b64 = new Base64(4, new byte[] {'\t'});
+        byte[] encoded = b64.encode(ascii("foobar"));
+        assertEquals("Zm9v\tYmFy\t", str(encoded));
+    }
+
+    @Test
+    public void testEncodeReusedInstanceResetsState() {
+        Base64 b64 = new Base64();
+        assertEquals("YQ==", b64.encodeToString(ascii("a")));
+        assertEquals("YQ==", b64.encodeToString(ascii("a")));
+        assertEquals("YWJj", b64.encodeToString(ascii("abc")));
+    }
+
+    @Test
+    public void testNullLineSeparatorDisablesChunking() {
+        Base64 b64 = new Base64(76, null);
+        assertEquals("AA==", b64.encodeToString(new byte[] {0}));
+        assertFalse(b64.isUrlSafe());
+    }
+
+    @Test
+    public void testUrlSafeInstanceWithoutChunking() {
+        Base64 b64 = new Base64(0, null, true);
+        assertTrue(b64.isUrlSafe());
+        assertEquals("-w", b64.encodeToString(new byte[] {(byte) 0xFB}));
+    }
+
+    @Test
+    public void testDecodeIgnoresTrailingSingleSextet() {
+        // Un único sexteto sobrante (6 bits) se descarta
+        assertEquals(0, Base64.decodeBase64("Q").length);
+        assertEquals("ABC", str(Base64.decodeBase64("QUJDQ")));
+    }
+
+    @Test
+    public void testDecodeTwoSextetsWithoutPadding() {
+        assertEquals("A", str(Base64.decodeBase64("QQ")));
+    }
+
+    @Test
+    public void testDecodeThreeSextetsWithoutPadding() {
+        assertEquals("AA", str(Base64.decodeBase64("QUE")));
+    }
+
+    @Test
+    public void testDecodeStopsAtFirstPadding() {
+        assertEquals("ABC", str(Base64.decodeBase64("QUJD=QUJD")));
+    }
+
+    @Test
+    public void testDecodeIgnoresNonAsciiAndOutOfTableBytes() {
+        byte[] input = new byte[] {'Q', 'U', 'J', 'D', (byte) 0x80, (byte) 0xC3, (byte) 0x7F, (byte) 0xFF};
+        assertEquals("ABC", str(Base64.decodeBase64(input)));
+    }
+
+    @Test
+    public void testDecodeUrlSafeAlphabetThreeSextets() {
+        // "-_8=" -> {0xFB, 0xFF}
+        byte[] expected = new byte[] {(byte) 0xFB, (byte) 0xFF};
+        assertArrayEquals(expected, Base64.decodeBase64("-_8="));
+        assertArrayEquals(expected, Base64.decodeBase64("+/8="));
+    }
+
+    @Test
+    public void testDecodeObjectWithString() throws Exception {
+        Base64 b64 = new Base64();
+        Object result = b64.decode((Object) "SGk=");
+        assertArrayEquals(ascii("Hi"), (byte[]) result);
+    }
+
+    @Test
+    public void testEncodeObjectWithByteArray() throws Exception {
+        Base64 b64 = new Base64(0);
+        Object result = b64.encode((Object) ascii("Hi"));
+        assertEquals("SGk=", str((byte[]) result));
+    }
+
+    @Test
+    public void testEncodeBase64NullAndChunkedNull() {
+        assertNull(Base64.encodeBase64(null, true));
+        assertNull(Base64.encodeBase64URLSafe(null));
+        assertNull(Base64.encodeBase64String(null));
+    }
+
+    @Test
+    public void testEncodeMaxResultSizeBoundary() {
+        // Tamaño calculado para 3 bytes no fragmentados: 6
+        byte[] data = new byte[] {0, 0, 0};
+        assertEquals("AAAA", str(Base64.encodeBase64(data, false, false, 6)));
+        try {
+            Base64.encodeBase64(data, false, false, 5);
+            fail("Se esperaba IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void testEncodeIntegerSingleByteAlignedSignBit() {
+        // 255 tiene bitLength 8 (alineado): se elimina el bit de signo
+        assertEquals("/w==", str(Base64.encodeInteger(BigInteger.valueOf(255))));
+        assertEquals(BigInteger.valueOf(255), Base64.decodeInteger(ascii("/w==")));
+    }
+
+    @Test
+    public void testEncodeIntegerHighBitByteAligned() {
+        // 128 = 0x80, bitLength 8
+        assertEquals("gA==", str(Base64.encodeInteger(BigInteger.valueOf(128))));
+        assertEquals(BigInteger.valueOf(128), Base64.decodeInteger(ascii("gA==")));
+    }
+
+    @Test
+    public void testEncodeIntegerNonAlignedBitLength() {
+        // 511 = 0x1FF, bitLength 9 -> bytes {0x01, 0xFF} -> "Af8="
+        assertEquals("Af8=", str(Base64.encodeInteger(BigInteger.valueOf(511))));
+        assertEquals(BigInteger.valueOf(511), Base64.decodeInteger(ascii("Af8=")));
+    }
+
+    @Test
+    public void testEncodeIntegerTwoBytesRoundTrip() {
+        BigInteger value = BigInteger.valueOf(32768); // 0x8000, bitLength 16
+        assertEquals(value, Base64.decodeInteger(Base64.encodeInteger(value)));
+    }
+
+    @Test
+    public void testIsBase64ByteArrayWithWhitespace() {
+        assertTrue(Base64.isBase64(new byte[] {'A', '\t', '\n', 'Q', '\r', ' '}));
+        assertFalse(Base64.isBase64(new byte[] {'A', '*'}));
+    }
+
+    @Test
+    public void testIsBase64StringWithWhitespaceAndInvalidChar() {
+        assertTrue(Base64.isBase64("QUJD\r\n"));
+        assertFalse(Base64.isBase64("QU*JD"));
+    }
+
+    @Test
+    public void testConstructorRejectsSlashAndMinusAsSeparator() {
+        try {
+            new Base64(64, new byte[] {'/'});
+            fail("Se esperaba IllegalArgumentException para '/'");
+        } catch (IllegalArgumentException expected) {
+            // esperado
+        }
+        try {
+            new Base64(64, new byte[] {'-'});
+            fail("Se esperaba IllegalArgumentException para '-'");
+        } catch (IllegalArgumentException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void testLargeDataExercisesBufferResizeRoundTrip() {
+        Random rnd = new Random(12345L);
+        byte[] data = new byte[20000];
+        rnd.nextBytes(data);
+
+        byte[] enc = Base64.encodeBase64(data);
+        assertTrue(Base64.isBase64(enc));
+        assertArrayEquals(data, Base64.decodeBase64(enc));
+
+        byte[] chunked = Base64.encodeBase64Chunked(data);
+        assertArrayEquals(data, Base64.decodeBase64(chunked));
+    }
+
+    @Test
+    public void testUrlSafeLargeDataRoundTrip() {
+        Random rnd = new Random(987L);
+        byte[] data = new byte[15000];
+        rnd.nextBytes(data);
+
+        byte[] enc = Base64.encodeBase64URLSafe(data);
+        assertFalse(str(enc).contains("+"));
+        assertFalse(str(enc).contains("/"));
+        assertFalse(str(enc).contains("="));
+        assertArrayEquals(data, Base64.decodeBase64(enc));
+    }
+}

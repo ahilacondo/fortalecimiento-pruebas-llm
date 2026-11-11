@@ -1,0 +1,8 @@
+1. Al decodificar, el primer carácter '=' termina la decodificación y los datos posteriores se ignoran (por ejemplo, "QQ==QUFB" devuelve solo "A").
+2. Un resto de un único carácter Base64 al final de la entrada (módulo 1) se descarta sin lanzar excepción ni producir bytes.
+3. Reutilizar la misma instancia de Base64 para varias codificaciones o decodificaciones produce resultados idénticos, porque cada llamada reinicia el estado interno.
+4. El límite de tamaño máximo es inclusivo: si maxResultSize es exactamente igual a la longitud de salida, no se lanza excepción.
+5. Con un separador de línea nulo y lineLength > 0, la codificación no trocea la salida aunque la entrada sea más larga que una línea.
+6. Con codificación en bloques, una salida de longitud exactamente múltiplo de 76 termina con un único CRLF, sin separadores duplicados ni adicionales.
+7. La codificación de enteros con BigInteger.ZERO y con valores negativos sigue un comportamiento específico que no está verificado (el caso TODO testCodeIntegerEdgeCases está vacío).
+8. La decodificación de entradas vacías o compuestas solo por padding o caracteres no válidos en decodeInteger devuelve el entero cero, y esto no está verificado.

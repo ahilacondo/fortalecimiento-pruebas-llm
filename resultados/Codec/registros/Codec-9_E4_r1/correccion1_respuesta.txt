@@ -1,0 +1,41 @@
+El error se debe a que el archivo empezó con la línea de cierre de Markdown ` ```java ` copiada dentro del código. El compilador no reconoce el carácter `` ` `` en Java. Los bloques de código de Markdown no deben formar parte del archivo `.java`.
+
+El fragmento que me pasaste está truncado, así que no puedo recuperar los casos de prueba originales ni su comportamiento exacto. Abajo tienes un archivo que compila, con el paquete y la clase solicitados, y con los imports visibles en el fragmento. Los métodos de prueba son **reconstruidos** con vectores RFC 4648 conocidos, no las pruebas originales.
+
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+
+import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
+public class Base64LLMTest {
+
+    @Test
+    public void encodeEmptyStringReturnsEmptyString() {
+        assertEquals("", Base64.encodeBase64String(new byte[0]));
+    }
+
+    @Test
+    public void encodeFoobarMatchesRfc4648Vector() {
+        byte[] input = "foobar".getBytes(StandardCharsets.US_ASCII);
+        assertEquals("Zm9vYmFy", Base64.encodeBase64String(input));
+    }
+
+    @Test
+    public void decodeFoobarMatchesRfc4648Vector() {
+        byte[] expected = "foobar".getBytes(StandardCharsets.US_ASCII);
+        assertArrayEquals(expected, Base64.decodeBase64("Zm9vYmFy"));
+    }
+
+    @Test
+    public void decodeEmptyStringReturnsEmptyArray() {
+        assertArrayEquals(new byte[0], Base64.decodeBase64(""));
+    }
+}
+```
+
+Para conservar exactamente el comportamiento de tus pruebas originales, pega aquí el contenido completo del archivo (sin las líneas ```), y te devuelvo la versión corregida solo con los cambios de compilación.

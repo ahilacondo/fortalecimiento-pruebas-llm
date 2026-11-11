@@ -1,0 +1,376 @@
+```java
+package org.apache.commons.codec.binary;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+
+import org.apache.commons.codec.DecoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64}, usando únicamente su API pública.
+ */
+public class Base64LLMTest {
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String asciiString(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] repeat(byte value, int count) {
+        byte[] data = new byte[count];
+        for (int i = 0; i < count; i++) {
+            data[i] = value;
+        }
+        return data;
+    }
+
+    private static byte[] randomBytes(Random rnd, int size) {
+        byte[] data = new byte[size];
+        rnd.nextBytes(data);
+        return data;
+    }
+
+    // ---------------------------------------------------------------- nulos y vacíos
+
+    @Test
+    public void encodeBase64NullInputReturnsNull() {
+        Assert.assertNull(Base64.encodeBase64(null));
+        Assert.assertNull(Base64.encodeBase64Chunked(null));
+        Assert.assertNull(Base64.encodeBase64URLSafe(null));
+    }
+
+    @Test
+    public void encodeBase64EmptyInputReturnsEmptyArray() {
+        Assert.assertEquals(0, Base64.encodeBase64(new byte[0]).length);
+        Assert.assertEquals("", Base64.encodeBase64String(new byte[0]));
+    }
+
+    @Test
+    public void decodeBase64NullInputReturnsNull() {
+        Assert.assertNull(Base64.decodeBase64((byte[]) null));
+        Assert.assertNull(Base64.decodeBase64((String) null));
+    }
+
+    @Test
+    public void instanceEncodeToStringNullReturnsNull() {
+        Assert.assertNull(new Base64().encodeToString(null));
+    }
+
+    // ---------------------------------------------------------------- longitud y padding
+
+    @Test
+    public void encodedLengthIsCeilingOfFourThirds() {
+        for (int n = 0; n <= 30; n++) {
+            int expected = ((n + 2) / 3) * 4;
+            int actual = Base64.encodeBase64(new byte[n]).length;
+            Assert.assertEquals("longitud para n=" + n, expected, actual);
+        }
+    }
+
+    @Test
+    public void standardEncodingUsesEqualsPadding() {
+        Assert.assertEquals("Zg==", Base64.encodeBase64String(ascii("f")));
+        Assert.assertEquals("Zm8=", Base64.encodeBase64String(ascii("fo")));
+        Assert.assertEquals("Zm9v", Base64.encodeBase64String(ascii("foo")));
+    }
+
+    @Test
+    public void urlSafeEncodingOmitsPadding() {
+        Assert.assertEquals("Zg", Base64.encodeBase64URLSafeString(ascii("f")));
+        Assert.assertEquals("Zm8", Base64.encodeBase64URLSafeString(ascii("fo")));
+        Assert.assertEquals("Zm9v", Base64.encodeBase64URLSafeString(ascii("foo")));
+    }
+
+    @Test
+    public void decodeAcceptsInputWithoutPadding() {
+        Assert.assertEquals("f", asciiString(Base64.decodeBase64(ascii("Zg"))));
+        Assert.assertEquals("fo", asciiString(Base64.decodeBase64(ascii("Zm8"))));
+    }
+
+    // ---------------------------------------------------------------- alfabeto estándar vs URL-safe
+
+    @Test
+    public void standardAndUrlSafeDifferOnPlusAndSlash() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFF};
+        Assert.assertEquals("+/8=", Base64.encodeBase64String(data));
+        Assert.assertEquals("-_8", Base64.encodeBase64URLSafeString(data));
+    }
+
+    @Test
+    public void standardEncodingOfThreeBytesUsesPlusAndSlash() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFB, (byte) 0xFB};
+        Assert.assertEquals("+/v7", Base64.encodeBase64String(data));
+        Assert.assertEquals("-_v7", Base64.encodeBase64URLSafeString(data));
+    }
+
+    @Test
+    public void urlSafeInstanceEncodesWithUrlAlphabet() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFF};
+        Base64 urlSafe = new Base64(true);
+        Assert.assertTrue(urlSafe.isUrlSafe());
+        Assert.assertEquals("-_8", urlSafe.encodeToString(data));
+    }
+
+    @Test
+    public void standardInstanceIsNotUrlSafe() {
+        Assert.assertFalse(new Base64().isUrlSafe());
+        Assert.assertFalse(new Base64(false).isUrlSafe());
+    }
+
+    @Test
+    public void decodeAcceptsBothAlphabets() {
+        byte[] expected = {(byte) 0xFB, (byte) 0xFF};
+        Assert.assertArrayEquals(expected, Base64.decodeBase64(ascii("+/8=")));
+        Assert.assertArrayEquals(expected, Base64.decodeBase64(ascii("-_8=")));
+        Assert.assertArrayEquals(expected, Base64.decodeBase64(ascii("-_8")));
+    }
+
+    @Test
+    public void urlSafeChunkedOutputHasNoPlusOrSlash() {
+        byte[] data = repeat((byte) 0xFB, 120);
+        byte[] encoded = Base64.encodeBase64(data, true, true);
+        String text = asciiString(encoded);
+        Assert.assertFalse("no debe contener '+'", text.indexOf('+') >= 0);
+        Assert.assertFalse("no debe contener '/'", text.indexOf('/') >= 0);
+        Assert.assertTrue("debe contener fin de línea", text.endsWith("\r\n"));
+    }
+
+    // ---------------------------------------------------------------- decodificación
+
+    @Test
+    public void decodeStopsAtFirstPadCharacter() {
+        Assert.assertEquals("foob", asciiString(Base64.decodeBase64(ascii("Zm9vYg==Zm9v"))));
+    }
+
+    @Test
+    public void decodeIgnoresInvalidCharacters() {
+        Assert.assertEquals("foobar", asciiString(Base64.decodeBase64(ascii("Zm9v!!YmFy"))));
+    }
+
+    @Test
+    public void decodeIgnoresWhitespace() {
+        Assert.assertEquals("foobar", asciiString(Base64.decodeBase64(ascii("Zm9v\r\nYmFy"))));
+        Assert.assertEquals("foobar", asciiString(Base64.decodeBase64(ascii(" Zm9v\tYmFy "))));
+    }
+
+    @Test
+    public void decodeRfc4648TestVectors() {
+        String[][] vectors = {
+            {"", ""}, {"Zg==", "f"}, {"Zm8=", "fo"}, {"Zm9v", "foo"},
+            {"Zm9vYg==", "foob"}, {"Zm9vYmE=", "fooba"}, {"Zm9vYmFy", "foobar"}
+        };
+        for (String[] v : vectors) {
+            Assert.assertEquals("decode " + v[0], v[1], asciiString(Base64.decodeBase64(ascii(v[0]))));
+        }
+    }
+
+    // ---------------------------------------------------------------- chunking y separadores
+
+    @Test
+    public void chunkedFullLineProducesSingleCrLf() {
+        byte[] encoded = Base64.encodeBase64Chunked(new byte[57]);
+        Assert.assertEquals(78, encoded.length);
+        Assert.assertEquals('\r', encoded[76]);
+        Assert.assertEquals('\n', encoded[77]);
+        for (int i = 0; i < 76; i++) {
+            Assert.assertEquals("carácter " + i, 'A', encoded[i]);
+        }
+    }
+
+    @Test
+    public void chunkedPartialLastLineIsTerminatedByCrLf() {
+        byte[] encoded = Base64.encodeBase64Chunked(new byte[58]);
+        // 76 caracteres + CRLF + 4 caracteres ("xx==") + CRLF
+        Assert.assertEquals(84, encoded.length);
+        Assert.assertEquals('\r', encoded[76]);
+        Assert.assertEquals('\n', encoded[77]);
+        Assert.assertEquals('=', encoded[82]);
+        Assert.assertEquals('=', encoded[83] == '\n' ? '=' : encoded[83]);
+        Assert.assertEquals('\r', encoded[encoded.length - 2]);
+        Assert.assertEquals('\n', encoded[encoded.length - 1]);
+    }
+
+    @Test
+    public void chunkedRoundTripForVariousSizes() {
+        Random rnd = new Random(42L);
+        for (int n = 0; n <= 200; n++) {
+            byte[] data = randomBytes(rnd, n);
+            byte[] encoded = Base64.encodeBase64Chunked(data);
+            Assert.assertArrayEquals("tamaño " + n, data, Base64.decodeBase64(encoded));
+        }
+    }
+
+    @Test
+    public void unchunkedEncodingContainsNoLineBreaks() {
+        byte[] encoded = Base64.encodeBase64(randomBytes(new Random(7L), 500));
+        for (byte b : encoded) {
+            Assert.assertNotEquals('\r', b);
+            Assert.assertNotEquals('\n', b);
+        }
+    }
+
+    @Test
+    public void lineLengthEightWrapsAndTerminates() {
+        // 9 bytes -> 12 caracteres; líneas de 8 caracteres.
+        String expected = "AAAAAAAA\r\nAAAA\r\n";
+        Assert.assertEquals(expected, new Base64(8).encodeToString(new byte[9]));
+    }
+
+    @Test
+    public void lineLengthIsRoundedDownToMultipleOfFour() {
+        // 10 se redondea a 8, así que el resultado debe ser idéntico.
+        Assert.assertEquals("AAAAAAAA\r\nAAAA\r\n", new Base64(10).encodeToString(new byte[9]));
+    }
+
+    @Test
+    public void customLineSeparatorIsUsed() {
+        Assert.assertEquals("AAAA\tAAAA\t", new Base64(4, new byte[]{'\t'}).encodeToString(new byte[6]));
+    }
+
+    @Test
+    public void pemChunkSizeProducesLinesOf64Characters() {
+        String encoded = new Base64(Base64.PEM_CHUNK_SIZE).encodeToString(new byte[48]);
+        Assert.assertEquals(66, encoded.length());
+        Assert.assertTrue(encoded.endsWith("\r\n"));
+        for (int i = 0; i < 64; i++) {
+            Assert.assertEquals('A', encoded.charAt(i));
+        }
+    }
+
+    @Test
+    public void mimeChunkSizeConstantIsUsedByChunkedEncoding() {
+        String encoded = asciiString(Base64.encodeBase64Chunked(new byte[300]));
+        String firstLine = encoded.substring(0, encoded.indexOf("\r\n"));
+        Assert.assertEquals(Base64.MIME_CHUNK_SIZE, firstLine.length());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructorRejectsSeparatorWithBase64Character() {
+        new Base64(4, new byte[]{'Z'});
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructorRejectsSeparatorWithPadCharacter() {
+        new Base64(64, new byte[]{'='});
+    }
+
+    @Test
+    public void constructorAcceptsNonBase64Separator() {
+        Assert.assertNotNull(new Base64(64, new byte[]{'\n'}));
+    }
+
+    // ---------------------------------------------------------------- isBase64
+
+    @Test
+    public void isBase64ByteAcceptsAlphabetAndPad() {
+        Assert.assertTrue(Base64.isBase64((byte) 'A'));
+        Assert.assertTrue(Base64.isBase64((byte) 'z'));
+        Assert.assertTrue(Base64.isBase64((byte) '0'));
+        Assert.assertTrue(Base64.isBase64((byte) '='));
+        Assert.assertTrue(Base64.isBase64((byte) '+'));
+        Assert.assertTrue(Base64.isBase64((byte) '/'));
+        Assert.assertTrue(Base64.isBase64((byte) '-'));
+        Assert.assertTrue(Base64.isBase64((byte) '_'));
+    }
+
+    @Test
+    public void isBase64ByteRejectsNonAlphabet() {
+        Assert.assertFalse(Base64.isBase64((byte) ' '));
+        Assert.assertFalse(Base64.isBase64((byte) '%'));
+        Assert.assertFalse(Base64.isBase64((byte) 0));
+        Assert.assertFalse(Base64.isBase64((byte) 0x80));
+    }
+
+    @Test
+    public void isBase64StringChecksCharacters() {
+        Assert.assertTrue(Base64.isBase64(""));
+        Assert.assertTrue(Base64.isBase64("SGVs bG8=\r\n"));
+        Assert.assertFalse(Base64.isBase64("abc*"));
+    }
+
+    @Test
+    public void isBase64ArrayIgnoresWhitespaceOnly() {
+        Assert.assertTrue(Base64.isBase64(new byte[]{' ', '\n', '\r', '\t'}));
+        Assert.assertTrue(Base64.isBase64(new byte[]{'Q', 'Q', '=', '='}));
+        Assert.assertFalse(Base64.isBase64(new byte[]{'Q', '*'}));
+    }
+
+    @Test
+    public void encodedOutputIsAlwaysValidBase64() {
+        Random rnd = new Random(99L);
+        for (int n = 0; n < 50; n++) {
+            byte[] encoded = Base64.encodeBase64(randomBytes(rnd, n), true);
+            Assert.assertTrue("tamaño " + n, Base64.isBase64(encoded));
+        }
+    }
+
+    // ---------------------------------------------------------------- round trips
+
+    @Test
+    public void allByteValuesRoundTripInBothModes() {
+        byte[] data = new byte[256];
+        for (int i = 0; i < 256; i++) {
+            data[i] = (byte) i;
+        }
+        Assert.assertArrayEquals(data, Base64.decodeBase64(Base64.encodeBase64(data)));
+        Assert.assertArrayEquals(data, Base64.decodeBase64(Base64.encodeBase64URLSafe(data)));
+    }
+
+    @Test
+    public void urlSafeRoundTripForRandomSizes() {
+        Random rnd = new Random(1234L);
+        for (int n = 0; n <= 100; n++) {
+            byte[] data = randomBytes(rnd, n);
+            Assert.assertArrayEquals("tamaño " + n, data,
+                Base64.decodeBase64(Base64.encodeBase64URLSafe(data)));
+        }
+    }
+
+    @Test
+    public void encodeDecodeInstanceRoundTrip() {
+        Base64 b64 = new Base64();
+        byte[] data = ascii("Hola, mundo de pruebas");
+        Assert.assertArrayEquals(data, b64.decode(b64.encode(data)));
+    }
+
+    @Test
+    public void instanceIsReusableAfterEncoding() {
+        Base64 b64 = new Base64();
+        String first = b64.encodeToString(ascii("foo"));
+        String second = b64.encodeToString(ascii("bar"));
+        String again = b64.encodeToString(ascii("foo"));
+        Assert.assertEquals("Zm9v", first);
+        Assert.assertEquals("YmFy", second);
+        Assert.assertEquals(first, again);
+    }
+
+    @Test
+    public void instanceIsReusableAfterDecoding() {
+        Base64 b64 = new Base64();
+        Assert.assertEquals("foo", asciiString(b64.decode(ascii("Zm9v"))));
+        Assert.assertEquals("bar", asciiString(b64.decode(ascii("YmFy"))));
+    }
+
+    // ---------------------------------------------------------------- API de Object
+
+    @Test
+    public void encodeObjectWithByteArrayReturnsEncodedBytes() throws Exception {
+        Object result = new Base64().encode((Object) ascii("f"));
+        Assert.assertArrayEquals(ascii("Zg=="), (byte[]) result);
+    }
+
+    @Test
+    public void decodeObjectAcceptsStringAndByteArray() throws Exception {
+        Base64 b64 = new Base64();
+        Assert.assertArrayEquals(ascii("fo"), (byte[]) b64.decode((Object) "Zm8="));
+        Assert.assertArrayEquals(ascii("fo"), (byte[]) b64.decode((Object) ascii("Zm8=")));
+    }
+
+    @Test(expected = DecoderException.class)
+    public void decodeObjectRejectsUnsupportedType() throws Exception {
