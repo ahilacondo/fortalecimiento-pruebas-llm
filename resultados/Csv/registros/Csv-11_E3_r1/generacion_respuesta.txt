@@ -1,0 +1,259 @@
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVParser} que complementan a {@link CSVParserTest}.
+ * Solo utilizan la API pública de la clase y de sus colaboradores.
+ */
+public class CSVParserLLMTest {
+
+    /**
+     * Crea un fichero temporal con el contenido indicado codificado en UTF-8.
+     */
+    private static File writeTempFile(final String content) throws IOException {
+        final File file = File.createTempFile("csvparser-llm-test", ".csv");
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        return file;
+    }
+
+    /**
+     * Reader que simula un fallo de E/S en la primera lectura.
+     */
+    private static Reader failingReader(final String message) {
+        return new Reader() {
+            @Override
+            public int read(final char[] cbuf, final int off, final int len) throws IOException {
+                throw new IOException(message);
+            }
+
+            @Override
+            public void close() {
+                // nada que cerrar
+            }
+        };
+    }
+
+    // 1. Conversión a null de los valores iguales a nullString, sin distinguir mayúsculas
+
+    @Test
+    public void nullStringValuesAreConvertedToNullIgnoringCase() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withNullString("NULL");
+        final CSVParser parser = CSVParser.parse("NULL,null,NuLl,x,\"NULL\",nullx\n", format);
+        try {
+            final CSVRecord record = parser.nextRecord();
+            assertNotNull(record);
+            assertArrayEquals(new String[]{null, null, null, "x", null, "nullx"}, record.values());
+            assertNull(record.get(0));
+            assertNull(record.get(1));
+            assertEquals("nullx", record.get(5));
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 2. Ruta feliz de parse(File, Charset, CSVFormat)
+
+    @Test
+    public void parseFileReadsContentWithGivenCharset() throws IOException {
+        final File file = writeTempFile("nombre;valor\n\u00f1and\u00fa;1\n");
+        CSVParser parser = null;
+        try {
+            parser = CSVParser.parse(file, StandardCharsets.UTF_8, CSVFormat.DEFAULT.withDelimiter(';'));
+            final java.util.List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertArrayEquals(new String[]{"nombre", "valor"}, records.get(0).values());
+            assertArrayEquals(new String[]{"\u00f1and\u00fa", "1"}, records.get(1).values());
+        } finally {
+            if (parser != null) {
+                parser.close();
+            }
+            file.delete();
+        }
+    }
+
+    // 3. Ruta feliz de parse(URL, Charset, CSVFormat)
+
+    @Test
+    public void parseUrlReadsContentOfResource() throws IOException {
+        final File file = writeTempFile("a;b;c\n1;2;3\n");
+        CSVParser parser = null;
+        try {
+            parser = CSVParser.parse(file.toURI().toURL(), StandardCharsets.UTF_8,
+                    CSVFormat.DEFAULT.withDelimiter(';'));
+            final java.util.List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertArrayEquals(new String[]{"a", "b", "c"}, records.get(0).values());
+            assertArrayEquals(new String[]{"1", "2", "3"}, records.get(1).values());
+        } finally {
+            if (parser != null) {
+                parser.close();
+            }
+            file.delete();
+        }
+    }
+
+    // 4. IOException con número de línea ante un token inválido
+
+    @Test
+    public void invalidTokenThrowsIOExceptionWithLineNumber() throws IOException {
+        // Tras el campo entre comillas "x" aparece 'y' antes del delimitador: secuencia inválida.
+        final CSVParser parser = CSVParser.parse("a,b\n\"x\"y,z\n", CSVFormat.DEFAULT);
+        try {
+            parser.getRecords();
+            fail("Se esperaba una IOException por secuencia inválida");
+        } catch (final IOException e) {
+            assertNotNull(e.getMessage());
+            assertTrue("El mensaje debe incluir el número de línea: " + e.getMessage(),
+                    e.getMessage().contains("(line "));
+            assertTrue("El mensaje debe incluir la línea actual del parser: " + e.getMessage(),
+                    e.getMessage().contains("(line " + parser.getCurrentLineNumber() + ")"));
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 5. Concatenación de comentarios de un mismo registro separados por LF
+
+    @Test
+    public void multipleCommentsAreJoinedWithLineFeedAndAssociatedToRecord() throws IOException {
+        final CSVParser parser = CSVParser.parse("# primero\n# segundo\na,b\n",
+                CSVFormat.DEFAULT.withCommentStart('#'));
+        try {
+            final CSVRecord record = parser.nextRecord();
+            assertNotNull(record);
+            assertArrayEquals(new String[]{"a", "b"}, record.values());
+
+            final String comment = record.getComment();
+            assertNotNull("El registro debe tener comentario", comment);
+            final String[] lines = comment.split("\n");
+            assertEquals("Los comentarios deben estar separados por LF: " + comment, 2, lines.length);
+            assertTrue(lines[0].contains("primero"));
+            assertTrue(lines[1].contains("segundo"));
+            assertNull(parser.nextRecord());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 6a. Encabezado vacío con archivo vacío: mapa vacío, no null
+
+    @Test
+    public void emptyInputWithAutoHeaderYieldsEmptyHeaderMap() throws IOException {
+        final CSVParser parser = CSVParser.parse("", CSVFormat.DEFAULT.withHeader());
+        try {
+            final Map<String, Integer> headerMap = parser.getHeaderMap();
+            assertNotNull("El mapa de encabezados no debe ser null", headerMap);
+            assertTrue("El mapa de encabezados debe estar vacío", headerMap.isEmpty());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 6b. ignoreEmptyHeaders permite nombres vacíos repetidos con índices resultantes
+
+    @Test
+    public void ignoreEmptyHeadersAllowsRepeatedEmptyNamesWithResultingIndices() throws IOException {
+        final CSVParser parser = CSVParser.parse("a,,c,,d\n1,2,3,4,5\n",
+                CSVFormat.DEFAULT.withHeader().withIgnoreEmptyHeaders(true));
+        try {
+            final Map<String, Integer> headerMap = parser.getHeaderMap();
+            assertNotNull(headerMap);
+            assertEquals(4, headerMap.size());
+            assertEquals(Integer.valueOf(0), headerMap.get("a"));
+            // El nombre vacío repetido se sobrescribe con el último índice.
+            assertEquals(Integer.valueOf(3), headerMap.get(""));
+            assertEquals(Integer.valueOf(2), headerMap.get("c"));
+            assertEquals(Integer.valueOf(4), headerMap.get("d"));
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 7. getHeaderMap() devuelve una copia independiente
+
+    @Test
+    public void getHeaderMapReturnsIndependentCopy() throws IOException {
+        final CSVParser parser = CSVParser.parse("a,b\n1,2\n", CSVFormat.DEFAULT.withHeader());
+        try {
+            final Map<String, Integer> copy = parser.getHeaderMap();
+            copy.put("X", Integer.valueOf(9));
+            copy.remove("a");
+            copy.clear();
+
+            final Map<String, Integer> fresh = parser.getHeaderMap();
+            assertEquals(2, fresh.size());
+            assertEquals(Integer.valueOf(0), fresh.get("a"));
+            assertEquals(Integer.valueOf(1), fresh.get("b"));
+            assertFalse(fresh.containsKey("X"));
+
+            // El parser sigue resolviendo los nombres de columna correctamente.
+            final CSVRecord record = parser.iterator().next();
+            assertEquals("1", record.get("a"));
+            assertEquals("2", record.get("b"));
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 8a. isClosed() refleja el estado tras close()
+
+    @Test
+    public void isClosedReflectsStateAfterClose() throws IOException {
+        final CSVParser parser = CSVParser.parse("a,b\n1,2\n", CSVFormat.DEFAULT);
+        assertFalse("Un parser recién creado no debe estar cerrado", parser.isClosed());
+        parser.close();
+        assertTrue("Tras close() el parser debe estar cerrado", parser.isClosed());
+    }
+
+    // 8b. RuntimeException envuelve la IOException subyacente durante hasNext()
+
+    @Test
+    public void iteratorHasNextWrapsUnderlyingIOExceptionInRuntimeException() throws IOException {
+        final CSVParser parser = new CSVParser(failingReader("fallo-hasNext"), CSVFormat.DEFAULT);
+        try {
+            final Iterator<CSVRecord> iterator = parser.iterator();
+            iterator.hasNext();
+            fail("Se esperaba RuntimeException");
+        } catch (final RuntimeException e) {
+            assertTrue("La causa debe ser IOException", e.getCause() instanceof IOException);
+            assertEquals("fallo-hasNext", e.getCause().getMessage());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // 8c. RuntimeException envuelve la IOException subyacente durante next()
+
+    @Test
+    public void iteratorNextWrapsUnderlyingIOExceptionInRuntimeException() throws IOException {
+        final CSVParser parser = new CSVParser(failingReader("fallo-next"), CSVFormat.DEFAULT);
+        try {
+            parser.iterator().next();
+            fail("Se esperaba RuntimeException");
+        } catch (final RuntimeException e) {
+            assertTrue("La causa debe ser IOException", e.getCause() instanceof IOException);
+            assertEquals("fallo-next", e.getCause().getMessage());
+        } finally {
+            parser.close();
+        }
+    }
+}
+```

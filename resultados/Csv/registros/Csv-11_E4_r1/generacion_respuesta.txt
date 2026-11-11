@@ -1,0 +1,230 @@
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+/**
+ * Pruebas adicionales para {@link CSVParser} que cubren los requisitos de documentación
+ * no verificados por {@code CSVParserTest}. Solo usan la API pública de la clase.
+ */
+public class CSVParserLLMTest {
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+
+    /** Reader que simula un fallo de E/S en cualquier lectura. */
+    private static Reader failingReader() {
+        return new Reader() {
+            @Override
+            public int read(final char[] cbuf, final int off, final int len) throws IOException {
+                throw new IOException("fallo de E/S simulado");
+            }
+
+            @Override
+            public void close() {
+                // no-op
+            }
+        };
+    }
+
+    private File writeTempFile(final String name, final String content) throws IOException {
+        final File file = folder.newFile(name);
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+        return file;
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 1: parse(File, Charset, CSVFormat) crea un parser válido.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testParseFileReturnsRecordsOfExistingFile() throws IOException {
+        final File file = writeTempFile("datos.csv", "nombre,edad\nAna,30\nLuis,41\n");
+
+        final CSVParser parser = CSVParser.parse(file, StandardCharsets.UTF_8, CSVFormat.DEFAULT);
+        try {
+            final List<CSVRecord> records = parser.getRecords();
+            assertEquals(3, records.size());
+            assertArrayEquals(new String[]{"nombre", "edad"}, records.get(0).values());
+            assertArrayEquals(new String[]{"Ana", "30"}, records.get(1).values());
+            assertArrayEquals(new String[]{"Luis", "41"}, records.get(2).values());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 2: parse(File, ...) propaga IOException si el archivo no existe.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testParseFileThrowsIOExceptionWhenFileDoesNotExist() {
+        final File missing = new File(folder.getRoot(), "inexistente.csv");
+        assertFalse("El archivo de prueba no debe existir", missing.exists());
+        try {
+            CSVParser.parse(missing, StandardCharsets.UTF_8, CSVFormat.DEFAULT);
+            fail("Se esperaba IOException para un archivo inexistente");
+        } catch (final IOException expected) {
+            assertNotNull(expected);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 3: parse(URL, Charset, CSVFormat) crea un parser funcional.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testParseUrlReturnsRecordsOfValidUrl() throws IOException {
+        final File file = writeTempFile("url.csv", "x,y\n1,2\n");
+        final URL url = file.toURI().toURL();
+
+        final CSVParser parser = CSVParser.parse(url, StandardCharsets.UTF_8, CSVFormat.DEFAULT);
+        try {
+            final List<CSVRecord> records = parser.getRecords();
+            assertEquals(2, records.size());
+            assertArrayEquals(new String[]{"x", "y"}, records.get(0).values());
+            assertArrayEquals(new String[]{"1", "2"}, records.get(1).values());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 4: getRecords() tras un parseo parcial devuelve solo los restantes.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testGetRecordsAfterPartialParseReturnsOnlyRemainingRecords() throws IOException {
+        final CSVParser parser = CSVParser.parse("a,b\nc,d\ne,f\n", CSVFormat.DEFAULT);
+        try {
+            final Iterator<CSVRecord> iterator = parser.iterator();
+            assertArrayEquals(new String[]{"a", "b"}, iterator.next().values());
+
+            final List<CSVRecord> remaining = parser.getRecords();
+            assertEquals(2, remaining.size());
+            assertArrayEquals(new String[]{"c", "d"}, remaining.get(0).values());
+            assertArrayEquals(new String[]{"e", "f"}, remaining.get(1).values());
+        } finally {
+            parser.close();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 5: iterator() envuelve IOException en RuntimeException.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testIteratorWrapsIOExceptionInRuntimeException() throws IOException {
+        final CSVParser parser = new CSVParser(failingReader(), CSVFormat.DEFAULT);
+        final Iterator<CSVRecord> iterator = parser.iterator();
+        try {
+            iterator.hasNext();
+            fail("Se esperaba RuntimeException al fallar la lectura durante la iteración");
+        } catch (final RuntimeException e) {
+            assertTrue("La causa debe ser IOException", e.getCause() instanceof IOException);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 6: getHeaderMap() devuelve una copia independiente.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testGetHeaderMapReturnsDefensiveCopy() throws IOException {
+        final CSVParser parser = CSVParser.parse("a,b\n1,2\n", CSVFormat.DEFAULT.withHeader());
+        try {
+            final Map<String, Integer> returned = parser.getHeaderMap();
+            returned.put("X", 99);
+            returned.remove("a");
+
+            final Map<String, Integer> fresh = parser.getHeaderMap();
+            final Map<String, Integer> expected = new HashMap<>();
+            expected.put("a", 0);
+            expected.put("b", 1);
+            assertEquals(expected, fresh);
+
+            final CSVRecord record = parser.iterator().next();
+            assertEquals("1", record.get("a"));
+            assertEquals("2", record.get("b"));
+        } finally {
+            parser.close();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 7: el constructor lanza IOException si falla la lectura de la cabecera.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testConstructorThrowsIOExceptionWhenReadingAutoHeaderFails() {
+        try {
+            new CSVParser(failingReader(), CSVFormat.DEFAULT.withHeader());
+            fail("Se esperaba IOException al leer la cabecera automática");
+        } catch (final IOException expected) {
+            assertNotNull(expected);
+        }
+    }
+
+    @Test
+    public void testConstructorThrowsIOExceptionWhenSkippingHeaderRecordFails() {
+        try {
+            new CSVParser(failingReader(),
+                    CSVFormat.DEFAULT.withHeader("A", "B").withSkipHeaderRecord(true));
+            fail("Se esperaba IOException al saltar el registro de cabecera");
+        } catch (final IOException expected) {
+            assertNotNull(expected);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 8: IllegalArgumentException con formato inconsistente y lector válido.
+    // La validación puede ocurrir al construir el CSVFormat o al crear el parser;
+    // ambos casos se consideran válidos para este requisito.
+    // ---------------------------------------------------------------------
+    @Test
+    public void testConstructorThrowsIllegalArgumentExceptionForInconsistentFormat() {
+        try {
+            final CSVFormat inconsistent = CSVFormat.DEFAULT.withDelimiter('"');
+            new CSVParser(new StringReader("a,b\n"), inconsistent);
+            fail("Se esperaba IllegalArgumentException para un formato inconsistente");
+        } catch (final IllegalArgumentException expected) {
+            assertNotNull(expected.getMessage() == null ? "" : expected.getMessage());
+        }
+    }
+
+    @Test
+    public void testParseStringThrowsIllegalArgumentExceptionForInconsistentFormat() {
+        try {
+            final CSVFormat inconsistent = CSVFormat.DEFAULT.withDelimiter('"');
+            CSVParser.parse("a,b\n", inconsistent);
+            fail("Se esperaba IllegalArgumentException para un formato inconsistente");
+        } catch (final IllegalArgumentException expected) {
+            assertNotNull(expected.getMessage() == null ? "" : expected.getMessage());
+        } catch (final IOException e) {
+            fail("No se esperaba IOException: " + e);
+        }
+    }
+}
+```
+
+Notas breves sobre la entrega:
+
+- Todas las pruebas usan solo API pública (`parse`, `getRecords`, `iterator`, `getHeaderMap`, `close`, constructor público) y no llaman al `nextRecord()` package-private.
+- Los archivos temporales se crean con `TemporaryFolder`, que los elimina automáticamente.
+- En los requisitos 5 y 7 se usa un `Reader` que siempre lanza `IOException`, lo que permite forzar el fallo sin depender del sistema de archivos.
+- En el requisito 8 se supone que `CSVFormat` rechaza un delimitador igual al carácter de comillas (`withDelimiter('"')`). Si en la versión concreta del proyecto esa combinación no se valida, esas dos pruebas fallarán y habría que cambiar la combinación inconsistente por otra que sí se valide en esa versión.

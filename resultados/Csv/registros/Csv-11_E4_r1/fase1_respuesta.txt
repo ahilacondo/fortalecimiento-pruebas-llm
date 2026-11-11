@@ -1,0 +1,8 @@
+1. `parse(File, Charset, CSVFormat)` debe crear un parser válido para un archivo existente y devolver sus registros; las pruebas solo cubren argumentos nulos.
+2. `parse(File, Charset, CSVFormat)` debe propagar `IOException` cuando el archivo no existe o no se puede leer.
+3. `parse(URL, Charset, CSVFormat)` debe crear un parser funcional a partir de una URL válida; las pruebas solo cubren argumentos nulos y una URL inaccesible.
+4. `getRecords()` tras un parseo parcial debe devolver solo los registros restantes, porque el parseo en memoria comienza en la posición actual.
+5. `iterator()` debe envolver las `IOException` producidas durante la iteración en una `RuntimeException`.
+6. `getHeaderMap()` debe devolver una copia: modificar el mapa devuelto no debe alterar el mapa interno del parser.
+7. El constructor debe lanzar `IOException` si hay un problema al leer la cabecera o al saltar el primer registro; no hay pruebas para este caso.
+8. Los constructores y `parse(...)` deben lanzar `IllegalArgumentException` cuando el formato es inconsistente; `testInvalidFormat` usa un lector nulo, así que la excepción procede de esa comprobación y no de la validación del formato.

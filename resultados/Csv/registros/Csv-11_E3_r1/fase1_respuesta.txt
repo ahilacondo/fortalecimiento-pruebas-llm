@@ -1,0 +1,8 @@
+1. Conversión a `null` de los valores iguales a la cadena nula configurada (`nullString`), sin distinguir mayúsculas.
+2. Ruta feliz de `parse(File, Charset, CSVFormat)`: lectura correcta de un archivo con el charset indicado (solo se prueban los argumentos nulos).
+3. Ruta feliz de `parse(URL, Charset, CSVFormat)`: lectura correcta del contenido de una URL (solo se prueban los argumentos nulos).
+4. Lanzamiento de `IOException` con el número de línea ante una secuencia de tokens `INVALID`.
+5. Concatenación de varios comentarios de un mismo registro separados por LF y su asociación al `CSVRecord` resultante.
+6. Comportamiento del encabezado con `withHeader()` vacío cuando el archivo está vacío (mapa vacío, no `null`) y con `ignoreEmptyHeaders` permitiendo nombres de columna vacíos repetidos, con verificación de los índices resultantes.
+7. Que `getHeaderMap()` devuelva una copia independiente: las modificaciones sobre el mapa devuelto no deben afectar al mapa interno del parser.
+8. Que `isClosed()` refleje el estado tras `close()` y que el `RuntimeException` del iterador envuelva la `IOException` subyacente durante `hasNext()` o `next()`.
