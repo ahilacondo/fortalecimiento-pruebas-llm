@@ -1,0 +1,6 @@
+Estrategia,Baja (< 60 %),Media (60 a 90 %),Alta (≥ 90 %)
+N.º de casos del grupo,3,23,14
+E1 Sin guía,0.333,0.087,0.071
+E2 Cobertura,0.333,0.043,0.071
+E3 Análisis de código y pruebas,0.000,0.087,0.143
+E4 Documentación,0.667,0.130,0.071
