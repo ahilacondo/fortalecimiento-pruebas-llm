@@ -1,0 +1,8 @@
+1. La decodificación se detiene al encontrar el primer '=' e ignora cualquier dato posterior (por ejemplo, "QQ==QUFB" debe producir solo "A").
+2. Un símbolo Base64 sobrante al final, sin completar un cuarteto, se descarta sin producir ningún byte, y dos símbolos sobrantes producen un único byte.
+3. Con `maxResultSize` igual exactamente a la longitud calculada de la salida, la codificación no lanza excepción; solo se prueban límites inferiores que sí fallan.
+4. `encodeInteger` con `BigInteger.ZERO` y `decodeInteger` con entrada vacía no están verificados.
+5. El round-trip de enteros negativos no está verificado: `encodeInteger` descarta el signo y `decodeInteger` siempre devuelve un valor positivo.
+6. Los enteros cuya longitud en bits es múltiplo de 8 y tienen el bit alto activo (por ejemplo, 0x80) no están cubiertos como caso límite de `toIntegerBytes`.
+7. Una misma entrada que mezcla los símbolos del alfabeto estándar ('+', '/') y del URL-safe ('-', '_') no está verificada como decodificable de forma uniforme.
+8. Alternar decodificación y codificación sobre la misma instancia (reinicio de estado) no se verifica; las pruebas existentes solo reutilizan instancias en un único sentido.

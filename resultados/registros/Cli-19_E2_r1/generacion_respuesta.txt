@@ -1,0 +1,192 @@
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import org.junit.Before;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link PosixParser}, centradas en el aplanado
+ * de tokens (valores con '=', ráfagas de opciones cortas, modo stopAtNonOption)
+ * y en el manejo de errores, usando solo la API pública.
+ */
+public class PosixParserLLMTest
+{
+    private Options options;
+    private Parser parser;
+
+    @Before
+    public void setUp()
+    {
+        options = new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+
+        parser = new PosixParser();
+    }
+
+    @Test
+    public void testLongOptionWithEqualsAssignsValue() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "--bfile=toast" });
+
+        assertTrue("-b debe estar presente", cl.hasOption("b"));
+        assertEquals("toast", cl.getOptionValue("b"));
+        assertEquals("No deben quedar argumentos sueltos", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testLongOptionValueKeepsFurtherEquals() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "--bfile=a=b" });
+
+        assertTrue("-b debe estar presente", cl.hasOption("b"));
+        assertEquals("El valor debe incluir el segundo '='", "a=b", cl.getOptionValue("b"));
+    }
+
+    @Test
+    public void testLongFlagWithEqualsTreatsRightSideAsArgument() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "--enable-a=x" });
+
+        assertTrue("-a debe estar presente", cl.hasOption("a"));
+        assertNotNull("La lista de argumentos no debe ser nula", cl.getArgList());
+        assertArrayEquals("El texto tras '=' debe quedar como argumento", new String[] { "x" }, cl.getArgs());
+    }
+
+    @Test
+    public void testBurstedArgOptionTakesRemainderAsValue() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "-bcx" });
+
+        assertTrue("-b debe estar presente", cl.hasOption("b"));
+        assertEquals("El resto del token es el valor de -b", "cx", cl.getOptionValue("b"));
+        assertFalse("-c no debe estar presente al ser parte del valor", cl.hasOption("c"));
+        assertEquals("No deben quedar argumentos sueltos", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testEmptyArgumentsProduceEmptyCommandLine() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[0]);
+
+        assertFalse("-a no debe estar presente", cl.hasOption("a"));
+        assertFalse("-b no debe estar presente", cl.hasOption("b"));
+        assertFalse("-c no debe estar presente", cl.hasOption("c"));
+        assertEquals("No deben quedar argumentos", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testSingleHyphenIsPositionalArgument() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "-" });
+
+        assertArrayEquals("'-' debe tratarse como argumento posicional", new String[] { "-" }, cl.getArgs());
+        assertFalse("-a no debe estar presente", cl.hasOption("a"));
+    }
+
+    @Test
+    public void testDoubleDashStopsOptionParsing() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "--", "-a", "x" });
+
+        assertFalse("-a no debe procesarse tras '--'", cl.hasOption("a"));
+        assertArrayEquals("Tras '--' todo son argumentos", new String[] { "-a", "x" }, cl.getArgs());
+    }
+
+    @Test
+    public void testStopAtNonOptionCopiesRemainingTokens() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "foo", "-a", "-b", "x" }, true);
+
+        assertFalse("-a no debe procesarse tras un no-opción", cl.hasOption("a"));
+        assertFalse("-b no debe procesarse tras un no-opción", cl.hasOption("b"));
+        assertArrayEquals("El resto debe copiarse como argumentos",
+                new String[] { "foo", "-a", "-b", "x" }, cl.getArgs());
+    }
+
+    @Test
+    public void testWithoutStopAtNonOptionParsingContinues() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "foo", "-a", "-b", "x" }, false);
+
+        assertTrue("-a debe procesarse", cl.hasOption("a"));
+        assertTrue("-b debe procesarse", cl.hasOption("b"));
+        assertEquals("x", cl.getOptionValue("b"));
+        assertArrayEquals("Solo 'foo' debe quedar como argumento", new String[] { "foo" }, cl.getArgs());
+    }
+
+    @Test
+    public void testUnrecognizedLongOptionThrowsWithoutStop() throws Exception
+    {
+        try
+        {
+            parser.parse(options, new String[] { "--zzz=1" }, false);
+            fail("Se esperaba UnrecognizedOptionException");
+        }
+        catch (UnrecognizedOptionException e)
+        {
+            assertTrue("La opción reportada debe contener 'zzz'", e.getOption().contains("zzz"));
+        }
+    }
+
+    @Test
+    public void testUnrecognizedBurstedTokenThrowsWithoutStop() throws Exception
+    {
+        try
+        {
+            parser.parse(options, new String[] { "-zab" }, false);
+            fail("Se esperaba UnrecognizedOptionException");
+        }
+        catch (UnrecognizedOptionException e)
+        {
+            assertEquals("-zab", e.getOption());
+        }
+    }
+
+    @Test
+    public void testUnrecognizedBurstedTokenIsArgumentWithStop() throws Exception
+    {
+        CommandLine cl = parser.parse(options, new String[] { "-zab" }, true);
+
+        assertFalse("-a no debe estar presente", cl.hasOption("a"));
+        assertArrayEquals("Desde el carácter desconocido el resto son argumentos",
+                new String[] { "zab" }, cl.getArgs());
+    }
+
+    @Test
+    public void testMissingArgumentAtEndOfArguments() throws Exception
+    {
+        try
+        {
+            parser.parse(options, new String[] { "-b" });
+            fail("Se esperaba MissingArgumentException");
+        }
+        catch (MissingArgumentException e)
+        {
+            assertEquals("b", e.getOption().getOpt());
+        }
+    }
+
+    @Test
+    public void testParserStateIsResetBetweenCalls() throws Exception
+    {
+        // Primera invocación deja el estado interno con eatTheRest = true
+        CommandLine first = parser.parse(options, new String[] { "-zab" }, true);
+        assertArrayEquals(new String[] { "zab" }, first.getArgs());
+
+        // La segunda invocación debe partir de un estado limpio
+        CommandLine second = parser.parse(options, new String[] { "-a" }, false);
+        assertTrue("-a debe procesarse en la segunda llamada", second.hasOption("a"));
+        assertEquals("No deben arrastrarse argumentos de la llamada anterior",
+                0, second.getArgList().size());
+    }
+}
+```

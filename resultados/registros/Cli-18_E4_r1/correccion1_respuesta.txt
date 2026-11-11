@@ -1,0 +1,167 @@
+El error se debía a una línea ```` ```java ```` duplicada al inicio del archivo, que el compilador leyó como código. El archivo también estaba truncado al final, en el comentario del Requisito 8, que no tenía prueba asociada. Lo he eliminado para que compile. Si necesitas esa prueba, habrá que reescribirla, porque el texto original no permite reconstruir qué debía verificar.
+
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import org.junit.Before;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link PosixParser} que cubren los requisitos de la
+ * documentación que no están verificados por {@code PosixParserTest}.
+ *
+ * Solo se usa la API pública de {@link Parser} y {@link CommandLine}.
+ */
+public class PosixParserLLMTest
+{
+    private Options options;
+    private Parser parser;
+
+    @Before
+    public void setUp()
+    {
+        options = new Options();
+        options.addOption("a", "enable-a", false, "turn [a] on or off");
+        options.addOption("b", "bfile", true, "set the value of [b]");
+        options.addOption("c", "copt", false, "turn [c] on or off");
+        options.addOption(OptionBuilder.hasArgs().create("J"));
+
+        parser = new PosixParser();
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 1: stopAtNonOption=false sigue interpretando opciones
+    // tras un argumento que no es opción.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_nonOptionWithoutStop_continuesProcessingOptions() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "foo", "-a", "-b", "x" }, false);
+
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertTrue("-b debe estar activo", cl.hasOption("b"));
+        assertEquals("valor de -b", "x", cl.getOptionValue("b"));
+        assertArrayEquals(new String[] { "foo" }, cl.getArgs());
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 2: stopAtNonOption=true + token de dos caracteres no válido
+    // => los elementos restantes se copian sin procesar como argumentos.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_invalidShortTokenWithStop_copiesRemainingElements() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-x", "foo", "bar" }, true);
+
+        assertArrayEquals(new String[] { "foo", "bar" }, cl.getArgs());
+        assertFalse("-a no debe estar activo", cl.hasOption("a"));
+        assertFalse("-b no debe estar activo", cl.hasOption("b"));
+        assertFalse("-c no debe estar activo", cl.hasOption("c"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 3: stopAtNonOption=false + token de dos caracteres no válido
+    // => el token se ignora y el procesamiento continúa.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_invalidShortTokenWithoutStop_isIgnored() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-x", "-a", "foo" }, false);
+
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertArrayEquals(new String[] { "foo" }, cl.getArgs());
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 4: burstToken con stopAtNonOption=true y carácter desconocido
+    // => se añade "--" seguido de los caracteres restantes, y el resto de
+    // tokens no se interpreta como opciones.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_burstUnknownCharWithStop_treatsRemainderAsLiteral() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-azc", "-b", "toast" }, true);
+
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertFalse("-c no debe estar activo (queda en el resto)", cl.hasOption("c"));
+        assertFalse("-b no debe interpretarse como opción tras '--'", cl.hasOption("b"));
+        assertArrayEquals(new String[] { "zc", "-b", "toast" }, cl.getArgs());
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 5: burstToken con stopAtNonOption=false y carácter desconocido.
+    // La Javadoc indica que se añade el carácter desconocido con prefijo "-"
+    // ("-z"); el código añade el token completo ("-az"). Esta prueba sigue la
+    // Javadoc y está pensada para evidenciar la discrepancia.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_burstUnknownCharWithoutStop_reportsOnlyUnknownCharacter() throws Exception
+    {
+        try
+        {
+            parser.parse(options, new String[] { "-az" }, false);
+            fail("Se esperaba UnrecognizedOptionException para el carácter desconocido");
+        }
+        catch (UnrecognizedOptionException e)
+        {
+            assertEquals("Según la Javadoc, la opción no reconocida es solo '-z'",
+                    "-z", e.getOption());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 6: una opción con múltiples valores (hasArgs) con
+    // stopAtNonOption=true debe consumir los tokens siguientes que no son
+    // opciones como valores. Esta prueba describe el comportamiento
+    // documentado; la rama correspondiente en flatten es inalcanzable.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_multiValueOptionWithStop_consumesNonOptionTokens() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-J", "x", "y", "-a" }, true);
+
+        assertArrayEquals("valores de -J", new String[] { "x", "y" }, cl.getOptionValues("J"));
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertEquals("no deben quedar argumentos sueltos", 0, cl.getArgs().length);
+    }
+
+    @Test
+    public void parse_multiValueOptionWithoutStop_consumesNonOptionTokens() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-J", "x", "y", "-a" }, false);
+
+        assertArrayEquals("valores de -J", new String[] { "x", "y" }, cl.getOptionValues("J"));
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertEquals("no deben quedar argumentos sueltos", 0, cl.getArgs().length);
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 7: tras consumir el argumento de una opción, con
+    // stopAtNonOption=true, el siguiente token no opción genera "--" y
+    // copia el resto sin procesar.
+    // ---------------------------------------------------------------
+    @Test
+    public void parse_nonOptionAfterArgConsumedWithStop_copiesRest() throws Exception
+    {
+        CommandLine cl = parser.parse(options,
+                new String[] { "-b", "toast", "foo", "-a" }, true);
+
+        assertTrue("-b debe estar activo", cl.hasOption("b"));
+        assertEquals("valor de -b", "toast", cl.getOptionValue("b"));
+        assertFalse("-a no debe procesarse como opción tras el no-opción", cl.hasOption("a"));
+        assertArrayEquals(new String[] { "foo", "-a" }, cl.getArgs());
+    }
+}
+```

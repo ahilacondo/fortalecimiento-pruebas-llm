@@ -1,0 +1,383 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.util.Collection;
+import java.util.List;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Options} usando solo su API pública.
+ */
+public class OptionsLLMTest
+{
+    @Test
+    public void newOptionsIsEmpty()
+    {
+        Options opts = new Options();
+
+        assertTrue(opts.getOptions().isEmpty());
+        assertTrue(opts.getRequiredOptions().isEmpty());
+        assertTrue(opts.getMatchingOptions("any").isEmpty());
+        assertFalse(opts.hasOption("a"));
+        assertNull(opts.getOption("a"));
+    }
+
+    @Test
+    public void addOptionReturnsSameInstance()
+    {
+        Options opts = new Options();
+
+        assertSame(opts, opts.addOption("a", "desc"));
+        assertSame(opts, opts.addOption("b", false, "desc"));
+        assertSame(opts, opts.addOption("c", "cee", true, "desc"));
+        assertSame(opts, opts.addOption(new Option("d", "dee", false, "desc")));
+    }
+
+    @Test
+    public void shortOnlyOptionIsFoundOnlyAsShort()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "toggle a");
+
+        assertTrue(opts.hasOption("a"));
+        assertTrue(opts.hasShortOption("a"));
+        assertFalse(opts.hasLongOption("a"));
+        assertEquals("toggle a", opts.getOption("a").getDescription());
+        assertFalse(opts.getOption("a").hasArg());
+    }
+
+    @Test
+    public void optionWithLongNameIsFoundByBothNames()
+    {
+        Options opts = new Options();
+        opts.addOption("v", "verbose", false, "verbose mode");
+
+        assertTrue(opts.hasOption("v"));
+        assertTrue(opts.hasOption("verbose"));
+        assertTrue(opts.hasShortOption("v"));
+        assertFalse(opts.hasShortOption("verbose"));
+        assertTrue(opts.hasLongOption("verbose"));
+        assertFalse(opts.hasLongOption("v"));
+        assertSame(opts.getOption("v"), opts.getOption("verbose"));
+    }
+
+    @Test
+    public void leadingHyphensAreIgnoredInLookups()
+    {
+        Options opts = new Options();
+        opts.addOption("v", "verbose", false, "verbose mode");
+
+        assertTrue(opts.hasOption("-v"));
+        assertTrue(opts.hasOption("--verbose"));
+        assertTrue(opts.hasShortOption("-v"));
+        assertTrue(opts.hasLongOption("--verbose"));
+        assertNotNull(opts.getOption("--verbose"));
+        assertNotNull(opts.getOption("-v"));
+    }
+
+    @Test
+    public void getOptionReturnsNullForUnknownName()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "desc");
+
+        assertNull(opts.getOption("zzz"));
+        assertFalse(opts.hasOption("zzz"));
+        assertFalse(opts.hasLongOption("zzz"));
+        assertFalse(opts.hasShortOption("zzz"));
+    }
+
+    @Test
+    public void hasArgIsPreservedFromAddition()
+    {
+        Options opts = new Options();
+        opts.addOption("f", "file", true, "input file");
+
+        assertTrue(opts.getOption("f").hasArg());
+        assertTrue(opts.getOption("file").hasArg());
+    }
+
+    @Test
+    public void getOptionsReturnsAllAddedOptionsInInsertionOrder()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "desc a");
+        opts.addOption("b", "desc b");
+        opts.addOption("c", "desc c");
+
+        Collection<Option> all = opts.getOptions();
+        assertEquals(3, all.size());
+
+        List<String> keys = new java.util.ArrayList<String>();
+        for (Option o : all)
+        {
+            keys.add(o.getKey());
+        }
+        assertEquals(java.util.Arrays.asList("a", "b", "c"), keys);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void getOptionsIsUnmodifiable()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "desc");
+        opts.getOptions().clear();
+    }
+
+    @Test
+    public void getOptionsIsSnapshotNotLiveView()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "desc");
+
+        Collection<Option> snapshot = opts.getOptions();
+        opts.addOption("b", "desc");
+
+        assertEquals(1, snapshot.size());
+        assertEquals(2, opts.getOptions().size());
+    }
+
+    @Test
+    public void duplicateShortKeyReplacesPreviousOption()
+    {
+        Options opts = new Options();
+        opts.addOption("a", "alpha", false, "first");
+        opts.addOption("a", "beta", true, "second");
+
+        assertEquals(1, opts.getOptions().size());
+        assertEquals("second", opts.getOption("a").getDescription());
+        assertTrue(opts.getOption("a").hasArg());
+    }
+
+    @Test
+    public void requiredOptionAppearsInRequiredOptions()
+    {
+        Options opts = new Options();
+        Option required = new Option("r", "required", false, "must be present");
+        required.setRequired(true);
+        opts.addOption(required);
+
+        List<?> requiredOpts = opts.getRequiredOptions();
+        assertEquals(1, requiredOpts.size());
+        assertTrue(requiredOpts.contains("r"));
+    }
+
+    @Test
+    public void nonRequiredOptionIsNotInRequiredOptions()
+    {
+        Options opts = new Options();
+        opts.addOption("n", "not required");
+
+        assertTrue(opts.getRequiredOptions().isEmpty());
+        assertFalse(opts.getRequiredOptions().contains("n"));
+    }
+
+    @Test
+    public void readdingRequiredOptionDoesNotDuplicateEntry()
+    {
+        Options opts = new Options();
+        Option first = new Option("r", "req", false, "first");
+        first.setRequired(true);
+        Option second = new Option("r", "req", false, "second");
+        second.setRequired(true);
+
+        opts.addOption(first);
+        opts.addOption(second);
+
+        assertEquals(1, opts.getRequiredOptions().size());
+        assertTrue(opts.getRequiredOptions().contains("r"));
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void getRequiredOptionsIsUnmodifiable()
+    {
+        Options opts = new Options();
+        Option required = new Option("r", "required", false, "desc");
+        required.setRequired(true);
+        opts.addOption(required);
+
+        opts.getRequiredOptions().clear();
+    }
+
+    @Test
+    public void requiredOptionGroupIsAddedToRequiredOptions()
+    {
+        Options opts = new Options();
+        Option a = new Option("a", "alpha", false, "a");
+        Option b = new Option("b", "beta", false, "b");
+        OptionGroup group = new OptionGroup();
+        group.addOption(a);
+        group.addOption(b);
+        group.setRequired(true);
+
+        opts.addOptionGroup(group);
+
+        assertEquals(1, opts.getRequiredOptions().size());
+        assertTrue(opts.getRequiredOptions().contains(group));
+    }
+
+    @Test
+    public void nonRequiredOptionGroupIsNotInRequiredOptions()
+    {
+        Options opts = new Options();
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", "alpha", false, "a"));
+        group.addOption(new Option("b", "beta", false, "b"));
+
+        opts.addOptionGroup(group);
+
+        assertTrue(opts.getRequiredOptions().isEmpty());
+    }
+
+    @Test
+    public void addOptionGroupRegistersAllMembers()
+    {
+        Options opts = new Options();
+        Option a = new Option("a", "alpha", false, "a");
+        Option b = new Option("b", "beta", false, "b");
+        OptionGroup group = new OptionGroup();
+        group.addOption(a);
+        group.addOption(b);
+
+        opts.addOptionGroup(group);
+
+        assertTrue(opts.hasOption("a"));
+        assertTrue(opts.hasOption("beta"));
+        assertEquals(2, opts.getOptions().size());
+        assertSame(group, opts.getOptionGroup(a));
+        assertSame(group, opts.getOptionGroup(b));
+    }
+
+    @Test
+    public void groupMembersCannotBeRequired()
+    {
+        Options opts = new Options();
+        Option a = new Option("a", "alpha", false, "a");
+        a.setRequired(true);
+        OptionGroup group = new OptionGroup();
+        group.addOption(a);
+
+        opts.addOptionGroup(group);
+
+        assertFalse(a.isRequired());
+        assertFalse(opts.getRequiredOptions().contains("a"));
+    }
+
+    @Test
+    public void getOptionGroupReturnsNullForOptionOutsideGroup()
+    {
+        Options opts = new Options();
+        Option grouped = new Option("a", "alpha", false, "a");
+        Option standalone = new Option("s", "solo", false, "s");
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(grouped);
+        opts.addOptionGroup(group);
+        opts.addOption(standalone);
+
+        assertNull(opts.getOptionGroup(standalone));
+        assertNotNull(opts.getOptionGroup(grouped));
+    }
+
+    @Test
+    public void getMatchingOptionsFindsLongNamesByPrefix()
+    {
+        Options opts = new Options();
+        opts.addOption("v", "version", false, "version");
+        opts.addOption("b", "verbose", false, "verbose");
+        opts.addOption("h", "help", false, "help");
+
+        List<String> matches = opts.getMatchingOptions("ver");
+
+        assertEquals(2, matches.size());
+        assertTrue(matches.contains("version"));
+        assertTrue(matches.contains("verbose"));
+        assertFalse(matches.contains("help"));
+    }
+
+    @Test
+    public void getMatchingOptionsIgnoresLeadingHyphens()
+    {
+        Options opts = new Options();
+        opts.addOption("v", "version", false, "version");
+        opts.addOption("b", "verbose", false, "verbose");
+
+        List<String> matches = opts.getMatchingOptions("--ver");
+
+        assertEquals(2, matches.size());
+        assertEquals(opts.getMatchingOptions("ver"), matches);
+    }
+
+    @Test
+    public void getMatchingOptionsIgnoresShortOnlyOptions()
+    {
+        Options opts = new Options();
+        opts.addOption("x", "desc");
+
+        assertTrue(opts.getMatchingOptions("x").isEmpty());
+    }
+
+    @Test
+    public void getMatchingOptionsWithExactNameReturnsIt()
+    {
+        Options opts = new Options();
+        opts.addOption("v", "version", false, "version");
+        opts.addOption("b", "verbose", false, "verbose");
+
+        List<String> matches = opts.getMatchingOptions("version");
+
+        assertEquals(1, matches.size());
+        assertEquals("version", matches.get(0));
+    }
+
+    @Test
+    public void toStringContainsRegisteredOptionNames()
+    {
+        Options opts = new Options();
+        opts.addOption("f", "foo", true, "Foo");
+        opts.addOption("z", "zeta", false, "Zeta");
+
+        String s = opts.toString();
+
+        assertNotNull(s);
+        assertTrue(s.contains("foo"));
+        assertTrue(s.contains("zeta"));
+        assertTrue(s.contains("f"));
+        assertTrue(s.contains("z"));
+    }
+
+    @Test
+    public void toStringOfEmptyOptionsIsNotNull()
+    {
+        Options opts = new Options();
+
+        String s = opts.toString();
+
+        assertNotNull(s);
+        assertTrue(s.contains("Options"));
+    }
+}

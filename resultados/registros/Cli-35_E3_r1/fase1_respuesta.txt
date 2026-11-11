@@ -1,0 +1,8 @@
+1. Eliminación de guiones iniciales (`-` y `--`) en `hasOption` y `getOption`, ya que las pruebas solo usan nombres sin guiones.
+2. `hasShortOption` y `hasLongOption` distinguen los espacios de nombres: un nombre corto no se reconoce como largo y viceversa.
+3. `getMatchingOptions` solo busca entre nombres largos, ignora opciones que solo tienen nombre corto y elimina guiones iniciales del parámetro.
+4. Al añadir dos veces una opción requerida con la misma clave, `getRequiredOptions` no duplica la entrada.
+5. `getRequiredOptions` incluye un `OptionGroup` solo si el grupo es requerido, y no incluye las opciones miembro.
+6. `addOptionGroup` fuerza `required=false` en cada opción miembro, aunque se hubieran marcado como requeridas antes.
+7. `getOptionGroup(Option)` devuelve el grupo al que pertenece la opción y `null` para opciones que no están en ningún grupo.
+8. Al sobrescribir una opción con la misma clave corta pero distinto nombre largo, el nombre largo anterior sigue registrado como alias obsoleto.

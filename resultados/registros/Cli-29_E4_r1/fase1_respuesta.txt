@@ -1,0 +1,8 @@
+1. `stripLeadingHyphens` debe devolver la cadena sin cambios cuando no empieza por guiones.
+2. `stripLeadingHyphens` debe devolver una cadena vacía cuando la entrada está formada solo por guiones (p. ej., "-" o "--").
+3. `stripLeadingHyphens` debe devolver una cadena vacía cuando la entrada es vacía.
+4. `stripLeadingHyphens` solo debe eliminar los guiones del inicio, sin tocar guiones intermedios o finales (p. ej., "a-b" o "foo-").
+5. `stripLeadingAndTrailingQuotes` debe eliminar las comillas dobles de inicio y de fin de una cadena entrecomillada, devolviendo el contenido interior (p. ej., "one two" entre comillas devuelve one two).
+6. `stripLeadingAndTrailingQuotes` debe eliminar solo la comilla inicial o solo la final cuando únicamente una de ellas está presente.
+7. `stripLeadingAndTrailingQuotes` debe devolver la cadena sin cambios cuando no está entrecomillada.
+8. `stripLeadingAndTrailingQuotes` debe conservar las comillas situadas en el interior de la cadena, eliminando únicamente las de los extremos.

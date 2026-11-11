@@ -1,0 +1,8 @@
+1. Los métodos isEmpty e isNotEmpty devuelven true o false según sea null, cadena vacía o contenga espacios, sin recortar el texto.
+2. Los métodos isBlank e isNotBlank consideran en blanco los valores null, vacíos y los formados solo por caracteres de espacio en blanco según Character.isWhitespace.
+3. Los métodos trim, trimToNull y trimToEmpty eliminan caracteres <= 32 en ambos extremos y devuelven null o cadena vacía según corresponda.
+4. Los métodos strip, stripToNull y stripToEmpty eliminan espacios en blanco en ambos extremos, y strip(str, stripChars) elimina solo los caracteres indicados, tratando stripChars nulo como espacio en blanco.
+5. Los métodos equals y equalsIgnoreCase son seguros ante null, consideran dos null como iguales y distinguen mayúsculas en equals.
+6. Los métodos startsWith, endsWith y sus variantes IgnoreCase son seguros ante null y no tienen pruebas directas, solo se usa startsWithAny.
+7. Los métodos indexOf, lastIndexOf, contains, indexOfAny, containsAny, containsOnly y containsNone devuelven -1 o false con entradas null o vacías, según su contrato.
+8. Los métodos substring, left, right, mid, substringBefore, substringAfter y substringBetween devuelven null para entrada null, cadena vacía con separador vacío o nulo, y valores de posición fuera de rango sin lanzar excepciones.

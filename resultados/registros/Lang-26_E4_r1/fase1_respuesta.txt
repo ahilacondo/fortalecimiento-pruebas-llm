@@ -1,0 +1,8 @@
+1. La clase debe ser segura para hilos: varios hilos pueden formatear con la misma instancia sin corrupción de resultados.
+2. El patrón `'Z'` debe producir el desfase RFC822 (por ejemplo `+0800`, `-1100`); la prueba que lo cubría está comentada y `testFormat` está vacío.
+3. El patrón `'ZZ'` debe producir el desfase ISO8601 con dos puntos (por ejemplo `+08:00`, `-11:00`).
+4. Los patrones deben generar la misma salida que `SimpleDateFormat` para letras como G, M, E, a, z o D; solo la prueba de comparación desactivada abordaba esto.
+5. Solo se soporta formateo: `parseObject` debe devolver `null` y dejar el índice de posición y el índice de error en 0.
+6. `format(Object)` debe aceptar `Date`, `Calendar` y `Long`, y lanzar `IllegalArgumentException` para cualquier otro tipo, incluido `null`.
+7. `getInstance` debe lanzar `IllegalArgumentException` cuando el patrón es `null` o inválido.
+8. Los métodos `getDateInstance`, `getTimeInstance` y `getDateTimeInstance` deben lanzar `IllegalArgumentException` cuando el Locale no define patrón para el estilo solicitado.

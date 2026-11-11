@@ -1,0 +1,191 @@
+```java
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales JUnit 4 para {@link Util}.
+ */
+public class UtilLLMTest
+{
+    // ---------------------------------------------------------------
+    // stripLeadingHyphens
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stripLeadingHyphensRemovesSingleHyphen()
+    {
+        assertEquals("f", Util.stripLeadingHyphens("-f"));
+    }
+
+    @Test
+    public void stripLeadingHyphensRemovesDoubleHyphen()
+    {
+        assertEquals("foo", Util.stripLeadingHyphens("--foo"));
+    }
+
+    @Test
+    public void stripLeadingHyphensOnlyRemovesFirstTwoHyphens()
+    {
+        // Solo se eliminan los guiones iniciales de "--", no todos
+        assertEquals("-foo", Util.stripLeadingHyphens("---foo"));
+    }
+
+    @Test
+    public void stripLeadingHyphensLeavesStringWithoutHyphensUnchanged()
+    {
+        assertEquals("foo", Util.stripLeadingHyphens("foo"));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsSameInstanceWhenNoHyphens()
+    {
+        String input = "option";
+        assertSame("Sin guiones debe devolverse la misma instancia",
+                input, Util.stripLeadingHyphens(input));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForEmptyInput()
+    {
+        assertEquals("", Util.stripLeadingHyphens(""));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForSingleHyphen()
+    {
+        assertEquals("", Util.stripLeadingHyphens("-"));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForDoubleHyphen()
+    {
+        assertEquals("", Util.stripLeadingHyphens("--"));
+    }
+
+    @Test
+    public void stripLeadingHyphensKeepsSingleHyphenAfterDoubleHyphenPrefix()
+    {
+        // "---" -> se quita "--" y queda "-"
+        assertEquals("-", Util.stripLeadingHyphens("---"));
+    }
+
+    @Test
+    public void stripLeadingHyphensDoesNotRemoveInnerHyphens()
+    {
+        assertEquals("foo-bar", Util.stripLeadingHyphens("-foo-bar"));
+        assertEquals("a-b", Util.stripLeadingHyphens("a-b"));
+    }
+
+    @Test
+    public void stripLeadingHyphensPreservesWhitespaceAfterHyphens()
+    {
+        assertEquals(" x", Util.stripLeadingHyphens("-- x"));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsNullForNullInput()
+    {
+        assertNull(Util.stripLeadingHyphens(null));
+    }
+
+    // ---------------------------------------------------------------
+    // stripLeadingAndTrailingQuotes
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stripQuotesRemovesBothQuotes()
+    {
+        assertEquals("one two", Util.stripLeadingAndTrailingQuotes("\"one two\""));
+    }
+
+    @Test
+    public void stripQuotesRemovesOnlyLeadingQuote()
+    {
+        assertEquals("abc", Util.stripLeadingAndTrailingQuotes("\"abc"));
+    }
+
+    @Test
+    public void stripQuotesRemovesOnlyTrailingQuote()
+    {
+        assertEquals("abc", Util.stripLeadingAndTrailingQuotes("abc\""));
+    }
+
+    @Test
+    public void stripQuotesLeavesUnquotedStringUnchanged()
+    {
+        assertEquals("abc", Util.stripLeadingAndTrailingQuotes("abc"));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyStringForEmptyInput()
+    {
+        assertEquals("", Util.stripLeadingAndTrailingQuotes(""));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyStringForSingleQuote()
+    {
+        assertEquals("", Util.stripLeadingAndTrailingQuotes("\""));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyStringForPairOfQuotes()
+    {
+        assertEquals("", Util.stripLeadingAndTrailingQuotes("\"\""));
+    }
+
+    @Test
+    public void stripQuotesRemovesOnlyOneQuotePerSide()
+    {
+        assertEquals("\"abc\"", Util.stripLeadingAndTrailingQuotes("\"\"abc\"\""));
+    }
+
+    @Test
+    public void stripQuotesDoesNotRemoveInnerQuotes()
+    {
+        assertEquals("a\"b", Util.stripLeadingAndTrailingQuotes("a\"b"));
+        assertEquals("a\"b\"c", Util.stripLeadingAndTrailingQuotes("\"a\"b\"c\""));
+    }
+
+    @Test
+    public void stripQuotesDoesNotRemoveSingleQuotes()
+    {
+        assertEquals("'abc'", Util.stripLeadingAndTrailingQuotes("'abc'"));
+    }
+
+    @Test
+    public void stripQuotesPreservesWhitespaceInsideQuotes()
+    {
+        assertEquals("  spaced  ", Util.stripLeadingAndTrailingQuotes("\"  spaced  \""));
+    }
+
+    @Test
+    public void stripQuotesDoesNotTrimWhitespaceOutsideQuotes()
+    {
+        assertEquals(" \"abc\" ", Util.stripLeadingAndTrailingQuotes(" \"abc\" ")
+                .equals("abc") ? "abc" : " \"abc\" ");
+    }
+}
+```

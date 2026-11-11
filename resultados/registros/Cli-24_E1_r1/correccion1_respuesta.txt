@@ -1,0 +1,243 @@
+Corrijo los errores de compilación. El archivo original tenía dos problemas:
+
+1. **Fences de Markdown incrustados**: el código empezaba con "```java" duplicado, y el carácter "`" de esas líneas llegó al compilador.
+2. **Archivo truncado**: el último método terminaba en mitad de una cadena (`hf.setSyntaxPrefix("`) y la clase no estaba cerrada. Como el resto del método no aparece, lo he completado de forma coherente con su nombre. Revisa esa prueba si esperabas otra aserción.
+
+También cambio los comparadores de `Comparator<Object>` a `Comparator<Option>`, porque `HelpFormatter.setOptionComparator` espera un `Comparator<Option>` en commons-cli, y con `Comparator<Object>` no compilaría. No cambia lo que verifican las pruebas.
+
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Comparator;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link HelpFormatter} usando solo su API pública.
+ */
+public class HelpFormatterLLMTest
+{
+    private static final String EOL = System.getProperty("line.separator");
+
+    // ------------------------------------------------------------ utilidades
+
+    private static String usageOf(HelpFormatter hf, int width, String app, Options options)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, width, app, options);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String helpOf(HelpFormatter hf, int width, String syntax, String header,
+                                 Options options, int leftPad, int descPad, String footer,
+                                 boolean autoUsage)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printHelp(pw, width, syntax, header, options, leftPad, descPad, footer, autoUsage);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String wrapOf(HelpFormatter hf, int width, int tabStop, String text)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printWrapped(pw, width, tabStop, text);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String optionsOf(HelpFormatter hf, int width, Options options,
+                                    int leftPad, int descPad)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, width, options, leftPad, descPad);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String captureStdout(Runnable action)
+    {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer, true));
+        try
+        {
+            action.run();
+        }
+        finally
+        {
+            System.setOut(original);
+        }
+        return buffer.toString();
+    }
+
+    // ------------------------------------------------------ constantes y valores por defecto
+
+    @Test
+    public void testPublicConstantsHaveExpectedValues()
+    {
+        assertEquals(74, HelpFormatter.DEFAULT_WIDTH);
+        assertEquals(1, HelpFormatter.DEFAULT_LEFT_PAD);
+        assertEquals(3, HelpFormatter.DEFAULT_DESC_PAD);
+        assertEquals("usage: ", HelpFormatter.DEFAULT_SYNTAX_PREFIX);
+        assertEquals("-", HelpFormatter.DEFAULT_OPT_PREFIX);
+        assertEquals("--", HelpFormatter.DEFAULT_LONG_OPT_PREFIX);
+        assertEquals("arg", HelpFormatter.DEFAULT_ARG_NAME);
+    }
+
+    @Test
+    public void testNewFormatterHasDefaultAccessorValues()
+    {
+        HelpFormatter hf = new HelpFormatter();
+
+        assertEquals(HelpFormatter.DEFAULT_WIDTH, hf.getWidth());
+        assertEquals(HelpFormatter.DEFAULT_LEFT_PAD, hf.getLeftPadding());
+        assertEquals(HelpFormatter.DEFAULT_DESC_PAD, hf.getDescPadding());
+        assertEquals(HelpFormatter.DEFAULT_SYNTAX_PREFIX, hf.getSyntaxPrefix());
+        assertEquals(HelpFormatter.DEFAULT_OPT_PREFIX, hf.getOptPrefix());
+        assertEquals(HelpFormatter.DEFAULT_LONG_OPT_PREFIX, hf.getLongOptPrefix());
+        assertEquals(HelpFormatter.DEFAULT_ARG_NAME, hf.getArgName());
+        assertEquals(EOL, hf.getNewLine());
+        assertNotNull(hf.getOptionComparator());
+    }
+
+    // ------------------------------------------------------------ comparador
+
+    @Test
+    public void testSetOptionComparatorStoresGivenInstance()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator<Option> custom = new Comparator<Option>()
+        {
+            public int compare(Option o1, Option o2)
+            {
+                return 0;
+            }
+        };
+
+        hf.setOptionComparator(custom);
+
+        assertSame(custom, hf.getOptionComparator());
+    }
+
+    @Test
+    public void testSetOptionComparatorNullRestoresDefaultComparator()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator<Option> custom = new Comparator<Option>()
+        {
+            public int compare(Option o1, Option o2)
+            {
+                return 0;
+            }
+        };
+
+        hf.setOptionComparator(custom);
+        hf.setOptionComparator(null);
+
+        assertNotNull(hf.getOptionComparator());
+        assertNotSame(custom, hf.getOptionComparator());
+    }
+
+    @Test
+    public void testDefaultComparatorSortsCaseInsensitively()
+    {
+        Options options = new Options();
+        options.addOption(new Option("B", "second"));
+        options.addOption(new Option("a", "first"));
+
+        String usage = usageOf(new HelpFormatter(), 80, "app", options);
+
+        assertEquals("usage: app [-a] [-B]" + EOL, usage);
+    }
+
+    @Test
+    public void testCustomComparatorControlsOptionListingOrder()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+        options.addOption(new Option("b", "second"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setOptionComparator(new Comparator<Option>()
+        {
+            public int compare(Option o1, Option o2)
+            {
+                return o2.getKey().compareToIgnoreCase(o1.getKey());
+            }
+        });
+
+        String listing = optionsOf(hf, 80, options, 1, 3);
+
+        assertEquals(" -b   second" + EOL + " -a   first" + EOL, listing);
+    }
+
+    // ------------------------------------------------------------ accesores y prefijos
+
+    @Test
+    public void testChangedOptPrefixIsUsedInOptionListing()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setOptPrefix("+");
+
+        assertEquals(" +a   first" + EOL, optionsOf(hf, 80, options, 1, 3));
+    }
+
+    @Test
+    public void testChangedLongOptPrefixIsUsedInOptionListing()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "aaa", false, "first"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setLongOptPrefix("++");
+
+        assertEquals(" -a,++aaa   first" + EOL, optionsOf(hf, 80, options, 1, 3));
+    }
+
+    @Test
+    public void testPrintHelpUsesConfiguredSyntaxPrefix()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setSyntaxPrefix("Uso: ");
+
+        String help = helpOf(hf, 80, "app", null, new Options(), 1, 3, null, false);
+
+        assertEquals("Uso: app" + EOL + EOL, help);
+    }
+
+    // ------------------------------------------------------------ printUsage
+
+    @Test
+    public void testPrintUsageWithCustomSyntaxPrefixAndSyntax()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setSyntaxPrefix("Uso: ");
+
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+
+        String usage = usageOf(hf, 80, "app", options);
+
+        assertEquals("Uso: app [-a]" + EOL, usage);
+    }
+}
+```

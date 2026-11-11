@@ -1,0 +1,8 @@
+1. El método addOption debe devolver el mismo grupo para permitir encadenamiento de llamadas; no se verifica el valor devuelto.
+2. El método getOptions debe devolver una colección con las opciones añadidas al grupo; no se prueba directamente.
+3. El método setSelected debe fijar la opción seleccionada y getSelected debe devolver su nombre; solo se observa indirectamente a través del parser.
+4. El método getSelected debe devolver null cuando ninguna opción del grupo está seleccionada.
+5. El método setSelected con null debe restablecer la selección previa del grupo; este caso no se prueba.
+6. Volver a seleccionar la misma opción del grupo no debe lanzar AlreadySelectedException; no hay prueba que lo confirme.
+7. Los métodos setRequired e isRequired deben guardar y devolver el estado de obligatoriedad del grupo; no hay ninguna prueba para ellos.
+8. El método getNames debe devolver también los nombres de opciones que solo tienen nombre largo; la prueba existente solo usa opciones con nombre corto.

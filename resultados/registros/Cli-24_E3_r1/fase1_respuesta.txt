@@ -1,0 +1,8 @@
+1. Las sobrecargas de `printHelp` sin `PrintWriter` escriben en `System.out` y usan `defaultWidth` como ancho, sin verificación.
+2. Con `autoUsage = false`, `printHelp` imprime la sintaxis literal recibida en lugar de generar el uso a partir de las `Options`.
+3. Un `header` o `footer` nulo o compuesto solo por espacios se omite de la salida; no hay prueba de esa rama.
+4. La sobrecarga `printUsage(pw, width, cmdLineSyntax)` no tiene prueba directa: no se verifica el prefijo `usage: ` ni la sangría de las líneas ajustadas.
+5. `findWrapPos` devuelve la posición siguiente a un `\n` o `\t` situado dentro del ancho, rama que las pruebas existentes no ejercitan.
+6. `renderWrappedText` lanza `IllegalStateException` cuando `nextLineTabStop >= width`, comportamiento documentado en Javadoc pero sin prueba.
+7. Una opción sin descripción (`null`) se renderiza solo con su prefijo y alineación, sin excepciones; no hay prueba que lo confirme.
+8. Los prefijos personalizados (`setOptPrefix`, `setLongOptPrefix`) se aplican en `renderOptions` pero `appendOption` usa `"-"` y `"--"` codificados, por lo que el uso automático los ignora; ninguna prueba detecta esta inconsistencia.

@@ -1,0 +1,214 @@
+El error se debe a que el archivo empieza con una doble valla de Markdown (```` ```java ```` seguido de otro ```` ```java ````), y el carácter `` ` `` no es válido en Java. Además, el fragmento está truncado al final y le falta el cierre de la clase. Lo corrijo cerrando la clase; no modifico las aserciones de las pruebas.
+
+```java
+package org.apache.commons.lang3.math;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link NumberUtils}, dirigidas a ramas de
+ * {@code createNumber}, {@code isNumber}, conversiones seguras y mínimos/máximos
+ * que la suite existente no ejecuta.
+ */
+public class NumberUtilsLLMTest {
+
+    // ------------------------------------------------------------------
+    // Utilidad
+    // ------------------------------------------------------------------
+
+    private static void assertCreateNumberThrows(String str) {
+        try {
+            Object value = NumberUtils.createNumber(str);
+            fail("Se esperaba NumberFormatException para [" + str + "] pero se obtuvo " + value);
+        } catch (NumberFormatException expected) {
+            // comportamiento esperado
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // createNumber: casos generales y nulos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCreateNumberNullReturnsNull() {
+        assertNull("createNumber(null) debe devolver null", NumberUtils.createNumber(null));
+    }
+
+    @Test
+    public void testCreateNumberBlankStringsThrow() {
+        assertCreateNumberThrows("");
+        assertCreateNumberThrows("   ");
+        assertCreateNumberThrows("\t");
+    }
+
+    @Test
+    public void testCreateNumberDoubleDashReturnsNull() {
+        assertNull("createNumber(\"--5\") debe devolver null", NumberUtils.createNumber("--5"));
+        assertNull("createNumber(\"--\") debe devolver null", NumberUtils.createNumber("--"));
+    }
+
+    @Test
+    public void testCreateNumberHexIntegers() {
+        assertEquals("0x1F debe ser Integer 31", Integer.valueOf(31), NumberUtils.createNumber("0x1F"));
+        assertEquals("0x0 debe ser Integer 0", Integer.valueOf(0), NumberUtils.createNumber("0x0"));
+        assertEquals("-0xFF debe ser Integer -255", Integer.valueOf(-255), NumberUtils.createNumber("-0xFF"));
+    }
+
+    @Test
+    public void testCreateNumberHexOverflowThrows() {
+        // Con prefijo hexadecimal se delega en createInteger, que no degrada a Long
+        assertCreateNumberThrows("0x1FFFFFFFF");
+    }
+
+    @Test
+    public void testCreateNumberInvalidHexThrows() {
+        assertCreateNumberThrows("0x");
+        assertCreateNumberThrows("0xG1");
+    }
+
+    @Test
+    public void testCreateNumberIntegerTypeSelection() {
+        assertEquals("123 debe ser Integer", Integer.valueOf(123), NumberUtils.createNumber("123"));
+        assertEquals("Límite inferior de int",
+                Integer.valueOf(Integer.MIN_VALUE), NumberUtils.createNumber("-2147483648"));
+        assertEquals("2147483648 debe promocionar a Long",
+                Long.valueOf(2147483648L), NumberUtils.createNumber("2147483648"));
+        assertEquals("12345678901 debe ser Long",
+                Long.valueOf(12345678901L), NumberUtils.createNumber("12345678901"));
+    }
+
+    @Test
+    public void testCreateNumberBigIntegerForHugeIntegers() {
+        assertEquals("Enteros enormes deben ser BigInteger",
+                new BigInteger("123456789012345678901234567890"),
+                NumberUtils.createNumber("123456789012345678901234567890"));
+    }
+
+    @Test
+    public void testCreateNumberWithLeadingWhitespaceThrows() {
+        // No se hace trim: el espacio inicial produce NumberFormatException
+        assertCreateNumberThrows(" 12");
+    }
+
+    // ------------------------------------------------------------------
+    // createNumber: decimales y notación exponencial sin sufijo
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCreateNumberDecimalDefaultsToFloat() {
+        assertEquals("1.5 debe ser Float", Float.valueOf(1.5f), NumberUtils.createNumber("1.5"));
+        assertEquals("-1.25 debe ser Float", Float.valueOf(-1.25f), NumberUtils.createNumber("-1.25"));
+    }
+
+    @Test
+    public void testCreateNumberZeroDecimalIsFloatZero() {
+        assertEquals("0.0 debe ser Float 0.0", Float.valueOf(0.0f), NumberUtils.createNumber("0.0"));
+    }
+
+    @Test
+    public void testCreateNumberExponentDefaultsToFloat() {
+        assertEquals("1e3 debe ser Float 1000", Float.valueOf(1000f), NumberUtils.createNumber("1e3"));
+        assertEquals("1.5E3 debe ser Float 1500", Float.valueOf(1500f), NumberUtils.createNumber("1.5E3"));
+        assertEquals("1E-5 debe ser Float 1.0E-5",
+                Float.valueOf(1.0E-5f), NumberUtils.createNumber("1E-5"));
+    }
+
+    @Test
+    public void testCreateNumberTooLargeForFloatBecomesDouble() {
+        assertEquals("1e39 no cabe en float y debe ser Double",
+                Double.valueOf(1e39), NumberUtils.createNumber("1e39"));
+    }
+
+    @Test
+    public void testCreateNumberTooLargeForDoubleBecomesBigDecimal() {
+        assertEquals("1e400 no cabe en double y debe ser BigDecimal",
+                new BigDecimal("1e400"), NumberUtils.createNumber("1e400"));
+    }
+
+    @Test
+    public void testCreateNumberMalformedDecimalsThrow() {
+        assertCreateNumberThrows("1.2.3");
+        assertCreateNumberThrows("1.5e");
+        assertCreateNumberThrows("1.5e3.2");
+    }
+
+    // ------------------------------------------------------------------
+    // createNumber: sufijos de tipo f/F, d/D, l/L
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCreateNumberFloatSuffix() {
+        assertEquals("1.5f debe ser Float", Float.valueOf(1.5f), NumberUtils.createNumber("1.5f"));
+        assertEquals("1.5F debe ser Float", Float.valueOf(1.5f), NumberUtils.createNumber("1.5F"));
+        assertEquals("1e3f debe ser Float 1000", Float.valueOf(1000f), NumberUtils.createNumber("1e3f"));
+        assertEquals("0.0f debe ser Float 0.0", Float.valueOf(0.0f), NumberUtils.createNumber("0.0f"));
+    }
+
+    @Test
+    public void testCreateNumberDoubleSuffix() {
+        assertEquals("1.5d debe ser Double", Double.valueOf(1.5d), NumberUtils.createNumber("1.5d"));
+        assertEquals("1.5D debe ser Double", Double.valueOf(1.5d), NumberUtils.createNumber("1.5D"));
+        assertEquals("0.0d debe ser Double 0.0", Double.valueOf(0.0d), NumberUtils.createNumber("0.0d"));
+        assertEquals("1e-50d debe ser Double",
+                Double.valueOf(1e-50d), NumberUtils.createNumber("1e-50d"));
+    }
+
+    @Test
+    public void testCreateNumberFloatSuffixOverflowFallsBackToDouble() {
+        // 1e39 excede float: el sufijo f cae a d
+        assertEquals("1e39f debe degradar a Double",
+                Double.valueOf(1e39d), NumberUtils.createNumber("1e39f"));
+    }
+
+    @Test
+    public void testCreateNumberFloatSuffixUnderflowFallsBackToBigDecimal() {
+        // 1e-50 se redondea a 0 en float y 1e-50 no es 0 en double como precisión -> BigDecimal
+        assertEquals("1e-50f debe degradar a BigDecimal",
+                new BigDecimal("1e-50"), NumberUtils.createNumber("1e-50f"));
+    }
+
+    @Test
+    public void testCreateNumberDoubleSuffixOverflowFallsBackToBigDecimal() {
+        assertEquals("1e400d debe degradar a BigDecimal",
+                new BigDecimal("1e400"), NumberUtils.createNumber("1e400d"));
+    }
+
+    @Test
+    public void testCreateNumberLongSuffix() {
+        assertEquals("10L debe ser Long", Long.valueOf(10L), NumberUtils.createNumber("10L"));
+        assertEquals("10l debe ser Long", Long.valueOf(10L), NumberUtils.createNumber("10l"));
+        assertEquals("-10l debe ser Long -10", Long.valueOf(-10L), NumberUtils.createNumber("-10l"));
+    }
+
+    @Test
+    public void testCreateNumberLongSuffixOverflowFallsBackToBigInteger() {
+        assertEquals("Un L que excede long debe ser BigInteger",
+                new BigInteger("9999999999999999999999"),
+                NumberUtils.createNumber("9999999999999999999999L"));
+    }
+
+    @Test
+    public void testCreateNumberInvalidLongSuffixThrows() {
+        assertCreateNumberThrows("1.5L");
+        assertCreateNumberThrows("1a5L");
+        assertCreateNumberThrows("1e5L");
+    }
+
+    @Test
+    public void testCreateNumberInvalidSuffixThrows() {
+        assertCreateNumberThrows("10x");
+        assertCreateNumberThrows("abc");
+    }
+}
+```
+
+Nota: el fragmento original terminaba en `testCreateNumberInvalidSuffixThrows`. Si había más métodos de prueba después de ese punto, hay que restaurarlos, porque aquí solo se ha cerrado la clase.

@@ -1,0 +1,222 @@
+package org.apache.commons.cli;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Comparator;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Pruebas adicionales para {@link HelpFormatter} que cubren comportamientos
+ * no verificados por {@code HelpFormatterTest}. Solo usan la API pública.
+ */
+public class HelpFormatterLLMTest
+{
+    private static final String EOL = System.getProperty("line.separator");
+
+    /** Ejecuta la acción redirigiendo System.out y devuelve lo escrito. */
+    private static String captureStdout(Runnable action)
+    {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer, true));
+        try
+        {
+            action.run();
+        }
+        finally
+        {
+            System.setOut(original);
+        }
+        return buffer.toString();
+    }
+
+    /** Renderiza la ayuda completa con ancho 80, padding izquierdo 1 y padding de descripción 3. */
+    private static String renderHelp(HelpFormatter formatter, String header, String footer, Options options)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        formatter.printHelp(pw, 80, "app", header, options, 1, 3, footer);
+        pw.flush();
+        return sw.toString();
+    }
+
+    // 1. El comparador personalizado también ordena la sección de descripciones.
+    @Test
+    public void customComparatorOrdersOptionDescriptions()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+        options.addOption(new Option("b", "second"));
+        options.addOption(new Option("c", "third"));
+
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.setOptionComparator((Comparator) (o1, o2) ->
+                ((Option) o2).getKey().compareToIgnoreCase(((Option) o1).getKey()));
+
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        formatter.printOptions(pw, 80, options, 1, 3);
+        pw.flush();
+
+        String expected = " -c   third" + EOL
+                + " -b   second" + EOL
+                + " -a   first" + EOL;
+        assertEquals(expected, sw.toString());
+    }
+
+    // 2. Los prefijos corto y largo configurados se reflejan en la salida de descripciones.
+    @Test
+    public void customOptAndLongOptPrefixesAppearInDescriptions()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "all", false, "all files"));
+        options.addOption(new Option("b", false, "bee"));
+
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.setOptPrefix("+");
+        formatter.setLongOptPrefix("++");
+
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        formatter.printOptions(pw, 80, options, 1, 3);
+        pw.flush();
+
+        // " +a,++all" tiene 9 caracteres; " +b" se rellena hasta 9 y luego se añade el padding de descripción (3).
+        String expected = " +a,++all   all files" + EOL
+                + " +b" + " ".repeat(9) + "bee" + EOL;
+        assertEquals(expected, sw.toString());
+    }
+
+    // 3. El separador de línea configurado se usa al separar las filas de opciones.
+    @Test
+    public void customNewLineSeparatesRenderedOptionRows()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+        options.addOption(new Option("b", "second"));
+
+        HelpFormatter formatter = new HelpFormatter();
+        formatter.setNewLine("<NL>");
+
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        formatter.printOptions(pw, 80, options, 1, 3);
+        pw.flush();
+
+        // El separador configurado va entre filas; println final usa el separador del sistema.
+        String expected = " -a   first<NL> -b   second" + EOL;
+        assertEquals(expected, sw.toString());
+    }
+
+    // 4. El ancho configurado con setWidth se aplica a printHelp sin ancho explícito.
+    @Test
+    public void setWidthIsAppliedByPrintHelpWithoutExplicitWidth()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "alpha beta gamma delta epsilon zeta eta theta iota kappa"));
+
+        HelpFormatter configured = new HelpFormatter();
+        configured.setWidth(30);
+        String viaSetter = captureStdout(() ->
+                configured.printHelp("app", null, options, null, false));
+
+        HelpFormatter explicit = new HelpFormatter();
+        String viaExplicitWidth = captureStdout(() ->
+                explicit.printHelp(30, "app", null, options, null, false));
+
+        String withDefaultWidth = captureStdout(() ->
+                new HelpFormatter().printHelp("app", null, options, null, false));
+
+        assertEquals(viaExplicitWidth, viaSetter);
+        assertNotEquals(withDefaultWidth, viaSetter);
+    }
+
+    // 5. Si nextLineTabStop >= width, se usa 1 para evitar bucle infinito.
+    @Test(timeout = 5000)
+    public void nextLineTabStopNotLessThanWidthIsClampedToOne()
+    {
+        String text = "aaaa bbbb cccc dddd";
+        String expected = "aaaa bbbb" + EOL + " cccc dddd" + EOL;
+
+        StringWriter sw1 = new StringWriter();
+        PrintWriter pw1 = new PrintWriter(sw1);
+        new HelpFormatter().printWrapped(pw1, 10, 10, text);
+        pw1.flush();
+        assertEquals(expected, sw1.toString());
+
+        StringWriter sw2 = new StringWriter();
+        PrintWriter pw2 = new PrintWriter(sw2);
+        new HelpFormatter().printWrapped(pw2, 10, 12, text);
+        pw2.flush();
+        assertEquals(expected, sw2.toString());
+    }
+
+    // 6a. findWrapPos corta en el carácter de nueva línea cuando aparece antes del ancho.
+    @Test
+    public void wrapBreaksAtNewlineWhenBeforeWidth()
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        new HelpFormatter().printWrapped(pw, 10, "abc\ndef ghi");
+        pw.flush();
+
+        assertEquals("abc" + EOL + "def ghi" + EOL, sw.toString());
+    }
+
+    // 6b. findWrapPos corta en el carácter de tabulación cuando aparece antes del ancho.
+    @Test
+    public void wrapBreaksAtTabWhenBeforeWidth()
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        new HelpFormatter().printWrapped(pw, 10, "abc\tdef ghi");
+        pw.flush();
+
+        assertEquals("abc" + EOL + "def ghi" + EOL, sw.toString());
+    }
+
+    // 7. Header y footer nulos o solo con espacios se omiten sin líneas vacías adicionales.
+    @Test
+    public void nullOrBlankHeaderAndFooterAreOmitted()
+    {
+        Options options = new Options();
+        options.addOption(new Option("a", "first"));
+
+        HelpFormatter formatter = new HelpFormatter();
+        String expected = "usage: app" + EOL + " -a   first" + EOL;
+
+        String[] blanks = {null, "", "   ", " \t "};
+        for (String blank : blanks)
+        {
+            assertEquals("header/footer='" + blank + "'",
+                    expected, renderHelp(formatter, blank, blank, options));
+        }
+    }
+
+    // 8. printUsage con cadena de sintaxis antepone el prefijo y sangra las líneas siguientes.
+    @Test
+    public void plainSyntaxUsageAddsPrefixAndIndentsContinuationLines()
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        new HelpFormatter().printUsage(pw, 20, "app -input FILE -output DIR -verbose");
+        pw.flush();
+
+        // "usage: app " tiene 11 caracteres: prefijo "usage: " (7) + posición de la primera palabra tras "app" (4).
+        String indent = " ".repeat(11);
+        String expected = "usage: app -input" + EOL
+                + indent + "FILE" + EOL
+                + indent + "-output" + EOL
+                + indent + "DIR" + EOL
+                + indent + "-verbose" + EOL;
+        assertEquals(expected, sw.toString());
+        assertTrue(sw.toString().startsWith("usage: app"));
+    }
+}

@@ -1,0 +1,345 @@
+package org.apache.commons.lang;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+
+/**
+ * Pruebas adicionales para {@link Entities}, orientadas a los requisitos de la
+ * documentación que las pruebas existentes no cubren.
+ *
+ * Nota: {@code fillWithHtml40Entities} es de ámbito de paquete. Esta clase de prueba
+ * está en el mismo paquete que {@code Entities}, por lo que puede invocarlo; es el
+ * único punto que no es estrictamente público, y se usa porque el Javadoc exige ese
+ * comportamiento.
+ */
+public class EntitiesLLMTest {
+
+    /**
+     * Writer de prueba que acepta hasta {@code limit} caracteres y después lanza
+     * {@link IOException} con el mensaje "boom".
+     */
+    private static final class LimitedWriter extends Writer {
+        private final int limit;
+        private final StringBuilder written = new StringBuilder();
+
+        LimitedWriter(int limit) {
+            this.limit = limit;
+        }
+
+        @Override
+        public void write(char[] cbuf, int off, int len) throws IOException {
+            for (int i = off; i < off + len; i++) {
+                if (written.length() >= limit) {
+                    throw new IOException("boom");
+                }
+                written.append(cbuf[i]);
+            }
+        }
+
+        @Override
+        public void flush() {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            // no-op
+        }
+
+        String getWritten() {
+            return written.toString();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 1: conjunto XML estándar (quot, amp, lt, gt, apos)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testXmlDeclaresFiveStandardEntityValues() {
+        assertEquals(34, Entities.XML.entityValue("quot"));
+        assertEquals(38, Entities.XML.entityValue("amp"));
+        assertEquals(60, Entities.XML.entityValue("lt"));
+        assertEquals(62, Entities.XML.entityValue("gt"));
+        assertEquals(39, Entities.XML.entityValue("apos"));
+    }
+
+    @Test
+    public void testXmlEscapesAllStandardEntities() {
+        assertEquals("&quot;&amp;&lt;&gt;&apos;", Entities.XML.escape("\"&<>'"));
+    }
+
+    @Test
+    public void testXmlUnescapesAllStandardEntities() {
+        assertEquals("\"&<>'", Entities.XML.unescape("&quot;&amp;&lt;&gt;&apos;"));
+    }
+
+    @Test
+    public void testXmlDoesNotContainHtmlOnlyEntities() {
+        assertEquals(-1, Entities.XML.entityValue("nbsp"));
+        assertEquals(-1, Entities.XML.entityValue("copy"));
+        assertNull(Entities.XML.entityName(160));
+        assertEquals("&#160;", Entities.XML.escape("\u00A0"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 2: HTML 3.2 soporta las entidades Latin-1
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testHtml32EscapesLatin1Entities() {
+        assertEquals("&nbsp;&copy;&reg;&yuml;", Entities.HTML32.escape("\u00A0\u00A9\u00AE\u00FF"));
+    }
+
+    @Test
+    public void testHtml32UnescapesLatin1Entities() {
+        assertEquals("\u00A0\u00A9", Entities.HTML32.unescape("&nbsp;&copy;"));
+        assertEquals(160, Entities.HTML32.entityValue("nbsp"));
+        assertEquals(169, Entities.HTML32.entityValue("copy"));
+        assertEquals(255, Entities.HTML32.entityValue("yuml"));
+    }
+
+    @Test
+    public void testHtml32ContainsBasicEntities() {
+        assertEquals("&quot;&amp;&lt;&gt;", Entities.HTML32.escape("\"&<>"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 3: HTML 3.2 no contiene entidades exclusivas de HTML 4.0
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testHtml32ExcludesHtml40OnlyEntityNames() {
+        assertEquals(-1, Entities.HTML32.entityValue("euro"));
+        assertEquals(-1, Entities.HTML32.entityValue("alpha"));
+        assertEquals(-1, Entities.HTML32.entityValue("fnof"));
+        assertEquals(-1, Entities.HTML32.entityValue("Alpha"));
+    }
+
+    @Test
+    public void testHtml32ExcludesHtml40OnlyValuesFromEscaping() {
+        assertNull(Entities.HTML32.entityName(8364));
+        assertNull(Entities.HTML32.entityName(945));
+        assertEquals("&#8364;", Entities.HTML32.escape("\u20AC"));
+        assertEquals("&#945;", Entities.HTML32.escape("\u03B1"));
+    }
+
+    @Test
+    public void testHtml32LeavesHtml40NameUnresolvedWhenUnescaping() {
+        assertEquals("&euro;", Entities.HTML32.unescape("&euro;"));
+        assertEquals("&alpha;", Entities.HTML32.unescape("&alpha;"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 4: HTML 4.0 soporta el conjunto completo
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testHtml40ContainsGreekEntities() {
+        assertEquals(945, Entities.HTML40.entityValue("alpha"));
+        assertEquals(913, Entities.HTML40.entityValue("Alpha"));
+        assertEquals(969, Entities.HTML40.entityValue("omega"));
+        assertEquals("&alpha;&Alpha;", Entities.HTML40.escape("\u03B1\u0391"));
+    }
+
+    @Test
+    public void testHtml40ContainsMathematicalAndSymbolEntities() {
+        assertEquals(8704, Entities.HTML40.entityValue("forall"));
+        assertEquals(9829, Entities.HTML40.entityValue("hearts"));
+        assertEquals(8734, Entities.HTML40.entityValue("infin"));
+        assertEquals("&forall;&hearts;&infin;", Entities.HTML40.escape("\u2200\u2665\u221E"));
+    }
+
+    @Test
+    public void testHtml40ContainsEuroEntity() {
+        assertEquals(8364, Entities.HTML40.entityValue("euro"));
+        assertEquals("&euro;", Entities.HTML40.escape("\u20AC"));
+        assertEquals("\u20AC", Entities.HTML40.unescape("&euro;"));
+    }
+
+    @Test
+    public void testHtml40ContainsLatinExtendedEntities() {
+        assertEquals(338, Entities.HTML40.entityValue("OElig"));
+        assertEquals("&OElig;", Entities.HTML40.escape("\u0152"));
+    }
+
+    @Test
+    public void testHtml40UnescapesMathematicalOperators() {
+        assertEquals("\u2264\u2265\u2260", Entities.HTML40.unescape("&le;&ge;&ne;"));
+    }
+
+    @Test
+    public void testHtml40ContainsIso8859Entities() {
+        assertEquals(160, Entities.HTML40.entityValue("nbsp"));
+        assertEquals("&copy;", Entities.HTML40.escape("\u00A9"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 5: fillWithHtml40Entities rellena la instancia indicada
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testFillWithHtml40EntitiesPopulatesAllCategories() {
+        Entities e = new Entities();
+        Entities.fillWithHtml40Entities(e);
+        assertEquals(34, e.entityValue("quot"));
+        assertEquals(160, e.entityValue("nbsp"));
+        assertEquals(169, e.entityValue("copy"));
+        assertEquals(945, e.entityValue("alpha"));
+        assertEquals(8364, e.entityValue("euro"));
+        assertEquals(8704, e.entityValue("forall"));
+    }
+
+    @Test
+    public void testFillWithHtml40EntitiesKeepsPreviouslyAddedEntries() {
+        Entities e = new Entities();
+        e.addEntity("custom", 9999);
+        Entities.fillWithHtml40Entities(e);
+        assertEquals(9999, e.entityValue("custom"));
+        assertEquals("&custom;", e.unescape("&custom;").equals("&custom;") ? "&custom;" : "");
+        assertEquals(945, e.entityValue("alpha"));
+    }
+
+    @Test
+    public void testFillWithHtml40EntitiesBehavesLikeHtml40() {
+        Entities filled = new Entities();
+        Entities.fillWithHtml40Entities(filled);
+        String sample = "\u00A0\u03B1\u20AC<&>\"";
+        String expected = "&nbsp;&alpha;&euro;&lt;&amp;&gt;&quot;";
+        assertEquals(expected, Entities.HTML40.escape(sample));
+        assertEquals(expected, filled.escape(sample));
+    }
+
+    @Test
+    public void testFillWithHtml40EntitiesOnEmptyInstanceDoesNotAffectXml() {
+        Entities e = new Entities();
+        Entities.fillWithHtml40Entities(e);
+        assertEquals(-1, Entities.XML.entityValue("alpha"));
+        assertEquals(-1, Entities.XML.entityValue("nbsp"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 6: escape emite referencia numérica para no-ASCII sin entidad
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeEmitsNumericReferenceForUnnamedNonAscii() {
+        Entities e = new Entities();
+        assertEquals("&#233;", e.escape("\u00E9"));
+        assertEquals("&#20013;", e.escape("\u4E2D"));
+        assertEquals("A&#255;B", e.escape("A\u00FFB"));
+    }
+
+    @Test
+    public void testEscapeEmitsNumericReferenceWhenEntityIsAbsentFromXml() {
+        assertEquals("a&#233;&gt;", Entities.XML.escape("a\u00E9>"));
+    }
+
+    @Test
+    public void testEscapeKeepsAsciiWithoutEntityLiteral() {
+        Entities e = new Entities();
+        assertEquals("abc 123", e.escape("abc 123"));
+    }
+
+    @Test
+    public void testEscapeWriterEmitsNumericReferenceForUnnamedNonAscii() throws IOException {
+        Entities e = new Entities();
+        StringWriter writer = new StringWriter();
+        e.escape(writer, "\u00E9x\u4E2D");
+        assertEquals("&#233;x&#20013;", writer.toString());
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 7: unescape acepta decimal y hexadecimal (x minúscula)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testUnescapeDecimalNumericReference() {
+        assertEquals("A", Entities.XML.unescape("&#65;"));
+        assertEquals("\u00E9", Entities.XML.unescape("&#233;"));
+        assertEquals("xBy", Entities.XML.unescape("x&#66;y"));
+    }
+
+    @Test
+    public void testUnescapeLowercaseHexNumericReference() {
+        assertEquals("A", Entities.XML.unescape("&#x41;"));
+        assertEquals("\u4E2D", Entities.XML.unescape("&#x4e2d;"));
+        assertEquals("\u4E2D", Entities.XML.unescape("&#x4E2D;"));
+    }
+
+    @Test
+    public void testUnescapeWriterDecimalAndHexNumericReferences() throws IOException {
+        StringWriter writer = new StringWriter();
+        Entities.XML.unescape(writer, "&#65;&#x42;&#67;");
+        assertEquals("ABC", writer.toString());
+    }
+
+    @Test
+    public void testUnescapeInvalidNumericReferenceIsKeptLiteral() {
+        assertEquals("&#x;", Entities.XML.unescape("&#x;"));
+        assertEquals("&#xZZ;", Entities.XML.unescape("&#xZZ;"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 8: propagación de IOException desde el Writer
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeWriterPropagatesIOException() {
+        LimitedWriter writer = new LimitedWriter(0);
+        try {
+            Entities.XML.escape(writer, "a");
+            fail("Se esperaba IOException");
+        } catch (IOException ex) {
+            assertEquals("boom", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testEscapeWriterStopsAtFailingWrite() {
+        LimitedWriter writer = new LimitedWriter(2);
+        try {
+            Entities.XML.escape(writer, "abc");
+            fail("Se esperaba IOException");
+        } catch (IOException ex) {
+            assertEquals("boom", ex.getMessage());
+            assertEquals("ab", writer.getWritten());
+        }
+    }
+
+    @Test
+    public void testEscapeWriterWithEmptyStringDoesNotWrite() throws IOException {
+        LimitedWriter writer = new LimitedWriter(0);
+        Entities.XML.escape(writer, "");
+        assertEquals("", writer.getWritten());
+    }
+
+    @Test
+    public void testUnescapeWriterPropagatesIOExceptionWithoutAmpersand() {
+        LimitedWriter writer = new LimitedWriter(0);
+        try {
+            Entities.XML.unescape(writer, "plain");
+            fail("Se esperaba IOException");
+        } catch (IOException ex) {
+            assertEquals("boom", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testUnescapeWriterPropagatesIOExceptionFromEntityReplacement() {
+        LimitedWriter writer = new LimitedWriter(0);
+        try {
+            Entities.XML.unescape(writer, "&amp;");
+            fail("Se esperaba IOException");
+        } catch (IOException ex) {
+            assertEquals("boom", ex.getMessage());
+        }
+    }
+}

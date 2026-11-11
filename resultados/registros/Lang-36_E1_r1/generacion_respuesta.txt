@@ -1,0 +1,348 @@
+```java
+package org.apache.commons.lang3.math;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link NumberUtils} que usan únicamente su API pública.
+ */
+public class NumberUtilsLLMTest {
+
+    // ------------------------------------------------------------------
+    // toInt
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToIntParsesNegativeAndExplicitPlusSign() {
+        assertEquals(-42, NumberUtils.toInt("-42"));
+        assertEquals(7, NumberUtils.toInt("+7"));
+    }
+
+    @Test
+    public void testToIntMaxValueIsParsed() {
+        assertEquals(Integer.MAX_VALUE, NumberUtils.toInt("2147483647"));
+    }
+
+    @Test
+    public void testToIntReturnsDefaultOnOverflow() {
+        assertEquals(0, NumberUtils.toInt("2147483648"));
+        assertEquals(7, NumberUtils.toInt("2147483648", 7));
+        assertEquals(-1, NumberUtils.toInt("-2147483649", -1));
+    }
+
+    @Test
+    public void testToIntDoesNotTrimOrAcceptHex() {
+        assertEquals("Espacios no se eliminan", 9, NumberUtils.toInt(" 5", 9));
+        assertEquals("Hexadecimal no es válido para toInt", 9, NumberUtils.toInt("0x10", 9));
+    }
+
+    @Test
+    public void testToIntUsesDefaultForNullAndEmpty() {
+        assertEquals(9, NumberUtils.toInt(null, 9));
+        assertEquals(9, NumberUtils.toInt("", 9));
+    }
+
+    // ------------------------------------------------------------------
+    // toLong
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToLongBoundaryValues() {
+        assertEquals(Long.MAX_VALUE, NumberUtils.toLong("9223372036854775807"));
+        assertEquals(Long.MIN_VALUE, NumberUtils.toLong("-9223372036854775808"));
+    }
+
+    @Test
+    public void testToLongOverflowUsesDefault() {
+        assertEquals(3L, NumberUtils.toLong("9223372036854775808", 3L));
+        assertEquals(-5L, NumberUtils.toLong("-5", 3L));
+    }
+
+    // ------------------------------------------------------------------
+    // toFloat
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToFloatScientificNotation() {
+        assertEquals(1000f, NumberUtils.toFloat("1e3"), 0.0f);
+    }
+
+    @Test
+    public void testToFloatSpecialValues() {
+        assertTrue(Float.isNaN(NumberUtils.toFloat("NaN")));
+        assertEquals(Float.POSITIVE_INFINITY, NumberUtils.toFloat("Infinity"), 0.0f);
+        assertEquals(Float.NEGATIVE_INFINITY, NumberUtils.toFloat("-Infinity"), 0.0f);
+    }
+
+    @Test
+    public void testToFloatWithDefaultOnInvalidOrMissingInput() {
+        assertEquals(2.5f, NumberUtils.toFloat("x", 2.5f), 0.0f);
+        assertEquals(2.5f, NumberUtils.toFloat(null, 2.5f), 0.0f);
+        assertEquals(2.5f, NumberUtils.toFloat("", 2.5f), 0.0f);
+    }
+
+    @Test
+    public void testToFloatAcceptsTypeSuffix() {
+        assertEquals(2.5f, NumberUtils.toFloat("2.5f"), 0.0f);
+    }
+
+    // ------------------------------------------------------------------
+    // toDouble
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToDoubleScientificNotation() {
+        assertEquals(0.001d, NumberUtils.toDouble("1e-3"), 1e-12);
+    }
+
+    @Test
+    public void testToDoubleSpecialValues() {
+        assertTrue(Double.isNaN(NumberUtils.toDouble("NaN")));
+        assertEquals(Double.POSITIVE_INFINITY, NumberUtils.toDouble("Infinity"), 0.0d);
+        assertTrue(Double.isInfinite(NumberUtils.toDouble("1e400")));
+    }
+
+    @Test
+    public void testToDoubleWithDefaultOnInvalidInput() {
+        assertEquals(4.0d, NumberUtils.toDouble("bad", 4.0d), 0.0d);
+        assertEquals(1.25d, NumberUtils.toDouble("1.25", 4.0d), 0.0d);
+    }
+
+    // ------------------------------------------------------------------
+    // toByte / toShort
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testToByteBoundaries() {
+        assertEquals(127, NumberUtils.toByte("127"));
+        assertEquals(-128, NumberUtils.toByte("-128"));
+        assertEquals("Desbordamiento devuelve cero", 0, NumberUtils.toByte("128"));
+        assertEquals(5, NumberUtils.toByte("128", (byte) 5));
+    }
+
+    @Test
+    public void testToShortBoundaries() {
+        assertEquals(32767, NumberUtils.toShort("32767"));
+        assertEquals(-32768, NumberUtils.toShort("-32768"));
+        assertEquals("Desbordamiento devuelve cero", 0, NumberUtils.toShort("32768"));
+        assertEquals(9, NumberUtils.toShort("32768", (short) 9));
+    }
+
+    // ------------------------------------------------------------------
+    // createNumber
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testCreateNumberNullReturnsNull() {
+        assertNull(NumberUtils.createNumber(null));
+    }
+
+    @Test
+    public void testCreateNumberSmallIntegersReturnInteger() {
+        Number n = NumberUtils.createNumber("123");
+        assertTrue(n instanceof Integer);
+        assertEquals(Integer.valueOf(123), n);
+        assertEquals(Integer.valueOf(0), NumberUtils.createNumber("0"));
+        assertEquals(Integer.valueOf(-2147483648), NumberUtils.createNumber("-2147483648"));
+    }
+
+    @Test
+    public void testCreateNumberPromotesToLongWhenIntOverflows() {
+        Number n = NumberUtils.createNumber("2147483648");
+        assertTrue(n instanceof Long);
+        assertEquals(Long.valueOf(2147483648L), n);
+    }
+
+    @Test
+    public void testCreateNumberPromotesToBigIntegerWhenLongOverflows() {
+        Number n = NumberUtils.createNumber("9223372036854775808");
+        assertTrue(n instanceof BigInteger);
+        assertEquals(new BigInteger("9223372036854775808"), n);
+    }
+
+    @Test
+    public void testCreateNumberHexadecimal() {
+        assertEquals(Integer.valueOf(31), NumberUtils.createNumber("0x1F"));
+        assertEquals(Integer.valueOf(-16), NumberUtils.createNumber("-0x10"));
+    }
+
+    @Test
+    public void testCreateNumberLongSuffix() {
+        Number n = NumberUtils.createNumber("12L");
+        assertTrue(n instanceof Long);
+        assertEquals(Long.valueOf(12L), n);
+        assertEquals(Long.valueOf(-12L), NumberUtils.createNumber("-12l"));
+    }
+
+    @Test
+    public void testCreateNumberLongSuffixOverflowReturnsBigInteger() {
+        Number n = NumberUtils.createNumber("12345678901234567890L");
+        assertTrue(n instanceof BigInteger);
+        assertEquals(new BigInteger("12345678901234567890"), n);
+    }
+
+    @Test
+    public void testCreateNumberDecimalDefaultsToFloat() {
+        Number n = NumberUtils.createNumber("1.5");
+        assertTrue(n instanceof Float);
+        assertEquals(Float.valueOf(1.5f), n);
+    }
+
+    @Test
+    public void testCreateNumberDoubleSuffix() {
+        Number n = NumberUtils.createNumber("1.5d");
+        assertTrue(n instanceof Double);
+        assertEquals(Double.valueOf(1.5d), n);
+    }
+
+    @Test
+    public void testCreateNumberFloatSuffix() {
+        Number n = NumberUtils.createNumber("1.5f");
+        assertTrue(n instanceof Float);
+        assertEquals(Float.valueOf(1.5f), n);
+    }
+
+    @Test
+    public void testCreateNumberScientificNotationReturnsFloat() {
+        Number n = NumberUtils.createNumber("1e5");
+        assertTrue(n instanceof Float);
+        assertEquals(Float.valueOf(100000f), n);
+    }
+
+    @Test
+    public void testCreateNumberFallsBackToDoubleWhenFloatOverflows() {
+        Number n = NumberUtils.createNumber("1e40");
+        assertTrue(n instanceof Double);
+        assertEquals(Double.valueOf(1e40d), n);
+    }
+
+    @Test
+    public void testCreateNumberFallsBackToBigDecimalWhenDoubleOverflows() {
+        Number n = NumberUtils.createNumber("1e400");
+        assertTrue(n instanceof BigDecimal);
+    }
+
+    @Test
+    public void testCreateNumberDoubleDashReturnsNull() {
+        assertNull(NumberUtils.createNumber("--5"));
+    }
+
+    @Test(expected = NumberFormatException.class)
+    public void testCreateNumberRejectsBlank() {
+        NumberUtils.createNumber("   ");
+    }
+
+    @Test(expected = NumberFormatException.class)
+    public void testCreateNumberRejectsSurroundingWhitespace() {
+        NumberUtils.createNumber(" 12");
+    }
+
+    @Test(expected = NumberFormatException.class)
+    public void testCreateNumberRejectsLongSuffixOnDecimal() {
+        NumberUtils.createNumber("1.5L");
+    }
+
+    @Test(expected = NumberFormatException.class)
+    public void testCreateNumberRejectsTrailingGarbage() {
+        NumberUtils.createNumber("abc");
+    }
+
+    @Test(expected = NumberFormatException.class)
+    public void testCreateNumberRejectsMalformedDecimal() {
+        NumberUtils.createNumber("1.2.3");
+    }
+
+    // ------------------------------------------------------------------
+    // isNumber
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIsNumberNullAndEmptyAreFalse() {
+        assertFalse(NumberUtils.isNumber(null));
+        assertFalse(NumberUtils.isNumber(""));
+    }
+
+    @Test
+    public void testIsNumberAcceptsValidForms() {
+        assertTrue(NumberUtils.isNumber("0"));
+        assertTrue(NumberUtils.isNumber("-1.5"));
+        assertTrue(NumberUtils.isNumber("1e5"));
+        assertTrue(NumberUtils.isNumber("1.5E-3"));
+        assertTrue(NumberUtils.isNumber("0x1F"));
+        assertTrue(NumberUtils.isNumber("1.5f"));
+        assertTrue(NumberUtils.isNumber("10L"));
+        assertTrue(NumberUtils.isNumber("2d"));
+    }
+
+    @Test
+    public void testIsNumberRejectsInvalidForms() {
+        assertFalse(NumberUtils.isNumber("0x"));
+        assertFalse(NumberUtils.isNumber("0xG"));
+        assertFalse(NumberUtils.isNumber("1e"));
+        assertFalse(NumberUtils.isNumber("1ee5"));
+        assertFalse(NumberUtils.isNumber("1.2.3"));
+        assertFalse(NumberUtils.isNumber("abc"));
+        assertFalse(NumberUtils.isNumber("-"));
+        assertFalse(NumberUtils.isNumber("."));
+    }
+
+    // ------------------------------------------------------------------
+    // isDigits
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIsDigitsAcceptsLeadingZerosAndUnicodeDigits() {
+        assertTrue(NumberUtils.isDigits("0123"));
+        // ARABIC-INDIC DIGITS: Character.isDigit devuelve true
+        assertTrue(NumberUtils.isDigits("\u0663\u0664"));
+    }
+
+    @Test
+    public void testIsDigitsRejectsSignsWhitespaceAndDecimal() {
+        assertFalse(NumberUtils.isDigits("-1"));
+        assertFalse(NumberUtils.isDigits("+1"));
+        assertFalse(NumberUtils.isDigits(" 1"));
+        assertFalse(NumberUtils.isDigits("1 "));
+        assertFalse(NumberUtils.isDigits("1.0"));
+    }
+
+    // ------------------------------------------------------------------
+    // min / max en arrays
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testMinMaxIntUnsortedArray() {
+        int[] values = {3, -7, 2};
+        assertEquals(-7, NumberUtils.min(values));
+        assertEquals(3, NumberUtils.max(values));
+    }
+
+    @Test
+    public void testMinMaxDoesNotModifyInputArray() {
+        int[] values = {3, 1, 2};
+        NumberUtils.min(values);
+        NumberUtils.max(values);
+        assertEquals(3, values[0]);
+        assertEquals(1, values[1]);
+        assertEquals(2, values[2]);
+    }
+
+    @Test
+    public void testMinMaxByteBoundaries() {
+        byte[] values = {Byte.MAX_VALUE, Byte.MIN_VALUE};
+        assertEquals(Byte.MIN_VALUE, NumberUtils.min(values));
+        assertEquals(Byte.MAX_VALUE, NumberUtils.max(values));
+    }
+
+    @Test
+    public void testMinMaxShortSingleElement() {
+        assertEquals(-3, NumberUtils.min(new short[] {(short) -3}));
+        assertEquals(-3

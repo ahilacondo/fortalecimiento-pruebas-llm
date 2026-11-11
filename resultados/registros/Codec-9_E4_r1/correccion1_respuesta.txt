@@ -1,0 +1,140 @@
+El error ocurrió porque el archivo anterior empezaba con texto en prosa antes del bloque de código, y además el código estaba cortado a mitad de una prueba. Aquí va el archivo completo, solo con código Java. No lo he compilado ni ejecutado. Para ser compatible con versiones antiguas de Java sustituí `String.repeat` y `StandardCharsets` por helpers equivalentes.
+
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import java.nio.charset.Charset;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64} basadas en los requisitos de la documentación.
+ */
+public class Base64LLMTest {
+
+    private static final Charset ASCII = Charset.forName("US-ASCII");
+
+    private static final byte[] CRLF = {'\r', '\n'};
+
+    /** Bytes FB FF BF repetidos: se codifican como "+/+/" (estándar) o "-_-_" (URL-safe). */
+    private static byte[] pattern(int times) {
+        byte[] data = new byte[times * 3];
+        for (int i = 0; i < times; i++) {
+            data[3 * i] = (byte) 0xfb;
+            data[3 * i + 1] = (byte) 0xff;
+            data[3 * i + 2] = (byte) 0xbf;
+        }
+        return data;
+    }
+
+    private static String ascii(byte[] b) {
+        return new String(b, ASCII);
+    }
+
+    private static byte[] bytes(String s) {
+        return s.getBytes(ASCII);
+    }
+
+    private static String repeat(String s, int times) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < times; i++) {
+            sb.append(s);
+        }
+        return sb.toString();
+    }
+
+    // ---------- Requisito 1: Base64() no fragmenta ----------
+
+    @Test
+    public void defaultConstructorDoesNotChunkLongInput() {
+        Base64 b64 = new Base64();
+        String encoded = ascii(b64.encode(pattern(34))); // 102 bytes -> 136 caracteres
+        assertEquals(repeat("+/+/", 34), encoded);
+        assertEquals(136, encoded.length());
+        assertFalse(encoded.contains("\r"));
+        assertFalse(encoded.contains("\n"));
+    }
+
+    @Test
+    public void defaultConstructorUsesStandardAlphabetAndPadding() {
+        Base64 b64 = new Base64();
+        assertFalse(b64.isUrlSafe());
+        assertEquals("+w==", ascii(b64.encode(new byte[] {(byte) 0xfb})));
+        assertEquals("+/+/", ascii(b64.encode(pattern(1))));
+    }
+
+    @Test
+    public void defaultConstructorEncodeToStringMatchesStaticUnchunked() {
+        byte[] data = pattern(40);
+        assertEquals(Base64.encodeBase64String(data), new Base64().encodeToString(data));
+    }
+
+    // ---------- Requisito 2: Base64(boolean) usa 76 y CRLF ----------
+
+    @Test
+    public void booleanConstructorStandardChunksAt76WithCrlf() {
+        Base64 b64 = new Base64(false);
+        String expected = repeat("+/+/", 19) + "\r\n" + "+/+/" + "\r\n";
+        assertEquals(expected, ascii(b64.encode(pattern(20)))); // 80 caracteres
+    }
+
+    @Test
+    public void booleanConstructorUrlSafeChunksAt76WithCrlf() {
+        Base64 b64 = new Base64(true);
+        assertTrue(b64.isUrlSafe());
+        String expected = repeat("-_-_", 19) + "\r\n" + "-_-_" + "\r\n";
+        assertEquals(expected, ascii(b64.encode(pattern(20))));
+    }
+
+    @Test
+    public void booleanConstructorShortInputGetsTrailingCrlf() {
+        assertEquals("+w==\r\n", ascii(new Base64(false).encode(new byte[] {(byte) 0xfb})));
+    }
+
+    // ---------- Longitud de línea y separador explícitos ----------
+
+    @Test
+    public void customLineLengthAndCrlfSeparator() {
+        Base64 b64 = new Base64(8, CRLF);
+        String expected = "+/+/+/+/\r\n+/+/+/+/\r\n";
+        assertEquals(expected, ascii(b64.encode(pattern(4))));
+    }
+
+    @Test
+    public void zeroLineLengthDoesNotChunk() {
+        Base64 b64 = new Base64(0);
+        assertEquals(repeat("+/+/", 4), ascii(b64.encode(pattern(4))));
+    }
+
+    // ---------- Decodificación ----------
+
+    @Test
+    public void decodeRoundTripUnchunked() {
+        byte[] data = pattern(34);
+        Base64 b64 = new Base64();
+        assertArrayEquals(data, b64.decode(b64.encode(data)));
+    }
+
+    @Test
+    public void decodeRoundTripChunked() {
+        byte[] data = pattern(20);
+        Base64 b64 = new Base64(false);
+        assertArrayEquals(data, b64.decode(b64.encode(data)));
+    }
+
+    @Test
+    public void decodeAcceptsUrlSafeAlphabet() {
+        assertArrayEquals(pattern(1), new Base64().decode(bytes("-_-_")));
+    }
+
+    @Test
+    public void decodeAcceptsStandardAlphabet() {
+        assertArrayEquals(pattern(1), new Base64(true).decode(bytes("+/+/")));
+    }
+}
+```

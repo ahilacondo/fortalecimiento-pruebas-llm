@@ -1,0 +1,215 @@
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.RandomAccess;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link ClassUtils} que cubren ramas y caminos
+ * no ejercitados por la suite existente. Solo usan la API pública.
+ */
+public class ClassUtilsLLMTest {
+
+    /** Interfaz pública usada para probar la búsqueda de métodos públicos. */
+    public interface PublicContract {
+        String hello();
+    }
+
+    /** Implementación no pública de una interfaz pública. */
+    private static class HiddenImpl implements PublicContract {
+        @Override
+        public String hello() {
+            return "hi";
+        }
+    }
+
+    /** Superclase pública con un método público. */
+    public static class PublicParent {
+        public String foo() {
+            return "parent";
+        }
+    }
+
+    /** Subclase no pública que sobrescribe el método de una superclase pública. */
+    private static class PrivateChild extends PublicParent {
+        @Override
+        public String foo() {
+            return "child";
+        }
+    }
+
+    /** Superclase no pública con un método público. */
+    private static class PrivateBase {
+        public String name() {
+            return "base";
+        }
+    }
+
+    /** Subclase pública que hereda un método de una superclase no pública. */
+    public static class PublicSub extends PrivateBase {
+    }
+
+    // ------------------------------------------------------------------
+    // getPublicMethod
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getPublicMethodReturnsInterfaceMethodWhenImplementationIsNotPublic() throws Exception {
+        Method m = ClassUtils.getPublicMethod(HiddenImpl.class, "hello", new Class<?>[0]);
+        assertEquals(PublicContract.class, m.getDeclaringClass());
+        assertEquals("hi", m.invoke(new HiddenImpl()));
+    }
+
+    @Test
+    public void getPublicMethodReturnsPublicSuperclassMethodWhenSubclassIsNotPublic() throws Exception {
+        Method m = ClassUtils.getPublicMethod(PrivateChild.class, "foo", new Class<?>[0]);
+        assertEquals(PublicParent.class, m.getDeclaringClass());
+        assertEquals("parent", m.invoke(new PrivateChild()));
+    }
+
+    @Test(expected = NoSuchMethodException.class)
+    public void getPublicMethodThrowsWhenOnlyNonPublicClassDeclaresMethod() throws Exception {
+        ClassUtils.getPublicMethod(PublicSub.class, "name", new Class<?>[0]);
+    }
+
+    @Test(expected = NoSuchMethodException.class)
+    public void getPublicMethodThrowsForUnknownMethodName() throws Exception {
+        ClassUtils.getPublicMethod(String.class, "noSuchMethodHere", new Class<?>[0]);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void getPublicMethodThrowsNullPointerForNullClass() throws Exception {
+        ClassUtils.getPublicMethod(null, "toString", new Class<?>[0]);
+    }
+
+    // ------------------------------------------------------------------
+    // getShortClassName / getPackageName (nombres JVM)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getShortClassNameStripsObjectEncodingFromArrayNames() {
+        assertEquals("Map.Entry[]", ClassUtils.getShortClassName("[Ljava.util.Map$Entry;"));
+        assertEquals("String[][]", ClassUtils.getShortClassName("[[Ljava.lang.String;"));
+    }
+
+    @Test
+    public void getShortClassNameForNestedClassUsesDotSeparator() {
+        assertEquals("ClassUtilsLLMTest.HiddenImpl", ClassUtils.getShortClassName(HiddenImpl.class));
+        assertEquals("ClassUtilsLLMTest.HiddenImpl",
+                ClassUtils.getShortClassName(HiddenImpl.class.getName()));
+    }
+
+    @Test
+    public void getShortClassNameForArrayObjectUsesComponentName() {
+        assertEquals("int[]", ClassUtils.getShortClassName(new int[0], "<null>"));
+        assertEquals("String[]", ClassUtils.getShortClassName(new String[0], "<null>"));
+    }
+
+    @Test
+    public void getPackageNameStripsArrayAndObjectEncodings() {
+        assertEquals("java.util", ClassUtils.getPackageName("[[Ljava.util.Map$Entry;"));
+        assertEquals("java.lang", ClassUtils.getPackageName("[Ljava.lang.String;"));
+        assertEquals("", ClassUtils.getPackageName("[Z"));
+    }
+
+    @Test
+    public void getPackageNameForNestedClassAndArrayObjects() {
+        assertEquals("org.apache.commons.lang3", ClassUtils.getPackageName(HiddenImpl.class));
+        assertEquals("java.lang", ClassUtils.getPackageName(new String[0], "<null>"));
+    }
+
+    // ------------------------------------------------------------------
+    // Nombres canónicos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getShortCanonicalNameConvertsAllPrimitiveAbbreviations() {
+        assertEquals("boolean[]", ClassUtils.getShortCanonicalName("[Z"));
+        assertEquals("byte[]", ClassUtils.getShortCanonicalName("[B"));
+        assertEquals("char[]", ClassUtils.getShortCanonicalName("[C"));
+        assertEquals("double[]", ClassUtils.getShortCanonicalName("[D"));
+        assertEquals("float[]", ClassUtils.getShortCanonicalName("[F"));
+        assertEquals("long[]", ClassUtils.getShortCanonicalName("[J"));
+        assertEquals("short[]", ClassUtils.getShortCanonicalName("[S"));
+    }
+
+    @Test
+    public void getPackageCanonicalNameReturnsEmptyForPrimitiveAbbreviations() {
+        assertEquals("", ClassUtils.getPackageCanonicalName("[Z"));
+        assertEquals("", ClassUtils.getPackageCanonicalName("[J"));
+        assertEquals("", ClassUtils.getPackageCanonicalName("[D"));
+    }
+
+    @Test
+    public void getShortCanonicalNameHandlesInnerClassArrayEncoding() {
+        assertEquals("Map.Entry[]", ClassUtils.getShortCanonicalName("[Ljava.util.Map$Entry;"));
+        assertEquals("java.util", ClassUtils.getPackageCanonicalName("[Ljava.util.Map$Entry;"));
+    }
+
+    @Test
+    public void getShortCanonicalNameIgnoresWhitespace() {
+        assertEquals("String[]", ClassUtils.getShortCanonicalName(" java.lang.String [ ] "));
+    }
+
+    // ------------------------------------------------------------------
+    // getClass (con y sin inicialización, con class loader)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getClassWithoutInitializationReturnsRequestedClass() throws Exception {
+        assertEquals(String.class, ClassUtils.getClass("java.lang.String", false));
+        assertEquals(boolean[].class, ClassUtils.getClass("boolean[]", false));
+    }
+
+    @Test
+    public void getClassWithoutInitializationResolvesPrimitiveAbbreviations() throws Exception {
+        ClassLoader loader = ClassUtilsLLMTest.class.getClassLoader();
+        assertEquals(int.class, ClassUtils.getClass(loader, "int", false));
+        assertEquals(Object[].class, ClassUtils.getClass(loader, "java.lang.Object[]", false));
+    }
+
+    @Test
+    public void getClassWithClassLoaderResolvesNamesAndJvmArrayNames() throws Exception {
+        ClassLoader loader = ClassUtilsLLMTest.class.getClassLoader();
+        assertEquals(String.class, ClassUtils.getClass(loader, "java.lang.String"));
+        assertEquals(int[].class, ClassUtils.getClass(loader, "[I"));
+        assertEquals(String[].class, ClassUtils.getClass(loader, "[Ljava.lang.String;"));
+    }
+
+    @Test(expected = ClassNotFoundException.class)
+    public void getClassThrowsClassNotFoundForMissingClass() throws Exception {
+        ClassUtils.getClass("org.example.DoesNotExistAtAll");
+    }
+
+    // ------------------------------------------------------------------
+    // toClass
+    // ------------------------------------------------------------------
+
+    @Test
+    public void toClassReturnsClassesOfElementsAndNullForNullElements() {
+        assertArrayEquals(new Class<?>[] { String.class, Integer.class },
+                ClassUtils.toClass(new Object[] { "a", 1 }));
+        assertArrayEquals(new Class<?>[] { null, String.class },
+                ClassUtils.toClass(new Object[] { null, "a" }));
+    }
+
+    @Test
+    public void toClassReturnsEmptyArrayForEmptyInput() {
+        assertArrayEquals(new Class<?>[0], ClassUtils.toClass(new Object[0]));
+    }
+
+    @Test
+    public void toClassReturnsNullForNullInput() {
+        assertNull(ClassUtils.toClass((Object[]) null));
+    }
+}

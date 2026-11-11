@@ -1,0 +1,8 @@
+1. Thread-safety: una instancia compartida debe parsear correctamente desde varios hilos a la vez; ninguna prueba ejercita concurrencia.
+2. Compatibilidad de zonas horarias: los campos `z` y `Z` (nombres de zona y desplazamientos GMT/±hhmm) deben dar el mismo resultado que `SimpleDateFormat`; `testParseZone` está vacío y su versión real está comentada.
+3. Solo parseo: la documentación indica que el formateo no está soportado, y ninguna prueba verifica ese comportamiento.
+4. Patrón inválido: el constructor debe lanzar `IllegalArgumentException` ("Invalid pattern") cuando el patrón no es válido; no hay pruebas de este caso.
+5. Ventana de años de dos dígitos: `adjustYear` debe devolver años dentro de −80 y +20 años respecto a la instanciación; no se prueban los límites de esta ventana.
+6. Igualdad por componentes: dos parsers con el mismo patrón pero distinta zona horaria o locale deben ser desiguales; `testEquals` no lo cubre y `test_Equality_Hash` solo lo verifica indirectamente a través de un mapa.
+7. Consistencia de equals/hashCode tras deserializar: el parser deserializado debe seguir siendo igual al original y tener el mismo hashCode; `testLang303` solo compara el resultado de un parseo.
+8. Reinicialización tras deserializar: `readObject` debe reconstruir los campos transitorios, de modo que el parser deserializado devuelva los mismos resultados que el original para todas las estrategias, no solo para un caso.

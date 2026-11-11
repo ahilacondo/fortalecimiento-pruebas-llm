@@ -1,0 +1,124 @@
+El archivo tenía tres problemas:
+
+1. Un doble bloque de código ```` ```java ```` al inicio. El carácter `` ` `` quedó dentro del fuente y javac lo rechaza.
+2. Un literal de cadena sin cerrar en la línea `"2003-02-10`, con un salto de línea dentro de la cadena.
+3. El archivo estaba truncado en esa línea, así que las pruebas posteriores (la sección 2 en adelante) no están disponibles. No puedo recuperarlas literalmente. Completé la prueba de offset numérico de forma coherente con su nombre, y no añadí las secciones que faltan.
+
+```java
+package org.apache.commons.lang3.time;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.commons.lang3.SerializationUtils;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link FastDateParser} que cubren concurrencia,
+ * zonas horarias, solo-parseo, patrones inválidos, ventana de años de dos dígitos,
+ * igualdad, serialización y reinicialización tras deserializar.
+ */
+public class FastDateParserLLMTest {
+
+    private static final TimeZone GMT = TimeZone.getTimeZone("GMT");
+    private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
+
+    private static final String YMD = "yyyy/MM/dd";
+
+    private static FastDateParser newParser(String pattern, TimeZone tz, Locale locale) {
+        return new FastDateParser(pattern, tz, locale);
+    }
+
+    private static void assertSameAsSimpleDateFormat(String pattern, String input) throws ParseException {
+        SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.US);
+        sdf.setTimeZone(GMT);
+        Date expected = sdf.parse(input);
+        Date actual = newParser(pattern, GMT, Locale.US).parse(input);
+        assertEquals("Patrón [" + pattern + "] entrada [" + input + "]", expected, actual);
+    }
+
+    private static void assertDeserializedBehavesLikeOriginal(String pattern, TimeZone tz,
+            Locale locale, String input) throws ParseException {
+        FastDateParser original = newParser(pattern, tz, locale);
+        FastDateParser copy = SerializationUtils.deserialize(SerializationUtils.serialize(original));
+        assertEquals("Patrón [" + pattern + "] entrada [" + input + "]",
+                original.parse(input), copy.parse(input));
+    }
+
+    // 1. Thread-safety
+
+    @Test
+    public void testSharedInstanceParsesCorrectlyFromConcurrentThreads() throws Exception {
+        final FastDateParser parser = newParser("yyyy-MM-dd HH:mm", GMT, Locale.US);
+        final int n = 200;
+        final String[] inputs = new String[n];
+        final Date[] expected = new Date[n];
+        for (int i = 0; i < n; i++) {
+            int year = 2000 + (i % 20);
+            int month = 1 + (i % 12);
+            int day = 1 + (i % 28);
+            int hour = i % 24;
+            int minute = (i * 7) % 60;
+            inputs[i] = String.format(Locale.US, "%04d-%02d-%02d %02d:%02d",
+                    year, month, day, hour, minute);
+            Calendar cal = Calendar.getInstance(GMT);
+            cal.clear();
+            cal.set(year, month - 1, day, hour, minute);
+            expected[i] = cal.getTime();
+        }
+
+        final int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            final CountDownLatch start = new CountDownLatch(1);
+            List<Future<String>> futures = new ArrayList<>();
+            for (int t = 0; t < threads; t++) {
+                final int offset = t;
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    for (int k = 0; k < n; k++) {
+                        int i = (k + offset * 31) % n;
+                        Date actual = parser.parse(inputs[i]);
+                        if (!expected[i].equals(actual)) {
+                            return "Hilo " + offset + ": entrada " + inputs[i]
+                                    + " esperaba " + expected[i] + " y obtuvo " + actual;
+                        }
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<String> f : futures) {
+                String error = f.get(60, TimeUnit.SECONDS);
+                assertNull(error, error);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    // 2. Compatibilidad de zonas horarias con SimpleDateFormat
+
+    @Test
+    public void testNumericZoneOffsetMatchesSimpleDateFormat() throws ParseException {
+        assertSameAsSimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", "2003-07-10 15:33:20 -0500");
+        assertSameAsSimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", "2003-02-10 15:33:20 +0100");
+    }
+}
+```
+
+Para completar el archivo original, envíame el contenido posterior a la línea truncada y lo integro en la misma estructura sin cambiar lo que verifica cada prueba.

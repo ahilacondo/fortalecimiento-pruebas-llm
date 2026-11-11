@@ -1,0 +1,152 @@
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.fail;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link StringUtils} que ejercitan ramas y casos
+ * límite no cubiertos por la suite existente. Solo usan la API pública.
+ */
+public class StringUtilsLLMTest {
+
+    // ------------------------------------------------------------------
+    // Búsqueda de índices con posiciones y ordinales
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIndexOfCharWithNegativeStartTreatedAsZero() {
+        assertEquals(2, StringUtils.indexOf("aabaabaa", 'b', -1));
+    }
+
+    @Test
+    public void testIndexOfCharWithStartBeyondLengthReturnsNotFound() {
+        assertEquals(-1, StringUtils.indexOf("aabaabaa", 'b', 9));
+    }
+
+    @Test
+    public void testIndexOfCharNullInputReturnsNotFound() {
+        assertEquals(-1, StringUtils.indexOf(null, 'a'));
+        assertEquals(-1, StringUtils.indexOf(null, 'a', 0));
+    }
+
+    @Test
+    public void testIndexOfStringWithEmptySearchAtStartBeyondLength() {
+        assertEquals(3, StringUtils.indexOf("abc", "", 9));
+    }
+
+    @Test
+    public void testOrdinalIndexOfReturnsNthOccurrence() {
+        assertEquals(1, StringUtils.ordinalIndexOf("aabaabaa", "a", 2));
+        assertEquals(5, StringUtils.ordinalIndexOf("aabaabaa", "b", 2));
+        assertEquals(4, StringUtils.ordinalIndexOf("aabaabaa", "ab", 2));
+    }
+
+    @Test
+    public void testOrdinalIndexOfNotEnoughOccurrencesReturnsNotFound() {
+        assertEquals(-1, StringUtils.ordinalIndexOf("aabaabaa", "b", 3));
+    }
+
+    @Test
+    public void testOrdinalIndexOfNonPositiveOrdinalReturnsNotFound() {
+        assertEquals(-1, StringUtils.ordinalIndexOf("aabaabaa", "a", 0));
+    }
+
+    @Test
+    public void testOrdinalIndexOfEmptySearchReturnsZero() {
+        assertEquals(0, StringUtils.ordinalIndexOf("", "", 1));
+        assertEquals(0, StringUtils.ordinalIndexOf("aabaabaa", "", 2));
+    }
+
+    @Test
+    public void testLastOrdinalIndexOfReturnsNthLastOccurrence() {
+        assertEquals(6, StringUtils.lastOrdinalIndexOf("aabaabaa", "a", 2));
+        assertEquals(4, StringUtils.lastOrdinalIndexOf("aabaabaa", "ab", 1));
+        assertEquals(1, StringUtils.lastOrdinalIndexOf("aabaabaa", "ab", 2));
+    }
+
+    @Test
+    public void testLastOrdinalIndexOfEmptySearchReturnsLength() {
+        assertEquals(0, StringUtils.lastOrdinalIndexOf("", "", 1));
+        assertEquals(8, StringUtils.lastOrdinalIndexOf("aabaabaa", "", 1));
+    }
+
+    @Test
+    public void testLastIndexOfCharWithStartPositionBoundaries() {
+        assertEquals(5, StringUtils.lastIndexOf("aabaabaa", 'b', 8));
+        assertEquals(2, StringUtils.lastIndexOf("aabaabaa", 'b', 4));
+        assertEquals(-1, StringUtils.lastIndexOf("aabaabaa", 'b', -1));
+        assertEquals(0, StringUtils.lastIndexOf("aabaabaa", 'a', 0));
+    }
+
+    @Test
+    public void testLastIndexOfStringWithStartPosition() {
+        assertEquals(4, StringUtils.lastIndexOf("aabaabaa", "ab", 8));
+        assertEquals(-1, StringUtils.lastIndexOf("aabaabaa", "b", 0));
+        assertEquals(-1, StringUtils.lastIndexOf(null, "b", 3));
+    }
+
+    @Test
+    public void testIndexOfIgnoreCaseWithStartPosition() {
+        assertEquals(5, StringUtils.indexOfIgnoreCase("aabaabaa", "B", 3));
+        assertEquals(-1, StringUtils.indexOfIgnoreCase("aabaabaa", "B", 9));
+        assertEquals(2, StringUtils.indexOfIgnoreCase("aabaabaa", "B", -1));
+        assertEquals(2, StringUtils.indexOfIgnoreCase("aabaabaa", "", 2));
+        assertEquals(0, StringUtils.indexOfIgnoreCase("", "", 0));
+        assertEquals(-1, StringUtils.indexOfIgnoreCase("abc", "d"));
+    }
+
+    @Test
+    public void testLastIndexOfIgnoreCaseWithStartPosition() {
+        assertEquals(5, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "B", 9));
+        assertEquals(4, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "AB", 8));
+        assertEquals(-1, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "B", -1));
+        assertEquals(-1, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "B", 0));
+        assertEquals(7, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "A"));
+        assertEquals(4, StringUtils.lastIndexOfIgnoreCase("aabaabaa", "AB"));
+    }
+
+    @Test
+    public void testContainsIgnoreCaseEdgeCases() {
+        assertTrue(StringUtils.containsIgnoreCase("ABC", "bc"));
+        assertTrue(StringUtils.containsIgnoreCase("", ""));
+        assertFalse(StringUtils.containsIgnoreCase("abc", "Z"));
+        assertFalse(StringUtils.containsIgnoreCase(null, "a"));
+    }
+
+    @Test
+    public void testContainsCharAndNullHandling() {
+        assertTrue(StringUtils.contains("abc", 'c'));
+        assertFalse(StringUtils.contains("", 'a'));
+        assertFalse(StringUtils.contains(null, 'a'));
+        assertFalse(StringUtils.contains("abc", null));
+    }
+
+    // ------------------------------------------------------------------
+    // indexOfAny / lastIndexOfAny / containsAny / containsOnly / containsNone
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIndexOfAnyCharArray() {
+        assertEquals(3, StringUtils.indexOfAny("zzabyycdxx", new char[] {'b', 'y'}));
+        assertEquals(-1, StringUtils.indexOfAny("aba", new char[] {'z'}));
+        assertEquals(-1, StringUtils.indexOfAny("abc", new char[0]));
+    }
+
+    @Test
+    public void testIndexOfAnyStringArrayWithNullEntryAndEmptyString() {
+        assertEquals(2, StringUtils.indexOfAny("abc", new String[] {null, "c"}));
+        assertEquals(0, StringUtils.indexOfAny("", new String[] {""}));
+        assertEquals(-1, StringUtils.indexOfAny("", new String[] {"a"}));
+        assertEquals(1, StringUtils.indexOfAny("zzabyycdxx", new String[] {"zab", "aby"}));
+    }
+
+    @Test
+    public void testLastIndexOfAnyStringArray() {
+        assertEquals(6, StringUt

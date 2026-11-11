@@ -1,0 +1,307 @@
+Los dos métodos que llaman a `setSelected(file)` sin declarar la excepción checked eran `testSetSelectedNullResetsSelection` y `testSetSelectedNullAllowsNewSelectionAfterReset`. Ambos ahora declaran `throws AlreadySelectedException`. No hace falta importarla porque está en el mismo paquete `org.apache.commons.cli`.
+
+```java
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Collection;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link OptionGroup} que cubren comportamientos
+ * no verificados por {@code OptionGroupTest}. Sólo usan la API pública.
+ */
+public class OptionGroupLLMTest
+{
+    /** Devuelve true si la colección contiene exactamente la instancia indicada (identidad). */
+    private static boolean containsSameInstance(Collection<?> coll, Object target)
+    {
+        for (Object o : coll)
+        {
+            if (o == target)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Cuenta las instancias de la colección que son idénticas al objeto indicado. */
+    private static int countSameInstance(Collection<?> coll, Object target)
+    {
+        int count = 0;
+        for (Object o : coll)
+        {
+            if (o == target)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Test
+    public void testSetSelectedNullResetsSelection() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        group.addOption(file);
+
+        group.setSelected(file);
+        assertEquals("f", group.getSelected());
+
+        group.setSelected(null);
+        assertNull("setSelected(null) debe reiniciar la selección", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedNullAllowsNewSelectionAfterReset() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        group.setSelected(null);
+        group.setSelected(dir);
+
+        assertEquals("tras reiniciar, la nueva selección debe ser 'd'", "d", group.getSelected());
+    }
+
+    @Test
+    public void testReselectingSameOptionKeepsSelection() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        group.addOption(file);
+
+        group.setSelected(file);
+        group.setSelected(file);
+
+        assertEquals("reseleccionar la misma opción debe conservar 'f'", "f", group.getSelected());
+    }
+
+    @Test
+    public void testReselectingSameOptionByDifferentInstanceWithSameOptDoesNotThrow()
+        throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option first = new Option("f", "file", false, "file to process");
+        Option second = new Option("f", "file", false, "file to process");
+        group.addOption(first);
+
+        group.setSelected(first);
+        group.setSelected(second);
+
+        assertEquals("instancia distinta con el mismo opt debe conservar 'f'", "f", group.getSelected());
+    }
+
+    @Test
+    public void testSelectingDifferentOptionThrowsAndKeepsPreviousSelection()
+        throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+
+        try
+        {
+            group.setSelected(dir);
+            fail("seleccionar una segunda opción distinta debe lanzar AlreadySelectedException");
+        }
+        catch (AlreadySelectedException e)
+        {
+            assertSame("la excepción debe referenciar el grupo", group, e.getOptionGroup());
+            assertSame("la excepción debe referenciar la opción rechazada", dir, e.getOption());
+        }
+
+        assertEquals("la selección previa no debe modificarse", "f", group.getSelected());
+    }
+
+    @Test
+    public void testNewGroupHasNoSelection()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertNull("un grupo recién creado no tiene selección", group.getSelected());
+    }
+
+    @Test
+    public void testNewGroupWithOptionsStillHasNoSelection()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "file to process"));
+
+        assertNull("añadir opciones no debe establecer una selección", group.getSelected());
+    }
+
+    @Test
+    public void testAddingSameKeyReplacesPreviousOption()
+    {
+        OptionGroup group = new OptionGroup();
+        Option first = new Option("a", "alpha", false, "first");
+        Option second = new Option("a", "beta", false, "second");
+
+        group.addOption(first);
+        group.addOption(second);
+
+        assertEquals("no debe haber duplicados en getOptions()", 1, group.getOptions().size());
+        assertEquals("no debe haber duplicados en getNames()", 1, group.getNames().size());
+        assertSame("la opción almacenada debe ser la última añadida", second,
+                   group.getOptions().iterator().next());
+        assertFalse("la opción reemplazada ya no debe estar en el grupo",
+                    containsSameInstance(group.getOptions(), first));
+    }
+
+    @Test
+    public void testAddingSameKeyTwiceDoesNotIncreaseSize()
+    {
+        OptionGroup group = new OptionGroup();
+        Option opt = new Option("x", "xray", false, "x option");
+
+        group.addOption(opt);
+        group.addOption(opt);
+
+        assertEquals("añadir dos veces la misma opción no debe duplicarla", 1, group.getOptions().size());
+        assertEquals("getNames() debe contener una única clave", 1, group.getNames().size());
+    }
+
+    @Test
+    public void testGetOptionsReturnsExactAddedInstances()
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        Option rev = new Option("r", "revision", false, "revision number");
+
+        group.addOption(file);
+        group.addOption(dir);
+        group.addOption(rev);
+
+        Collection<?> options = group.getOptions();
+        assertEquals("deben devolverse exactamente 3 opciones", 3, options.size());
+        assertEquals("cada instancia debe aparecer una sola vez", 1, countSameInstance(options, file));
+        assertEquals("cada instancia debe aparecer una sola vez", 1, countSameInstance(options, dir));
+        assertEquals("cada instancia debe aparecer una sola vez", 1, countSameInstance(options, rev));
+    }
+
+    @Test
+    public void testGetOptionsOfEmptyGroupIsEmpty()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertNotNull("getOptions() nunca debe devolver null", group.getOptions());
+        assertEquals("un grupo vacío no tiene opciones", 0, group.getOptions().size());
+    }
+
+    @Test
+    public void testIsRequiredDefaultsToFalse()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertFalse("por defecto un grupo no es obligatorio", group.isRequired());
+    }
+
+    @Test
+    public void testSetRequiredTogglesValue()
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setRequired(true);
+        assertTrue("setRequired(true) debe activar isRequired()", group.isRequired());
+
+        group.setRequired(false);
+        assertFalse("setRequired(false) debe desactivar isRequired()", group.isRequired());
+    }
+
+    @Test
+    public void testEmptyGroupToStringIsBrackets()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertEquals("[]", group.toString());
+    }
+
+    @Test
+    public void testSingleOptionToStringIsDeterministic()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "foo", false, "Foo"));
+
+        assertEquals("[-f Foo]", group.toString());
+    }
+
+    @Test
+    public void testSingleLongOnlyOptionToStringIsDeterministic()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option(null, "foo", false, "Foo"));
+
+        assertEquals("[--foo Foo]", group.toString());
+    }
+
+    @Test
+    public void testMultipleOptionsToStringContainsEachEntryAndSeparator()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "foo", false, "Foo"));
+        group.addOption(new Option("b", "bar", false, "Bar"));
+
+        String text = group.toString();
+
+        assertTrue("debe empezar por '['", text.startsWith("["));
+        assertTrue("debe terminar por ']'", text.endsWith("]"));
+        assertTrue("debe contener la entrada de -f", text.contains("-f Foo"));
+        assertTrue("debe contener la entrada de -b", text.contains("-b Bar"));
+        assertEquals("debe haber exactamente un separador ', '", 1, countOccurrences(text, ", "));
+        assertEquals("debe tener exactamente dos entradas con guión",
+                     2, countOccurrences(text, " ") - 1 >= 0 ? 2 : 0);
+    }
+
+    /** Cuenta las apariciones no solapadas de {@code needle} en {@code haystack}. */
+    private static int countOccurrences(String haystack, String needle)
+    {
+        int count = 0;
+        int idx = 0;
+        while ((idx = haystack.indexOf(needle, idx)) != -1)
+        {
+            count++;
+            idx += needle.length();
+        }
+        return count;
+    }
+}
+```
+
+Fuera del alcance de la corrección de compilación, observo que la última aserción de `testMultipleOptionsToStringContainsEachEntryAndSeparator` (`countOccurrences(text, " ") - 1 >= 0 ? 2 : 0`) siempre vale 2, así que no verifica nada. No la he modificado porque pediste no cambiar lo que verifica cada prueba, pero conviene reemplazarla por una comprobación real, por ejemplo `assertEquals(2, countOccurrences(text, " -"))` o similar, si quieres fortalecer la suite.

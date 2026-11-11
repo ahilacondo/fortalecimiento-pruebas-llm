@@ -1,0 +1,366 @@
+package org.apache.commons.cli;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.function.Consumer;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+/**
+ * Pruebas adicionales para {@link HelpFormatter} usando únicamente su API pública.
+ */
+public class HelpFormatterLLMTest
+{
+    private static final String EOL = System.getProperty("line.separator");
+
+    private static String render(Consumer<PrintWriter> action)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        action.accept(pw);
+        pw.flush();
+        return sw.toString();
+    }
+
+    @Test
+    public void testDefaultConstantValues()
+    {
+        assertEquals(74, HelpFormatter.DEFAULT_WIDTH);
+        assertEquals(1, HelpFormatter.DEFAULT_LEFT_PAD);
+        assertEquals(3, HelpFormatter.DEFAULT_DESC_PAD);
+        assertEquals("usage: ", HelpFormatter.DEFAULT_SYNTAX_PREFIX);
+        assertEquals("-", HelpFormatter.DEFAULT_OPT_PREFIX);
+        assertEquals("--", HelpFormatter.DEFAULT_LONG_OPT_PREFIX);
+        assertEquals(" ", HelpFormatter.DEFAULT_LONG_OPT_SEPARATOR);
+        assertEquals("arg", HelpFormatter.DEFAULT_ARG_NAME);
+    }
+
+    @Test
+    public void testDefaultAccessorValues()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        assertEquals(74, hf.getWidth());
+        assertEquals(1, hf.getLeftPadding());
+        assertEquals(3, hf.getDescPadding());
+        assertEquals("usage: ", hf.getSyntaxPrefix());
+        assertEquals("-", hf.getOptPrefix());
+        assertEquals("--", hf.getLongOptPrefix());
+        assertEquals(" ", hf.getLongOptSeparator());
+        assertEquals("arg", hf.getArgName());
+        assertEquals(EOL, hf.getNewLine());
+        assertNotNull(hf.getOptionComparator());
+    }
+
+    @Test
+    public void testSetWidthUpdatesPublicFieldAndGetter()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setWidth(30);
+        assertEquals(30, hf.getWidth());
+        assertEquals(30, hf.defaultWidth);
+    }
+
+    @Test
+    public void testSetOptionComparatorNullRestoresCaseInsensitiveOrder()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator custom = (o1, o2) -> 0;
+        hf.setOptionComparator(custom);
+        assertSame(custom, hf.getOptionComparator());
+
+        hf.setOptionComparator(null);
+        Comparator restored = hf.getOptionComparator();
+        assertNotNull(restored);
+        assertTrue("default comparator must order 'b' after 'A' ignoring case",
+                restored.compare(new Option("b", "x"), new Option("A", "y")) > 0);
+        assertEquals(0, restored.compare(new Option("a", "x"), new Option("A", "y")));
+    }
+
+    @Test
+    public void testSetOptionComparatorStoresCustomInstance()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator custom = (o1, o2) -> 0;
+        hf.setOptionComparator(custom);
+        assertSame(custom, hf.getOptionComparator());
+    }
+
+    @Test
+    public void testPrintUsageRequiredShortOptionHasNoBrackets()
+    {
+        Option r = new Option("r", "req", false, "required option");
+        r.setRequired(true);
+        Options opts = new Options();
+        opts.addOption(r);
+
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app", opts));
+        assertEquals("usage: app -r" + EOL, out);
+    }
+
+    @Test
+    public void testPrintUsageLongOnlyOptionWithoutArg()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option(null, "verbose", false, "Verbose"));
+
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app", opts));
+        assertEquals("usage: app [--verbose]" + EOL, out);
+    }
+
+    @Test
+    public void testPrintUsageLongOnlyOptionWithArgUsesLongOptSeparator()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option(null, "size", true, "Size"));
+
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app", opts));
+        assertEquals("usage: app [--size <arg>]" + EOL, out);
+    }
+
+    @Test
+    public void testPrintUsageBlankArgNameOmitsArgument()
+    {
+        Option f = new Option("f", true, null);
+        f.setArgName("");
+        Options opts = new Options();
+        opts.addOption(f);
+
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app", opts));
+        assertEquals("usage: app [-f]" + EOL, out);
+    }
+
+    @Test
+    public void testPrintUsageSortsOptionsCaseInsensitively()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("B", "second"));
+        opts.addOption(new Option("a", "first"));
+
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app", opts));
+        assertEquals("usage: app [-a] [-B]" + EOL, out);
+    }
+
+    @Test
+    public void testPrintUsageThreeArgWithCustomSyntax()
+    {
+        String out = render(pw -> new HelpFormatter().printUsage(pw, 80, "app [options] file"));
+        assertEquals("usage: app [options] file" + EOL, out);
+    }
+
+    @Test
+    public void testPrintHelpWriterRejectsNullOrEmptySyntax()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Options opts = new Options();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+
+        try
+        {
+            hf.printHelp(pw, 80, null, null, opts, 1, 3, null, false);
+            fail("null syntax must be rejected");
+        }
+        catch (IllegalArgumentException expected)
+        {
+            // expected
+        }
+
+        try
+        {
+            hf.printHelp(pw, 80, "", null, opts, 1, 3, null, false);
+            fail("empty syntax must be rejected");
+        }
+        catch (IllegalArgumentException expected)
+        {
+            // expected
+        }
+    }
+
+    @Test
+    public void testPrintHelpWithAutoUsageIncludesOptionsInSyntax()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "first"));
+
+        String out = render(pw -> new HelpFormatter()
+                .printHelp(pw, 80, "app", null, opts, 1, 3, null, true));
+        assertEquals("usage: app [-a]" + EOL + " -a   first" + EOL, out);
+    }
+
+    @Test
+    public void testPrintHelpWithoutAutoUsageOmitsOptionsFromSyntax()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "first"));
+
+        String out = render(pw -> new HelpFormatter()
+                .printHelp(pw, 80, "app", null, opts, 1, 3, null, false));
+        assertEquals("usage: app" + EOL + " -a   first" + EOL, out);
+    }
+
+    @Test
+    public void testPrintHelpSkipsBlankHeaderAndEmptyFooter()
+    {
+        Options opts = new Options();
+
+        String out = render(pw -> new HelpFormatter()
+                .printHelp(pw, 80, "app", "   ", opts, 1, 3, "", false));
+        assertEquals("usage: app" + EOL + EOL, out);
+    }
+
+    @Test
+    public void testPrintHelpWritesHeaderAndFooter()
+    {
+        Options opts = new Options();
+
+        String out = render(pw -> new HelpFormatter()
+                .printHelp(pw, 80, "app", "Header", opts, 1, 3, "Footer", false));
+        assertEquals("usage: app" + EOL + "Header" + EOL + EOL + "Footer" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsAppliesLeftPadding()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "first"));
+
+        String out = render(pw -> new HelpFormatter().printOptions(pw, 80, opts, 2, 3));
+        assertEquals("  -a   first" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsWithoutDescriptionTrimsTrailingPadding()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, null));
+
+        String out = render(pw -> new HelpFormatter().printOptions(pw, 80, opts, 1, 3));
+        assertEquals(" -a" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsShowsArgName()
+    {
+        Option f = new Option("f", true, "file");
+        f.setArgName("FILE");
+        Options opts = new Options();
+        opts.addOption(f);
+
+        String out = render(pw -> new HelpFormatter().printOptions(pw, 80, opts, 1, 3));
+        assertEquals(" -f <FILE>   file" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsBlankArgNameAddsOnlySpace()
+    {
+        Option f = new Option("f", true, "file");
+        f.setArgName("");
+        Options opts = new Options();
+        opts.addOption(f);
+
+        String out = render(pw -> new HelpFormatter().printOptions(pw, 80, opts, 1, 3));
+        assertEquals(" -f    file" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsLongOnlyIsIndented()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option(null, "verbose", false, "Verbose"));
+
+        String out = render(pw -> new HelpFormatter().printOptions(pw, 80, opts, 1, 3));
+        assertEquals("    --verbose   Verbose" + EOL, out);
+    }
+
+    @Test
+    public void testPrintOptionsSortsAndUsesConfiguredNewLine()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("b", "second"));
+        opts.addOption(new Option("a", "first"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        assertEquals("\n", hf.getNewLine());
+
+        String out = render(pw -> hf.printOptions(pw, 80, opts, 1, 3));
+        assertEquals(" -a   first\n -b   second" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedSplitsOnNewLineCharacter()
+    {
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, 80, "line one\nline two"));
+        assertEquals("line one" + EOL + "line two" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedSplitsOnTabCharacter()
+    {
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, 80, "a\tb"));
+        assertEquals("a" + EOL + "b" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedUsesConfiguredNewLineForWraps()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+
+        String out = render(pw -> hf.printWrapped(pw, 80, "line one\nline two"));
+        assertEquals("line one\nline two" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedTextExactlyWidthIsNotWrapped()
+    {
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, 5, "abcde"));
+        assertEquals("abcde" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedBreaksAtWordBoundaryWithTabStop()
+    {
+        String text = "aaaa bbbb cccc dddd eeee";
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, 20, 4, text));
+        assertEquals("aaaa bbbb cccc dddd" + EOL + "    eeee" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedTabStopNotLessThanWidthIsReset()
+    {
+        // nextLineTabStop >= width must be reset to 1 to avoid an infinite loop
+        String text = "aaaa bbbb cccc dddd";
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, 10, 10, text));
+        assertEquals("aaaa bbbb" + EOL + " cccc dddd" + EOL, out);
+    }
+
+    @Test
+    public void testPrintWrappedLinesRespectWidthAndKeepWords()
+    {
+        String text = "the quick brown fox jumps over the lazy dog again";
+        int width = 12;
+
+        String out = render(pw -> new HelpFormatter().printWrapped(pw, width, text));
+
+        String[] lines = out.split("\\r?\\n");
+        assertTrue("text should be wrapped over several lines", lines.length > 1);
+        for (String line : lines)
+        {
+            assertTrue("line exceeds width: '" + line + "'", line.length() <= width);
+        }
+
+        String[] expectedWords = text.split("\\s+");
+        String[] actualWords = out.trim().split("\\s+");
+        assertTrue("words must be preserved in order",
+                Arrays.equals(expectedWords, actualWords));
+    }
+}

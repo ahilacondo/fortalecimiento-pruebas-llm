@@ -1,0 +1,210 @@
+El requisito 1 no se cumple con el código actual. El Javadoc de `toClass` dice que se inserta `null` para elementos nulos, pero la implementación llama a `array[i].getClass()` sin comprobarlo, así que lanza `NullPointerException`. La prueba `testToClass_ElementoNulo_InsertaNull` falla contra el código actual y está escrita para detectar ese defecto. Las demás pruebas deberían pasar.
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link ClassUtils} que cubren los requisitos
+ * detectados en la fase 1 de análisis.
+ */
+public class ClassUtilsLLMTest {
+
+    /** Registro de clases de prueba que han sido inicializadas (ejecutado su bloque static). */
+    static final List<String> INIT_LOG = new ArrayList<String>();
+
+    /** Clase usada solo para verificar que getClass(..., false) no la inicializa. */
+    public static final class InitProbeA {
+        static {
+            INIT_LOG.add("A");
+        }
+    }
+
+    /** Clase usada solo para verificar que getClass(..., true) la inicializa. */
+    public static final class InitProbeB {
+        static {
+            INIT_LOG.add("B");
+        }
+    }
+
+    /** Clase usada solo para verificar que se usa el ClassLoader indicado. */
+    public static final class InitProbeC {
+    }
+
+    /** Clase privada cuyo método público no es accesible públicamente. */
+    private static class Hidden {
+        public void m() {
+        }
+    }
+
+    /** ClassLoader que registra los nombres de clase solicitados. */
+    private static final class TrackingClassLoader extends ClassLoader {
+        final List<String> requested = new ArrayList<String>();
+
+        TrackingClassLoader(ClassLoader parent) {
+            super(parent);
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            requested.add(name);
+            return super.loadClass(name, resolve);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: toClass inserta null para elementos nulos
+    // ------------------------------------------------------------------
+    @Test
+    public void testToClass_ElementoNulo_InsertaNull() {
+        Object[] input = {"texto", null, Integer.valueOf(3)};
+        Class<?>[] result = ClassUtils.toClass(input);
+
+        assertNotNull("El resultado no debe ser null para un array no nulo", result);
+        assertEquals("La longitud debe coincidir con la entrada", 3, result.length);
+        assertEquals(String.class, result[0]);
+        assertNull("El elemento nulo debe convertirse en null", result[1]);
+        assertEquals(Integer.class, result[2]);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: toClass devuelve null para array nulo y vacío para entrada vacía
+    // ------------------------------------------------------------------
+    @Test
+    public void testToClass_ArrayNulo_DevuelveNull() {
+        assertNull(ClassUtils.toClass((Object[]) null));
+    }
+
+    @Test
+    public void testToClass_ArrayVacio_DevuelveArrayVacio() {
+        Class<?>[] result = ClassUtils.toClass(new Object[0]);
+
+        assertNotNull(result);
+        assertEquals("El array resultante debe estar vacío", 0, result.length);
+        assertSame("Debe devolver el array vacío de clases de ArrayUtils",
+                ArrayUtils.EMPTY_CLASS_ARRAY, result);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: getPublicMethod lanza NullPointerException si la clase es null
+    // ------------------------------------------------------------------
+    @Test(expected = NullPointerException.class)
+    public void testGetPublicMethod_ClaseNull_LanzaNullPointerException() throws Exception {
+        ClassUtils.getPublicMethod(null, "toString", new Class<?>[0]);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: getPublicMethod lanza NoSuchMethodException sin método público conforme
+    // ------------------------------------------------------------------
+    @Test
+    public void testGetPublicMethod_MetodoInexistente_LanzaNoSuchMethodException() throws Exception {
+        try {
+            ClassUtils.getPublicMethod(Object.class, "metodoQueNoExiste", new Class<?>[0]);
+            fail("Debe lanzar NoSuchMethodException para un método inexistente");
+        } catch (NoSuchMethodException expected) {
+            assertNotNull(expected.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetPublicMethod_SinMetodoPublicoConforme_LanzaNoSuchMethodException() throws Exception {
+        // Hidden es privada: su método m() existe pero su clase declarante no es pública,
+        // y Object no declara m(), así que no hay candidato público conforme.
+        try {
+            ClassUtils.getPublicMethod(Hidden.class, "m", new Class<?>[0]);
+            fail("Debe lanzar NoSuchMethodException cuando no hay método público conforme");
+        } catch (NoSuchMethodException expected) {
+            assertNotNull(expected.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: getClass(ClassLoader, String, boolean) respeta initialize y usa el ClassLoader
+    // ------------------------------------------------------------------
+    @Test
+    public void testGetClass_InitializeFalse_NoInicializaLaClase() throws Exception {
+        ClassLoader cl = ClassUtilsLLMTest.class.getClassLoader();
+        String name = InitProbeA.class.getName();
+
+        assertFalse("La clase no debe estar inicializada antes de la llamada",
+                INIT_LOG.contains("A"));
+
+        Class<?> result = ClassUtils.getClass(cl, name, false);
+
+        assertEquals(InitProbeA.class, result);
+        assertFalse("Con initialize=false la clase no debe inicializarse",
+                INIT_LOG.contains("A"));
+    }
+
+    @Test
+    public void testGetClass_InitializeTrue_InicializaLaClase() throws Exception {
+        ClassLoader cl = ClassUtilsLLMTest.class.getClassLoader();
+        String name = InitProbeB.class.getName();
+
+        assertFalse("La clase no debe estar inicializada antes de la llamada",
+                INIT_LOG.contains("B"));
+
+        Class<?> result = ClassUtils.getClass(cl, name, true);
+
+        assertEquals(InitProbeB.class, result);
+        assertTrue("Con initialize=true la clase debe inicializarse",
+                INIT_LOG.contains("B"));
+    }
+
+    @Test
+    public void testGetClass_UsaElClassLoaderIndicado() throws Exception {
+        TrackingClassLoader loader = new TrackingClassLoader(ClassUtilsLLMTest.class.getClassLoader());
+        String name = InitProbeC.class.getName();
+
+        Class<?> result = ClassUtils.getClass(loader, name, false);
+
+        assertEquals(InitProbeC.class, result);
+        assertTrue("La carga debe realizarse a través del ClassLoader indicado",
+                loader.requested.contains(name));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: getAllSuperclasses devuelve lista vacía para Object o una interfaz
+    // ------------------------------------------------------------------
+    @Test
+    public void testGetAllSuperclasses_Object_DevuelveListaVacia() {
+        List<Class<?>> result = ClassUtils.getAllSuperclasses(Object.class);
+
+        assertNotNull(result);
+        assertTrue("Object no tiene superclases", result.isEmpty());
+    }
+
+    @Test
+    public void testGetAllSuperclasses_Interfaz_DevuelveListaVacia() {
+        List<Class<?>> result = ClassUtils.getAllSuperclasses(Runnable.class);
+
+        assertNotNull(result);
+        assertTrue("Una interfaz no tiene superclases", result.isEmpty());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 7: convertClassNamesToClasses almacena null para un nombre null
+    // ------------------------------------------------------------------
+    @Test
+    public void testConvertClassNamesToClasses_NombreNulo_AlmacenaNull() {
+        List<String> names = new ArrayList<String>();
+        names.add("java.lang.String");
+        names.add(null);
+        names.add("java.lang.Object");
+
+        List<Class<?>> result = ClassUtils.convertClassNamesToClasses(names);
+
+        assertNotNull(result);
+        assertEquals("La longitud debe coincidir con la entrada", 3, result.size());
+        assertEquals(String.class, result.get(0));
+        assertNull("Un nombre null debe producir null en la lista de salida", result.get(1));
+        assertEquals(Object.class, result.get(2));
+    }
+}
+```

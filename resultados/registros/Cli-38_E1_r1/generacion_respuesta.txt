@@ -1,0 +1,318 @@
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.Properties;
+
+import org.junit.Before;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DefaultParser}, basadas exclusivamente
+ * en su API pública.
+ */
+public class DefaultParserLLMTest
+{
+    private DefaultParser parser;
+
+    @Before
+    public void setUp()
+    {
+        parser = new DefaultParser();
+    }
+
+    /* ---------- utilidades ---------- */
+
+    private CommandLine parse(Options options, String... args) throws ParseException
+    {
+        return parser.parse(options, args);
+    }
+
+    private ParseException parseExpectingFailure(Options options, String... args)
+    {
+        try
+        {
+            parser.parse(options, args);
+        }
+        catch (ParseException e)
+        {
+            return e;
+        }
+        fail("Se esperaba una ParseException");
+        return null;
+    }
+
+    private static Option flag(String shortName, String longName)
+    {
+        return new Option(shortName, longName, false, "descripción");
+    }
+
+    private static Option withArg(String shortName, String longName)
+    {
+        return new Option(shortName, longName, true, "descripción");
+    }
+
+    /* ---------- opciones cortas ---------- */
+
+    @Test
+    public void shortFlagIsRecognizedWithoutArguments() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("a", null));
+
+        CommandLine cmd = parse(options, "-a");
+
+        assertTrue(cmd.hasOption("a"));
+        assertTrue(cmd.getArgList().isEmpty());
+    }
+
+    @Test
+    public void shortOptionTakesSeparateValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-f", "file.txt");
+
+        assertTrue(cmd.hasOption("f"));
+        assertEquals("file.txt", cmd.getOptionValue("f"));
+        assertTrue(cmd.getArgList().isEmpty());
+    }
+
+    @Test
+    public void shortOptionAcceptsAttachedValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-fvalue");
+
+        assertTrue(cmd.hasOption("f"));
+        assertEquals("value", cmd.getOptionValue("f"));
+    }
+
+    @Test
+    public void shortOptionAcceptsEqualsValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-f=value");
+
+        assertTrue(cmd.hasOption("f"));
+        assertEquals("value", cmd.getOptionValue("f"));
+    }
+
+    @Test
+    public void combinedFlagsAreAllRecognized() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("a", null));
+        options.addOption(flag("b", null));
+        options.addOption(flag("c", null));
+
+        CommandLine cmd = parse(options, "-abc");
+
+        assertTrue(cmd.hasOption("a"));
+        assertTrue(cmd.hasOption("b"));
+        assertTrue(cmd.hasOption("c"));
+        assertEquals(3, cmd.getOptions().length);
+    }
+
+    @Test
+    public void combinedFlagFollowedByValueOptionReceivesTrailingText() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("a", null));
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-afvalue");
+
+        assertTrue(cmd.hasOption("a"));
+        assertTrue(cmd.hasOption("f"));
+        assertEquals("value", cmd.getOptionValue("f"));
+    }
+
+    @Test
+    public void unknownShortOptionThrowsUnrecognizedOptionException()
+    {
+        Options options = new Options();
+        options.addOption(flag("a", null));
+
+        ParseException e = parseExpectingFailure(options, "-z");
+
+        assertTrue("Tipo inesperado: " + e, e instanceof UnrecognizedOptionException);
+        assertEquals("-z", ((UnrecognizedOptionException) e).getOption());
+    }
+
+    @Test
+    public void negativeNumberIsUsedAsValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("n", null));
+
+        CommandLine cmd = parse(options, "-n", "-5");
+
+        assertEquals("-5", cmd.getOptionValue("n"));
+    }
+
+    @Test
+    public void unknownDashTokenIsConsumedAsValueOfPrecedingOption() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-f", "-x");
+
+        assertEquals("-x", cmd.getOptionValue("f"));
+    }
+
+    @Test
+    public void quotesAroundValueAreStripped() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("f", null));
+
+        CommandLine cmd = parse(options, "-f", "\"quoted value\"");
+
+        assertEquals("quoted value", cmd.getOptionValue("f"));
+    }
+
+    @Test
+    public void optionWithUnlimitedValuesCollectsAllFollowingTokens() throws ParseException
+    {
+        Option multi = withArg("p", "params");
+        multi.setArgs(Option.UNLIMITED_VALUES);
+        Options options = new Options();
+        options.addOption(multi);
+
+        CommandLine cmd = parse(options, "-p", "a", "b", "c");
+
+        assertArrayEquals(new String[] {"a", "b", "c"}, cmd.getOptionValues("p"));
+    }
+
+    @Test
+    public void javaStyleDefinePropertyIsSplitIntoKeyAndValue() throws ParseException
+    {
+        Option define = withArg("D", null);
+        define.setArgs(2);
+        Options options = new Options();
+        options.addOption(define);
+
+        CommandLine cmd = parse(options, "-Dkey=value");
+
+        assertTrue(cmd.hasOption("D"));
+        assertArrayEquals(new String[] {"key", "value"}, cmd.getOptionValues("D"));
+    }
+
+    /* ---------- opciones largas ---------- */
+
+    @Test
+    public void longFlagIsRecognized() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("v", "verbose"));
+
+        CommandLine cmd = parse(options, "--verbose");
+
+        assertTrue(cmd.hasOption("verbose"));
+        assertTrue(cmd.hasOption("v"));
+    }
+
+    @Test
+    public void longOptionAcceptsEqualsValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("o", "output"));
+
+        CommandLine cmd = parse(options, "--output=result.txt");
+
+        assertTrue(cmd.hasOption("output"));
+        assertEquals("result.txt", cmd.getOptionValue("output"));
+    }
+
+    @Test
+    public void longOptionAcceptsSeparateValue() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(withArg("o", "output"));
+
+        CommandLine cmd = parse(options, "--output", "result.txt");
+
+        assertEquals("result.txt", cmd.getOptionValue("output"));
+    }
+
+    @Test
+    public void uniquePartialLongOptionIsResolved() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("v", "verbose"));
+        options.addOption(flag("h", "help"));
+
+        CommandLine cmd = parse(options, "--verb");
+
+        assertTrue(cmd.hasOption("verbose"));
+        assertFalse(cmd.hasOption("help"));
+    }
+
+    @Test
+    public void ambiguousPartialLongOptionThrowsAmbiguousOptionException()
+    {
+        Options options = new Options();
+        options.addOption(flag("v", "verbose"));
+        options.addOption(flag("w", "version"));
+
+        ParseException e = parseExpectingFailure(options, "--ver");
+
+        assertTrue("Tipo inesperado: " + e, e instanceof AmbiguousOptionException);
+    }
+
+    @Test
+    public void flagLongOptionWithEqualsValueThrowsUnrecognized()
+    {
+        Options options = new Options();
+        options.addOption(flag("v", "verbose"));
+
+        ParseException e = parseExpectingFailure(options, "--verbose=yes");
+
+        assertTrue("Tipo inesperado: " + e, e instanceof UnrecognizedOptionException);
+    }
+
+    @Test
+    public void unknownLongOptionThrowsUnrecognized()
+    {
+        Options options = new Options();
+        options.addOption(flag("v", "verbose"));
+
+        ParseException e = parseExpectingFailure(options, "--desconocida");
+
+        assertTrue("Tipo inesperado: " + e, e instanceof UnrecognizedOptionException);
+    }
+
+    /* ---------- argumentos no opción y separadores ---------- */
+
+    @Test
+    public void nonOptionTokensAreCollectedAsArguments() throws ParseException
+    {
+        Options options = new Options();
+        options.addOption(flag("a", null));
+
+        CommandLine cmd = parse(options, "file1", "-a", "file2");
+
+        assertTrue(cmd.hasOption("a"));
+        assertEquals(Arrays.asList("file1", "file2"), cmd.getArgList());
+    }
+
+    @Test
+    public void doubleDashStopsOptionProcessing() throws ParseException
+    {
+        Options options = new Options();
+        options.addO

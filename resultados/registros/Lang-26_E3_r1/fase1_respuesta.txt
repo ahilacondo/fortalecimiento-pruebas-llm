@@ -1,0 +1,8 @@
+1. Salida de `format(Date)`, `format(long)` y `format(Calendar)` con patrones comunes, comparada con `SimpleDateFormat`, porque `testFormat` está vacío y su versión original está comentada.
+2. Los tokens `Z` y `ZZ` con offsets de zona horaria positivos y negativos, incluido el formato con y sin dos puntos.
+3. Los tokens `z` y `zzzz` (nombre de zona horaria), según si la zona está forzada y del locale usado.
+4. Con zona horaria forzada, `format(Calendar)` no debe modificar el `Calendar` original y debe aplicar la zona del formateador.
+5. El token `yy` (año de dos dígitos, `TwoDigitYearField`) y su salida para años distintos de 2004.
+6. Los tokens `h`, `k` y `K` en medianoche y mediodía, donde se aplican los valores de corrección de hora (0 se convierte en 12 o 24).
+7. `parseObject` devuelve siempre `null` y deja `ParsePosition` con índice y `errorIndex` a 0; no hay prueba de ese comportamiento.
+8. Patrones inválidos (`null`, letras no soportadas como `X`) deben lanzar `IllegalArgumentException`, y las comillas simples con `''` deben producir literales correctos.

@@ -1,0 +1,8 @@
+1. El comparador personalizado de opciones también debe ordenar la sección de descripciones de `renderOptions`, no solo la línea de uso.
+2. Los prefijos corto y largo configurados con `setOptPrefix` y `setLongOptPrefix` deben reflejarse en la salida de las descripciones.
+3. El separador de línea configurado con `setNewLine` debe usarse al separar las filas de opciones renderizadas.
+4. El ancho configurado con `setWidth` debe aplicarse a `printHelp` cuando no se indica un ancho explícito, y no solo quedar guardado en el getter.
+5. Si `nextLineTabStop` es mayor o igual que el ancho, `renderWrappedText` debe usar 1 para evitar un bucle infinito, y esa protección no está verificada.
+6. `findWrapPos` debe cortar en el carácter de nueva línea o de tabulación cuando aparece antes del ancho, y ese caso no tiene prueba directa.
+7. Un encabezado o pie nulo o compuesto solo por espacios debe omitirse sin añadir líneas vacías a la salida de `printHelp`.
+8. `printUsage` con una cadena de sintaxis (ruta no automática) debe anteponer el prefijo y calcular la sangría de las líneas siguientes, comportamiento sin prueba directa.

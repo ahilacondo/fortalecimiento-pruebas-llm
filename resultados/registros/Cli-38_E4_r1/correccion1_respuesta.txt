@@ -1,0 +1,338 @@
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.Properties;
+
+import org.junit.Test;
+
+public class DefaultParserLLMTest {
+
+    /** Opciones base: -a y -b, sin argumento y sin nombre largo. */
+    private static Options basicOptions() {
+        Options options = new Options();
+        options.addOption("a", false, "opción a");
+        options.addOption("b", false, "opción b");
+        return options;
+    }
+
+    /** Parsea un único flag "v" desde Properties y devuelve si quedó presente. */
+    private static boolean flagFromProperty(String value) throws ParseException {
+        Options options = new Options();
+        options.addOption("v", false, "verbose");
+        Properties properties = new Properties();
+        properties.setProperty("v", value);
+        CommandLine cmd = new DefaultParser().parse(options, new String[0], properties);
+        return cmd.hasOption("v");
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 1: stopAtNonOption=true detiene el parseo en el primer no-opción
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stopAtNonOptionTrueAddsAllRemainingTokensAsArgs() throws ParseException {
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(basicOptions(),
+                new String[] {"-a", "file1", "-b", "x"}, true);
+
+        assertTrue("La opción -a anterior al no-opción debe procesarse", cmd.hasOption("a"));
+        assertFalse("-b tras el no-opción no debe procesarse como opción", cmd.hasOption("b"));
+        assertEquals(Arrays.asList("file1", "-b", "x"), cmd.getArgList());
+    }
+
+    @Test
+    public void stopAtNonOptionTrueTreatsUnknownDashTokenAfterStopAsArgument() throws ParseException {
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(basicOptions(),
+                new String[] {"file1", "-z"}, true);
+
+        assertEquals(Arrays.asList("file1", "-z"), cmd.getArgList());
+        assertFalse(cmd.hasOption("a"));
+        assertFalse(cmd.hasOption("b"));
+    }
+
+    @Test
+    public void stopAtNonOptionTrueWithOnlyNonOptionsLeavesNoOptions() throws ParseException {
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(basicOptions(),
+                new String[] {"-a", "uno"}, true);
+
+        assertTrue(cmd.hasOption("a"));
+        assertEquals(Arrays.asList("uno"), cmd.getArgList());
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 2: stopAtNonOption=false lanza UnrecognizedOptionException
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stopAtNonOptionFalseThrowsForUnknownDashToken() {
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(basicOptions(), new String[] {"-z"}, false);
+            fail("Se esperaba UnrecognizedOptionException para -z");
+        } catch (UnrecognizedOptionException e) {
+            assertEquals("-z", e.getOption());
+        } catch (ParseException e) {
+            fail("Se esperaba UnrecognizedOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    @Test
+    public void stopAtNonOptionFalseAddsPlainUnknownTokenAsArgument() throws ParseException {
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(basicOptions(), new String[] {"file1"}, false);
+
+        assertEquals(Arrays.asList("file1"), cmd.getArgList());
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 3: clave de Properties no definida -> UnrecognizedOptionException
+    // ---------------------------------------------------------------
+
+    @Test
+    public void undefinedPropertyKeyThrowsUnrecognizedOptionWithExpectedMessage() {
+        Options options = basicOptions();
+        Properties properties = new Properties();
+        properties.setProperty("noDefinida", "valor");
+
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(options, new String[0], properties);
+            fail("Se esperaba UnrecognizedOptionException para la clave noDefinida");
+        } catch (UnrecognizedOptionException e) {
+            assertEquals("Default option wasn't defined", e.getMessage());
+            assertEquals("noDefinida", e.getOption());
+        } catch (ParseException e) {
+            fail("Se esperaba UnrecognizedOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 4: valores de Properties para opciones sin argumento
+    // ---------------------------------------------------------------
+
+    @Test
+    public void propertyValuesYesTrueOneActivateNoArgOptionIgnoringCase() throws ParseException {
+        String[] activators = {"yes", "YES", "Yes", "true", "TRUE", "1"};
+        for (String value : activators) {
+            assertTrue("El valor '" + value + "' debe activar la opción", flagFromProperty(value));
+        }
+    }
+
+    @Test
+    public void propertyValuesOtherThanYesTrueOneDoNotActivateNoArgOption() throws ParseException {
+        String[] nonActivators = {"no", "false", "0", "", "sí", "2"};
+        for (String value : nonActivators) {
+            assertFalse("El valor '" + value + "' no debe activar la opción", flagFromProperty(value));
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 5: Properties no sobrescriben CLI ni grupos ya seleccionados
+    // ---------------------------------------------------------------
+
+    @Test
+    public void propertiesDoNotOverrideOptionAlreadyPresentInCommandLine() throws ParseException {
+        Options options = new Options();
+        options.addOption("o", true, "salida");
+
+        Properties properties = new Properties();
+        properties.setProperty("o", "desdeProps");
+
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, new String[] {"-o", "desdeCli"}, properties);
+
+        assertTrue(cmd.hasOption("o"));
+        assertEquals("desdeCli", cmd.getOptionValue("o"));
+    }
+
+    @Test
+    public void propertiesProvideValueWhenOptionAbsentFromCommandLine() throws ParseException {
+        Options options = new Options();
+        options.addOption("o", true, "salida");
+
+        Properties properties = new Properties();
+        properties.setProperty("o", "desdeProps");
+
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, new String[0], properties);
+
+        assertTrue(cmd.hasOption("o"));
+        assertEquals("desdeProps", cmd.getOptionValue("o"));
+    }
+
+    @Test
+    public void propertiesDoNotSelectAnotherOptionOfAlreadySelectedGroup() throws ParseException {
+        Options options = new Options();
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", false, "opción a"));
+        group.addOption(new Option("b", false, "opción b"));
+        options.addOptionGroup(group);
+
+        Properties properties = new Properties();
+        properties.setProperty("b", "true");
+
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, new String[] {"-a"}, properties);
+
+        assertTrue("-a debe quedar seleccionada desde la línea de comandos", cmd.hasOption("a"));
+        assertFalse("Properties no debe seleccionar b si el grupo ya tiene selección", cmd.hasOption("b"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 6: checkRequiredOptions -> MissingOptionException
+    // ---------------------------------------------------------------
+
+    @Test
+    public void missingRequiredOptionThrowsMissingOptionException() {
+        Options options = new Options();
+        Option required = new Option("r", true, "requerida");
+        required.setRequired(true);
+        options.addOption(required);
+
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(options, new String[0]);
+            fail("Se esperaba MissingOptionException por la opción requerida -r");
+        } catch (MissingOptionException e) {
+            assertTrue("La excepción debe listar la opción r", e.getMissingOptions().contains("r"));
+        } catch (ParseException e) {
+            fail("Se esperaba MissingOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    @Test
+    public void requiredOptionSuppliedByPropertiesIsNotMissing() throws ParseException {
+        Options options = new Options();
+        Option required = new Option("r", false, "requerida");
+        required.setRequired(true);
+        options.addOption(required);
+
+        Properties properties = new Properties();
+        properties.setProperty("r", "true");
+
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, new String[0], properties);
+
+        assertTrue("La opción requerida suministrada por Properties debe estar presente", cmd.hasOption("r"));
+    }
+
+    @Test
+    public void missingRequiredOptionGroupThrowsMissingOptionException() {
+        Options options = new Options();
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", false, "opción a"));
+        group.addOption(new Option("b", false, "opción b"));
+        group.setRequired(true);
+        options.addOptionGroup(group);
+
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(options, new String[0]);
+            fail("Se esperaba MissingOptionException por el grupo requerido");
+        } catch (MissingOptionException e) {
+            // esperado: el grupo requerido no tiene selección
+        } catch (ParseException e) {
+            fail("Se esperaba MissingOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    @Test
+    public void requiredOptionGroupSatisfiedBySelectionDoesNotThrow() throws ParseException {
+        Options options = new Options();
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", false, "opción a"));
+        group.addOption(new Option("b", false, "opción b"));
+        group.setRequired(true);
+        options.addOptionGroup(group);
+
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, new String[] {"-b"});
+
+        assertTrue(cmd.hasOption("b"));
+        assertFalse(cmd.hasOption("a"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 7: handleConcatenatedOptions con stopAtNonOption
+    // La Javadoc menciona el token "--" seguido de los caracteres restantes,
+    // pero el código solo añade los caracteres restantes como argumento.
+    // Estas pruebas fijan el comportamiento observado en el código.
+    // ---------------------------------------------------------------
+
+    @Test
+    public void concatenatedOptionsWithStopAtNonOptionAddsRemainderAsArgWithoutDoubleDash()
+            throws ParseException {
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(basicOptions(), new String[] {"-axyz"}, true);
+
+        assertTrue("La opción -a del bloque concatenado debe procesarse", cmd.hasOption("a"));
+        assertEquals(Arrays.asList("xyz"), cmd.getArgList());
+        assertFalse("El código no añade el token especial \"--\"", cmd.getArgList().contains("--"));
+    }
+
+    @Test
+    public void concatenatedOptionsWithoutStopAtNonOptionThrowsWithFullToken() {
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(basicOptions(), new String[] {"-axyz"}, false);
+            fail("Se esperaba UnrecognizedOptionException para el bloque -axyz");
+        } catch (UnrecognizedOptionException e) {
+            assertEquals("-axyz", e.getOption());
+        } catch (ParseException e) {
+            fail("Se esperaba UnrecognizedOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 8: opción larga parcial ambigua -> AmbiguousOptionException
+    // ---------------------------------------------------------------
+
+    private static Options longNameOptions() {
+        Options options = new Options();
+        options.addOption("v", "verbose", false, "modo verboso");
+        options.addOption("V", "version", false, "versión");
+        return options;
+    }
+
+    @Test
+    public void ambiguousPartialLongOptionThrowsAmbiguousOptionException() {
+        DefaultParser parser = new DefaultParser();
+        try {
+            parser.parse(longNameOptions(), new String[] {"--ver"});
+            fail("Se esperaba AmbiguousOptionException para --ver");
+        } catch (AmbiguousOptionException e) {
+            // esperado: --ver coincide con verbose y version
+        } catch (ParseException e) {
+            fail("Se esperaba AmbiguousOptionException y llegó " + e.getClass().getName());
+        }
+    }
+
+    @Test
+    public void uniquePartialLongOptionResolvesToSingleMatch() throws ParseException {
+        DefaultParser parser = new DefaultParser();
+
+        CommandLine cmdVersion = parser.parse(longNameOptions(), new String[] {"--vers"});
+        assertTrue(cmdVersion.hasOption("V"));
+        assertFalse(cmdVersion.hasOption("v"));
+
+        CommandLine cmdVerbose = parser.parse(longNameOptions(), new String[] {"--verb"});
+        assertTrue(cmdVerbose.hasOption("v"));
+        assertFalse(cmdVerbose.hasOption("V"));
+    }
+}
+```
+
+Cambios realizados:
+
+1. **Error de compilación:** se eliminó el delimitador ```` ```java ```` duplicado al inicio del archivo, que era el carácter `` ` `` ilegal que reportaba javac.
+2. **Archivo truncado:** el original terminaba a mitad de `uniquePartialLongOptionResolvesToSingleMatch`. Lo completé con dos comprobaciones: `--vers` resuelve a `V` (version) y `--verb` resuelve a `v` (verbose). Ambas son coherentes con el emparejamiento por prefijo de `DefaultParser`, pero conviene revisar que reflejen lo que la prueba pretendía verificar.
+
+El resto del contenido no se modificó.

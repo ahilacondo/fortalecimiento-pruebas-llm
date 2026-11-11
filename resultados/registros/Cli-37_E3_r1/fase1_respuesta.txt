@@ -1,0 +1,8 @@
+1. Las propiedades con valor "false", "no" o vacío no añaden opciones sin argumento, mientras que "yes", "true" y "1" sí las añaden.
+2. Una propiedad cuyo nombre no corresponde a ninguna opción definida lanza UnrecognizedOptionException.
+3. Una propiedad para una opción de grupo se ignora si otra opción del mismo grupo ya está seleccionada.
+4. Una propiedad para una opción con argumento solo asigna su valor si la opción aún no aparece en la línea de comandos.
+5. Con stopAtNonOption=true, el primer token no reconocido detiene el análisis y todos los tokens siguientes, incluidos los que parecen opciones, se añaden como argumentos.
+6. El token "-" aislado se trata como argumento posicional y no como opción.
+7. Un valor numérico negativo (por ejemplo "-5") se acepta como valor de una opción que espera argumento, aunque coincida con el patrón de una opción corta.
+8. Reutilizar la misma instancia del parser reinicia el estado (opciones esperadas, selección de grupos y opción actual) entre llamadas a parse.

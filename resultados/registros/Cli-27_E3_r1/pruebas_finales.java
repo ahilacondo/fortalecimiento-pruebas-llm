@@ -1,0 +1,358 @@
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link OptionGroup} que cubren comportamientos
+ * no verificados por {@code OptionGroupTest}. Solo usan la API pública.
+ */
+public class OptionGroupLLMTest {
+
+    // ---------------------------------------------------------------
+    // 1. setSelected(null) restablece la selección a null
+    // ---------------------------------------------------------------
+
+    @Test
+    public void setSelectedNullResetsPreviousSelection() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        assertEquals("f", group.getSelected());
+
+        group.setSelected(null);
+        assertNull("setSelected(null) debe restablecer la selección", group.getSelected());
+    }
+
+    @Test
+    public void afterResetAnotherOptionCanBeSelected() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        group.setSelected(null);
+        group.setSelected(dir);
+
+        assertEquals("d", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // 2. Reseleccionar la misma opción no lanza excepción
+    // ---------------------------------------------------------------
+
+    @Test
+    public void reselectingSameOptionDoesNotThrow() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        group.addOption(file);
+
+        group.setSelected(file);
+        group.setSelected(file);
+
+        assertEquals("f", group.getSelected());
+    }
+
+    @Test
+    public void reselectingSameOptionByLongNameDoesNotThrow() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option importOpt = new Option(null, "import", false, "import data");
+        group.addOption(importOpt);
+
+        group.setSelected(importOpt);
+        group.setSelected(importOpt);
+
+        assertEquals("import", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // 3. getSelected() devuelve null si nada está seleccionado
+    // ---------------------------------------------------------------
+
+    @Test
+    public void getSelectedIsNullByDefault() {
+        OptionGroup group = new OptionGroup();
+        assertNull("Un grupo nuevo no tiene selección", group.getSelected());
+    }
+
+    @Test
+    public void getSelectedIsNullWhenGroupHasOptionsButNoneSelected() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "file to process"));
+        group.addOption(new Option("d", "directory", false, "directory to process"));
+
+        assertNull("Añadir opciones no debe seleccionar ninguna", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // 4. Tras AlreadySelectedException la selección original se mantiene
+    // ---------------------------------------------------------------
+
+    @Test
+    public void selectionIsUnchangedAfterAlreadySelectedException() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+
+        try {
+            group.setSelected(dir);
+            fail("Se esperaba AlreadySelectedException");
+        } catch (AlreadySelectedException e) {
+            assertSame("El grupo de la excepción debe ser el grupo", group, e.getOptionGroup());
+            assertEquals("La opción de la excepción debe ser la rechazada", "d", e.getOption().getOpt());
+        }
+
+        assertEquals("La selección original debe permanecer", "f", group.getSelected());
+    }
+
+    @Test
+    public void originalSelectionCanStillBeReselectedAfterException() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        try {
+            group.setSelected(dir);
+            fail("Se esperaba AlreadySelectedException");
+        } catch (AlreadySelectedException expected) {
+            // esperado
+        }
+
+        group.setSelected(file);
+        assertEquals("f", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // 5. addOption con clave existente sustituye la opción anterior
+    // ---------------------------------------------------------------
+
+    @Test
+    public void addOptionWithSameKeyDoesNotIncreaseNames() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "first description"));
+        group.addOption(new Option("f", "file", false, "second description"));
+
+        assertEquals("No deben duplicarse los nombres", 1, group.getNames().size());
+        assertTrue(group.getNames().contains("f"));
+    }
+
+    @Test
+    public void addOptionWithSameKeyDoesNotIncreaseOptions() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "first description"));
+        group.addOption(new Option("f", "file", false, "second description"));
+
+        assertEquals("No deben duplicarse las opciones", 1, group.getOptions().size());
+    }
+
+    @Test
+    public void addOptionWithSameKeyReplacesPreviousOption() {
+        OptionGroup group = new OptionGroup();
+        Option first = new Option("f", "file", false, "first description");
+        Option second = new Option("f", "file", false, "second description");
+        group.addOption(first);
+        group.addOption(second);
+
+        Option stored = (Option) group.getOptions().iterator().next();
+        assertSame("La opción almacenada debe ser la última añadida", second, stored);
+        assertEquals("second description", stored.getDescription());
+    }
+
+    // ---------------------------------------------------------------
+    // 6. isRequired / setRequired
+    // ---------------------------------------------------------------
+
+    @Test
+    public void isRequiredIsFalseByDefault() {
+        OptionGroup group = new OptionGroup();
+        assertFalse("Por defecto un grupo no es obligatorio", group.isRequired());
+    }
+
+    @Test
+    public void setRequiredTrueMakesGroupRequired() {
+        OptionGroup group = new OptionGroup();
+        group.setRequired(true);
+        assertTrue(group.isRequired());
+    }
+
+    @Test
+    public void setRequiredFalseAfterTrueMakesGroupNotRequired() {
+        OptionGroup group = new OptionGroup();
+        group.setRequired(true);
+        group.setRequired(false);
+        assertFalse(group.isRequired());
+    }
+
+    @Test
+    public void setRequiredDoesNotAffectSelection() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        group.addOption(file);
+
+        group.setSelected(file);
+        group.setRequired(true);
+
+        assertEquals("f", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // 7. toString(): grupo vacío y forma corta preferida
+    // ---------------------------------------------------------------
+
+    @Test
+    public void toStringOfEmptyGroupIsBrackets() {
+        OptionGroup group = new OptionGroup();
+        assertEquals("[]", group.toString());
+    }
+
+    @Test
+    public void toStringPrefersShortFormWhenOptAndLongOptPresent() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "foo", false, "Foo"));
+
+        assertEquals("[-f Foo]", group.toString());
+    }
+
+    @Test
+    public void toStringUsesShortFormOnlyWhenOptPresent() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("x", "Ex"));
+
+        assertEquals("[-x Ex]", group.toString());
+    }
+
+    @Test
+    public void toStringUsesLongFormWhenOptIsNull() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option(null, "foo", false, "Foo"));
+
+        assertEquals("[--foo Foo]", group.toString());
+    }
+
+    @Test
+    public void toStringWithMultipleOptionsContainsEachEntry() {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "foo", false, "Foo"));
+        group.addOption(new Option("b", "bar", false, "Bar"));
+
+        String s = group.toString();
+        assertTrue(s, s.startsWith("["));
+        assertTrue(s, s.endsWith("]"));
+        assertTrue(s, s.contains("-f Foo"));
+        assertTrue(s, s.contains("-b Bar"));
+        assertFalse("No debe usar la forma larga si hay forma corta", s.contains("--foo"));
+        assertFalse("No debe usar la forma larga si hay forma corta", s.contains("--bar"));
+    }
+
+    // ---------------------------------------------------------------
+    // 8. Serialización de un OptionGroup con opciones y selección
+    // ---------------------------------------------------------------
+
+    @Test
+    public void serializationRoundTripPreservesNamesAndOptions() throws Exception {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "file to process"));
+        group.addOption(new Option("d", "directory", false, "directory to process"));
+
+        OptionGroup copy = roundTrip(group);
+
+        assertEquals(2, copy.getNames().size());
+        assertTrue(copy.getNames().contains("f"));
+        assertTrue(copy.getNames().contains("d"));
+        assertEquals(2, copy.getOptions().size());
+    }
+
+    @Test
+    public void serializationRoundTripPreservesSelection() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        group.addOption(file);
+        group.addOption(new Option("d", "directory", false, "directory to process"));
+        group.setSelected(file);
+
+        OptionGroup copy = roundTrip(group);
+
+        assertEquals("f", copy.getSelected());
+    }
+
+    @Test
+    public void serializationRoundTripPreservesRequiredFlag() throws Exception {
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("f", "file", false, "file to process"));
+        group.setRequired(true);
+
+        OptionGroup copy = roundTrip(group);
+
+        assertTrue(copy.isRequired());
+    }
+
+    @Test
+    public void deserializedGroupKeepsMutualExclusion() throws Exception {
+        OptionGroup group = new OptionGroup();
+        Option file = new Option("f", "file", false, "file to process");
+        Option dir = new Option("d", "directory", false, "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+        group.setSelected(file);
+
+        OptionGroup copy = roundTrip(group);
+
+        try {
+            copy.setSelected(dir);
+            fail("El grupo deserializado debe seguir siendo mutuamente excluyente");
+        } catch (AlreadySelectedException e) {
+            assertNotNull(e.getOptionGroup());
+            assertEquals("d", e.getOption().getOpt());
+        }
+        assertEquals("f", copy.getSelected());
+    }
+
+    @Test
+    public void serializationOfEmptyGroupRoundTrips() throws Exception {
+        OptionGroup group = new OptionGroup();
+
+        OptionGroup copy = roundTrip(group);
+
+        assertEquals(0, copy.getNames().size());
+        assertEquals(0, copy.getOptions().size());
+        assertNull(copy.getSelected());
+        assertFalse(copy.isRequired());
+        assertEquals("[]", copy.toString());
+    }
+
+    private static OptionGroup roundTrip(OptionGroup original) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+        try (ObjectInputStream in = new ObjectInputStream(
+                new ByteArrayInputStream(bytes.toByteArray()))) {
+            return (OptionGroup) in.readObject();
+        }
+    }
+}

@@ -1,0 +1,413 @@
+```java
+package org.apache.commons.lang3.builder;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.Collections;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link HashCodeBuilder}, usando únicamente su API pública.
+ */
+public class HashCodeBuilderLLMTest {
+
+    /** Fixture: dos campos de instancia no transitorios, declarados en orden. */
+    static class Point {
+        private int x = 1;
+        private int y = 2;
+    }
+
+    /** Fixture: un único campo de instancia. */
+    static class SingleField {
+        private int v = 1;
+    }
+
+    /** Fixture: solo un campo transitorio. */
+    static class OnlyTransient {
+        private transient int t = 5;
+    }
+
+    /** Fixture: un campo estático (se ignora) y un campo de instancia. */
+    static class WithStatic {
+        @SuppressWarnings("unused")
+        private static int S = 99;
+        private int v = 1;
+    }
+
+    /** Fixture: jerarquía de dos niveles. */
+    static class Parent {
+        private int a = 1;
+    }
+
+    static class Child extends Parent {
+        private int b = 2;
+    }
+
+    /** Fixture: referencias cíclicas. */
+    static class CycleA {
+        CycleB b;
+    }
+
+    static class CycleB {
+        CycleA a;
+    }
+
+    // ------------------------------------------------------------------
+    // Constructores y valor inicial
+    // ------------------------------------------------------------------
+
+    @Test
+    public void defaultConstructorStartsWithSeventeen() {
+        assertEquals(17, new HashCodeBuilder().toHashCode());
+    }
+
+    @Test
+    public void defaultConstructorUsesMultiplierThirtySeven() {
+        assertEquals(17 * 37 + 1, new HashCodeBuilder().append(1).toHashCode());
+    }
+
+    @Test
+    public void customConstructorWithoutAppendsReturnsInitialValue() {
+        assertEquals(19, new HashCodeBuilder(19, 41).toHashCode());
+    }
+
+    @Test
+    public void negativeOddConstantsAreAccepted() {
+        assertEquals(-3, new HashCodeBuilder(-3, -5).toHashCode());
+    }
+
+    @Test
+    public void constructorRejectsZeroInitialValue() {
+        try {
+            new HashCodeBuilder(0, 37);
+            fail("Se esperaba IllegalArgumentException por valor inicial cero");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void constructorRejectsEvenInitialValue() {
+        try {
+            new HashCodeBuilder(4, 37);
+            fail("Se esperaba IllegalArgumentException por valor inicial par");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void constructorRejectsZeroMultiplier() {
+        try {
+            new HashCodeBuilder(17, 0);
+            fail("Se esperaba IllegalArgumentException por multiplicador cero");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void constructorRejectsEvenMultiplier() {
+        try {
+            new HashCodeBuilder(17, 10);
+            fail("Se esperaba IllegalArgumentException por multiplicador par");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Encadenamiento y orden
+    // ------------------------------------------------------------------
+
+    @Test
+    public void appendReturnsSameBuilderInstance() {
+        HashCodeBuilder hcb = new HashCodeBuilder(17, 37);
+        assertSame(hcb, hcb.append(1));
+        assertSame(hcb, hcb.append("x"));
+        assertSame(hcb, hcb.appendSuper(3));
+    }
+
+    @Test
+    public void appendIntFollowsFormula() {
+        int expected = (17 * 37 + 5) * 37 + 3;
+        assertEquals(expected, new HashCodeBuilder(17, 37).append(5).append(3).toHashCode());
+    }
+
+    @Test
+    public void orderOfAppendsMatters() {
+        int ab = new HashCodeBuilder(17, 37).append(1).append(2).toHashCode();
+        int ba = new HashCodeBuilder(17, 37).append(2).append(1).toHashCode();
+        assertNotEquals(ab, ba);
+    }
+
+    @Test
+    public void hashCodeEqualsToHashCodeAfterAppends() {
+        HashCodeBuilder hcb = new HashCodeBuilder(17, 37).append(42).append("abc");
+        assertEquals(hcb.toHashCode(), hcb.hashCode());
+    }
+
+    // ------------------------------------------------------------------
+    // Tipos primitivos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void appendByteNegativeValueAddsSignedValue() {
+        assertEquals(17 * 37 + (-1), new HashCodeBuilder(17, 37).append((byte) -1).toHashCode());
+    }
+
+    @Test
+    public void appendShortAddsValue() {
+        assertEquals(17 * 37 + 300, new HashCodeBuilder(17, 37).append((short) 300).toHashCode());
+    }
+
+    @Test
+    public void appendCharAddsCodePoint() {
+        assertEquals(17 * 37 + 97, new HashCodeBuilder(17, 37).append('a').toHashCode());
+    }
+
+    @Test
+    public void appendFloatUsesFloatToIntBits() {
+        assertEquals(17 * 37 + Float.floatToIntBits(1.0f),
+                new HashCodeBuilder(17, 37).append(1.0f).toHashCode());
+    }
+
+    @Test
+    public void appendDoubleEqualsAppendingItsLongBits() {
+        double d = -2.75d;
+        int viaDouble = new HashCodeBuilder(17, 37).append(d).toHashCode();
+        int viaLong = new HashCodeBuilder(17, 37).append(Double.doubleToLongBits(d)).toHashCode();
+        assertEquals(viaLong, viaDouble);
+    }
+
+    @Test
+    public void appendLongMaxValueUsesFoldedBits() {
+        // Long.MAX_VALUE: (int)(v ^ (v >> 32)) == Integer.MIN_VALUE
+        assertEquals(17 * 37 + Integer.MIN_VALUE,
+                new HashCodeBuilder(17, 37).append(Long.MAX_VALUE).toHashCode());
+    }
+
+    @Test
+    public void appendBooleanTrueAddsZeroAndFalseAddsOne() {
+        assertEquals(17 * 37 * 37 + 0 * 37 + 1,
+                new HashCodeBuilder(17, 37).append(true).append(false).toHashCode());
+    }
+
+    // ------------------------------------------------------------------
+    // Objetos, nulos y arrays
+    // ------------------------------------------------------------------
+
+    @Test
+    public void appendNullObjectMultipliesByConstantOnly() {
+        assertEquals(17 * 37, new HashCodeBuilder(17, 37).append((Object) null).toHashCode());
+    }
+
+    @Test
+    public void appendStringUsesStringHashCode() {
+        assertEquals(17 * 37 + "abc".hashCode(),
+                new HashCodeBuilder(17, 37).append((Object) "abc").toHashCode());
+    }
+
+    @Test
+    public void equalStringsProduceSameBuilderResult() {
+        int h1 = new HashCodeBuilder(17, 37).append((Object) new String("hola")).toHashCode();
+        int h2 = new HashCodeBuilder(17, 37).append((Object) new String("hola")).toHashCode();
+        assertEquals(h1, h2);
+    }
+
+    @Test
+    public void appendObjectHoldingIntArrayDispatchesToPrimitiveHandler() {
+        int[] arr = {1, 2};
+        int viaPrimitive = new HashCodeBuilder(17, 37).append(arr).toHashCode();
+        int viaObject = new HashCodeBuilder(17, 37).append((Object) arr).toHashCode();
+        assertEquals(viaPrimitive, viaObject);
+        assertEquals(((17 * 37) + 1) * 37 + 2, viaObject);
+    }
+
+    @Test
+    public void appendObjectHoldingShortArrayDispatchesCorrectly() {
+        short[] arr = {7};
+        assertEquals(17 * 37 + 7, new HashCodeBuilder(17, 37).append((Object) arr).toHashCode());
+    }
+
+    @Test
+    public void appendEmptyPrimitiveArrayLeavesTotalUnchanged() {
+        assertEquals(17, new HashCodeBuilder().append(new int[0]).toHashCode());
+        assertEquals(17, new HashCodeBuilder().append(new long[0]).toHashCode());
+    }
+
+    @Test
+    public void appendNullPrimitiveArrayMultipliesByConstantOnly() {
+        assertEquals(17 * 37, new HashCodeBuilder(17, 37).append((int[]) null).toHashCode());
+        assertEquals(17 * 37, new HashCodeBuilder(17, 37).append((double[]) null).toHashCode());
+    }
+
+    @Test
+    public void appendObjectArrayHandlesNestedPrimitiveArray() {
+        Object[] arr = {new int[] {1}, "x"};
+        int expected = ((17 * 37) + 1) * 37 + "x".hashCode();
+        assertEquals(expected, new HashCodeBuilder(17, 37).append(arr).toHashCode());
+    }
+
+    @Test
+    public void appendObjectArrayWithNullElementUsesNullRule() {
+        Object[] arr = {null, 5};
+        int expected = (17 * 37) * 37 + 5;
+        assertEquals(expected, new HashCodeBuilder(17, 37).append(arr).toHashCode());
+    }
+
+    // ------------------------------------------------------------------
+    // appendSuper
+    // ------------------------------------------------------------------
+
+    @Test
+    public void appendSuperAddsSuperHashCodeToTotal() {
+        assertEquals(17 * 37 + 5, new HashCodeBuilder(17, 37).appendSuper(5).toHashCode());
+    }
+
+    @Test
+    public void appendSuperCombinedWithFieldAppends() {
+        int expected = (17 * 37 + 0) * 37 + 1;
+        assertEquals(expected, new HashCodeBuilder(17, 37).appendSuper(0).append(1).toHashCode());
+    }
+
+    // ------------------------------------------------------------------
+    // Reflexión
+    // ------------------------------------------------------------------
+
+    @Test
+    public void reflectionHashCodeOfObjectWithoutFieldsIsInitialValue() {
+        assertEquals(17, HashCodeBuilder.reflectionHashCode(new Object()));
+    }
+
+    @Test
+    public void reflectionHashCodeIncludesNonTransientInstanceField() {
+        assertEquals(17 * 37 + 1, HashCodeBuilder.reflectionHashCode(new SingleField()));
+    }
+
+    @Test
+    public void reflectionHashCodeIgnoresStaticFields() {
+        assertEquals(17 * 37 + 1, HashCodeBuilder.reflectionHashCode(new WithStatic()));
+    }
+
+    @Test
+    public void reflectionHashCodeIgnoresTransientByDefault() {
+        assertEquals(17, HashCodeBuilder.reflectionHashCode(new OnlyTransient()));
+    }
+
+    @Test
+    public void reflectionHashCodeIncludesTransientWhenRequested() {
+        assertEquals(17 * 37 + 5, HashCodeBuilder.reflectionHashCode(17, 37, new OnlyTransient(), true));
+    }
+
+    @Test
+    public void reflectionHashCodeWithCustomConstantsUsesThem() {
+        // Un único campo v = 1: initial 19, multiplier 41 => 19 * 41 + 1
+        assertEquals(19 * 41 + 1, HashCodeBuilder.reflectionHashCode(19, 41, new SingleField()));
+    }
+
+    @Test
+    public void reflectionHashCodeExcludingOneFieldKeepsOther() {
+        // Point: x = 1, y = 2
+        Point p = new Point();
+        assertEquals(17 * 37 + 2,
+                HashCodeBuilder.reflectionHashCode(17, 37, p, false, null, new String[] {"x"}));
+        assertEquals(17 * 37 + 1,
+                HashCodeBuilder.reflectionHashCode(17, 37, p, false, null, new String[] {"y"}));
+    }
+
+    @Test
+    public void reflectionHashCodeExcludingAllFieldsReturnsInitialValue() {
+        assertEquals(17, HashCodeBuilder.reflectionHashCode(new Point(), Arrays.asList("x", "y")));
+    }
+
+    @Test
+    public void reflectionHashCodeWithCollectionExcludesGivenField() {
+        assertEquals(17 * 37 + 2,
+                HashCodeBuilder.reflectionHashCode(new Point(), Collections.singletonList("x")));
+    }
+
+    @Test
+    public void reflectionHashCodeWithStringArrayExcludesGivenField() {
+        assertEquals(17 * 37 + 1,
+                HashCodeBuilder.reflectionHashCode(new Point(), new String[] {"y"}));
+    }
+
+    @Test
+    public void reflectionHashCodeIncludesSuperclassFieldsByDefault() {
+        Child child = new Child();
+        // Campo de Child (b = 2) y luego el de Parent (a = 1)
+        assertEquals((17 * 37 + 2) * 37 + 1,
+                HashCodeBuilder.reflectionHashCode(17, 37, child, false, null));
+    }
+
+    @Test
+    public void reflectionHashCodeStopsAtReflectUpToClass() {
+        Child child = new Child();
+        assertEquals(17 * 37 + 2,
+                HashCodeBuilder.reflectionHashCode(17, 37, child, false, Child.class));
+    }
+
+    @Test
+    public void reflectionHashCodeIncludesReflectUpToClassFields() {
+        Child child = new Child();
+        assertEquals((17 * 37 + 2) * 37 + 1,
+                HashCodeBuilder.reflectionHashCode(17, 37, child, false, Parent.class));
+    }
+
+    @Test
+    public void reflectionHashCodeIsStableForSameObject() {
+        Point p = new Point();
+        assertEquals(HashCodeBuilder.reflectionHashCode(p), HashCodeBuilder.reflectionHashCode(p));
+    }
+
+    @Test
+    public void reflectionHashCodeHandlesCyclicReferencesAndTerminates() {
+        CycleA a = new CycleA();
+        CycleB b = new CycleB();
+        a.b = b;
+        b.a = a;
+        int first = HashCodeBuilder.reflectionHashCode(a);
+        int second = HashCodeBuilder.reflectionHashCode(a);
+        assertEquals(first, second);
+    }
+
+    @Test
+    public void reflectionHashCodeWithNullReferenceFieldUsesNullRule() {
+        // CycleA tiene un campo b == null
+        assertEquals(17 * 37, HashCodeBuilder.reflectionHashCode(new CycleA()));
+    }
+
+    @Test
+    public void reflectionHashCodeRejectsNullObject() {
+        try {
+            HashCodeBuilder.reflectionHashCode((Object) null);
+            fail("Se esperaba IllegalArgumentException para objeto nulo");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void reflectionHashCodeRejectsEvenConstants() {
+        try {
+            HashCodeBuilder.reflectionHashCode(2, 3, new SingleField());
+            fail("Se esperaba IllegalArgumentException para constante par");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void reflectionHashCodeAcceptsZeroFieldsWithOddConstants() {
+        assertTrue(HashCodeBuilder.reflectionHashCode(3, 5, new Object()) == 3);
+    }
+}
+```

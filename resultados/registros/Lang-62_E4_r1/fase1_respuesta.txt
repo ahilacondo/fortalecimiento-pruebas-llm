@@ -1,0 +1,8 @@
+1. El Javadoc de `XML` exige el conjunto estándar de entidades XML (quot, amp, lt, gt, apos), pero las pruebas solo comprueban `gt` y la ausencia de `xyzzy`.
+2. El Javadoc de `HTML32` exige soportar las entidades HTML 3.2, pero ninguna prueba verifica el contenido de `HTML32` (por ejemplo, que `nbsp` o `copy` se escapen).
+3. El Javadoc de `HTML32` implica que no deben aparecer entidades exclusivas de HTML 4.0 (como `euro` o `alpha`), y ninguna prueba lo comprueba.
+4. El Javadoc de `HTML40` exige soportar las entidades HTML 4.0 completas (griegas, matemáticas, símbolos y `euro`), pero solo se prueba `nbsp`.
+5. El Javadoc de `fillWithHtml40Entities` exige rellenar la instancia indicada con las entidades HTML 4.0, y la prueba solo valida una entidad (`nbsp`) con un único mapa.
+6. El Javadoc de `escape` indica que los caracteres mayores que 0x7F sin entidad nominal se emiten como referencia numérica, y ninguna prueba cubre este comportamiento.
+7. El Javadoc de `unescape` exige aceptar referencias numéricas decimales y hexadecimales, pero solo se prueba la forma hexadecimal con `X` mayúscula; no se prueba la decimal ni la `x` minúscula.
+8. Los Javadoc de `escape(Writer, String)` y `unescape(Writer, String)` indican que se propaga la `IOException` lanzada por el `Writer`, y ninguna prueba verifica esta propagación.

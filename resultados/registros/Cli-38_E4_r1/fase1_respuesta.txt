@@ -1,0 +1,10 @@
+Nota: `DefaultParserTest` solo hereda de `ParserTestCase`, cuyo contenido no se ha proporcionado. Confirma estos puntos contra esa clase antes de dar por hecho que no están cubiertos.
+
+1. Con `stopAtNonOption=true`, el primer token que no es opción detiene el parseo y todos los tokens restantes se añaden tal cual a los argumentos.
+2. Con `stopAtNonOption=false`, un token desconocido que empieza por guion lanza `UnrecognizedOptionException`.
+3. Una clave de `Properties` no definida como opción lanza `UnrecognizedOptionException` con el mensaje "Default option wasn't defined".
+4. Para opciones sin argumento, en `Properties` solo "yes", "true" o "1" (sin distinguir mayúsculas) activan la opción; otros valores la omiten.
+5. Las `Properties` no sobrescriben opciones ya presentes en la línea de comandos ni opciones de un grupo que ya tiene una selección.
+6. `checkRequiredOptions` lanza `MissingOptionException` cuando faltan opciones requeridas, incluyendo las de grupos requeridos.
+7. La Javadoc de `handleConcatenatedOptions` indica que con `stopAtNonOption` se añade el token especial "--" seguido de los caracteres restantes, pero el código no añade ese "--" (discrepancia documentación-implementación a verificar).
+8. Una opción larga parcial que coincide con varias opciones lanza `AmbiguousOptionException`.

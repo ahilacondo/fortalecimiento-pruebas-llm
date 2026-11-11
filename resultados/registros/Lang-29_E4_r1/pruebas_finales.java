@@ -1,0 +1,190 @@
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.security.Permission;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.Assume;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link SystemUtils} que cubren requisitos no verificados por
+ * {@code SystemUtilsTest}.
+ */
+public class SystemUtilsLLMTest {
+
+    private static final String DENIED_PROPERTY = "org.apache.commons.lang3.llm.deniedProperty";
+    private static final String SYSTEM_UTILS_CLASS = "org.apache.commons.lang3.SystemUtils";
+
+    /** Acción que puede lanzar excepciones, ejecutada bajo un gestor de seguridad. */
+    private interface Action {
+        void run() throws Exception;
+    }
+
+    /**
+     * Ejecuta la acción con un SecurityManager que deniega el acceso a la propiedad indicada
+     * y permite todo lo demás. Restaura el gestor anterior al terminar.
+     */
+    private static void runWithDeniedProperty(final String deniedKey, Action action) throws Exception {
+        SecurityManager previous = System.getSecurityManager();
+        SecurityManager deny = new SecurityManager() {
+            @Override
+            public void checkPropertyAccess(String key) {
+                if (deniedKey.equals(key)) {
+                    throw new SecurityException("Acceso denegado a la propiedad " + key);
+                }
+            }
+
+            @Override
+            public void checkPermission(Permission perm) {
+                // permitir el resto de operaciones
+            }
+
+            @Override
+            public void checkPermission(Permission perm, Object context) {
+                // permitir el resto de operaciones
+            }
+        };
+        try {
+            System.setSecurityManager(deny);
+        } catch (UnsupportedOperationException e) {
+            Assume.assumeTrue("SecurityManager no disponible en esta JVM", false);
+        }
+        try {
+            action.run();
+        } finally {
+            System.setSecurityManager(previous);
+        }
+    }
+
+    private static Method privateStatic(String name, Class<?>... types) throws NoSuchMethodException {
+        Method m = SystemUtils.class.getDeclaredMethod(name, types);
+        m.setAccessible(true);
+        return m;
+    }
+
+    /**
+     * Carga una copia aislada de SystemUtils con propiedades del sistema temporalmente modificadas
+     * (valor null = propiedad eliminada) y devuelve el valor de los campos indicados.
+     */
+    private static Map<String, Object> loadIsolated(Map<String, String> overrides, String... fieldNames)
+            throws Exception {
+        URL location = SystemUtils.class.getProtectionDomain().getCodeSource().getLocation();
+        Assume.assumeTrue("No se puede determinar la ubicación del código fuente", location != null);
+
+        Map<String, String> saved = new HashMap<>();
+        for (String key : overrides.keySet()) {
+            saved.put(key, System.getProperty(key));
+        }
+        try {
+            for (Map.Entry<String, String> e : overrides.entrySet()) {
+                if (e.getValue() == null) {
+                    System.clearProperty(e.getKey());
+                } else {
+                    System.setProperty(e.getKey(), e.getValue());
+                }
+            }
+            Map<String, Object> result = new HashMap<>();
+            // Parent null: la clase se define de nuevo, así sus constantes se recalculan.
+            try (URLClassLoader loader = new URLClassLoader(new URL[] {location}, null)) {
+                Class<?> cls = Class.forName(SYSTEM_UTILS_CLASS, true, loader);
+                for (String field : fieldNames) {
+                    result.put(field, cls.getField(field).get(null));
+                }
+            }
+            return result;
+        } finally {
+            for (Map.Entry<String, String> e : saved.entrySet()) {
+                if (e.getValue() == null) {
+                    System.clearProperty(e.getKey());
+                } else {
+                    System.setProperty(e.getKey(), e.getValue());
+                }
+            }
+        }
+    }
+
+    private static String expectedTrimmedVersion(String version) {
+        if (version == null) {
+            return null;
+        }
+        for (int i = 0; i < version.length(); i++) {
+            char ch = version.charAt(i);
+            if (ch >= '0' && ch <= '9') {
+                return version.substring(i);
+            }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: SecurityException -> null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getSystemPropertyDevuelveNullCuandoSeniegaAcceso() throws Exception {
+        final Method m = privateStatic("getSystemProperty", String.class);
+        runWithDeniedProperty(DENIED_PROPERTY, () -> assertNull(m.invoke(null, DENIED_PROPERTY)));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: mensaje en System.err cuando se deniega el acceso
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getSystemPropertyEscribeMensajeEnSystemErrCuandoSeniegaAcceso() throws Exception {
+        final Method m = privateStatic("getSystemProperty", String.class);
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        PrintStream capture = new PrintStream(buffer, true, StandardCharsets.UTF_8.name());
+        PrintStream originalErr = System.err;
+        System.setErr(capture);
+        try {
+            runWithDeniedProperty(DENIED_PROPERTY, () -> m.invoke(null, DENIED_PROPERTY));
+        } finally {
+            System.setErr(originalErr);
+        }
+        capture.flush();
+        String output = buffer.toString(StandardCharsets.UTF_8.name());
+        assertTrue("System.err debe mencionar la propiedad denegada: " + output,
+                output.contains(DENIED_PROPERTY));
+        assertTrue("El mensaje debe indicar la SecurityException: " + output,
+                output.contains("SecurityException"));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: constantes de propiedad coinciden con System.getProperty
+    // ------------------------------------------------------------------
+
+    @Test
+    public void constantesDeSeparadoresCoincidenConSystemGetProperty() {
+        assertEquals(System.getProperty("file.separator"), SystemUtils.FILE_SEPARATOR);
+        assertEquals(System.getProperty("path.separator"), SystemUtils.PATH_SEPARATOR);
+        assertEquals(System.getProperty("line.separator"), SystemUtils.LINE_SEPARATOR);
+    }
+
+    @Test
+    public void constantesDeDirectoriosCoincidenConSystemGetProperty() {
+        assertEquals(System.getProperty("java.home"), SystemUtils.JAVA_HOME);
+        assertEquals(System.getProperty("java.io.tmpdir"), SystemUtils.JAVA_IO_TMPDIR);
+        assertEquals(System.getProperty("user.dir"), SystemUtils.USER_DIR);
+        assertEquals(System.getProperty("user.home"), SystemUtils.USER_HOME);
+    }
+
+    @Test
+    public void constantesDeSistemaYUsuarioCoincidenConSystemGetProperty() {
+        assertEquals(System.getProperty("os.name"), SystemUtils.OS_NAME);
+        assertEquals(System.getProperty("os.version"), SystemUtils.OS_VERSION);
+        assertEquals(System.getProperty("os.arch"), SystemUtils.OS_ARCH);
+        assertEquals(System.getProperty("user.name"), SystemUtils.USER_NAME);
+    }
+}

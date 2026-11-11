@@ -1,0 +1,315 @@
+```java
+package org.apache.commons.lang3.math;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link NumberUtils}, orientadas a los requisitos
+ * que no cubre la suite existente {@code NumberUtilsTest}.
+ */
+public class NumberUtilsLLMTest {
+
+    // ------------------------------------------------------------------
+    // Requisito 1: createNumber(null) devuelve null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void createNumberNullReturnsNull() {
+        assertNull(NumberUtils.createNumber(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: sufijos de tipo y tipo más pequeño que representa el valor
+    // ------------------------------------------------------------------
+
+    @Test
+    public void createNumberLongSuffixReturnsLong() {
+        Number lower = NumberUtils.createNumber("1l");
+        Number upper = NumberUtils.createNumber("1L");
+
+        assertTrue("'1l' debe devolver Long", lower instanceof Long);
+        assertEquals(Long.valueOf(1L), lower);
+        assertTrue("'1L' debe devolver Long", upper instanceof Long);
+        assertEquals(Long.valueOf(1L), upper);
+    }
+
+    @Test
+    public void createNumberFloatSuffixReturnsFloat() {
+        Number lower = NumberUtils.createNumber("1f");
+        Number upper = NumberUtils.createNumber("1F");
+        Number decimal = NumberUtils.createNumber("1.5F");
+
+        assertTrue("'1f' debe devolver Float", lower instanceof Float);
+        assertEquals(Float.valueOf(1.0f), lower);
+        assertTrue("'1F' debe devolver Float", upper instanceof Float);
+        assertEquals(Float.valueOf(1.0f), upper);
+        assertTrue("'1.5F' debe devolver Float", decimal instanceof Float);
+        assertEquals(Float.valueOf(1.5f), decimal);
+    }
+
+    @Test
+    public void createNumberDoubleSuffixReturnsDouble() {
+        Number lower = NumberUtils.createNumber("1d");
+        Number upper = NumberUtils.createNumber("1D");
+        Number decimalLower = NumberUtils.createNumber("1.5d");
+        Number decimalUpper = NumberUtils.createNumber("1.5D");
+
+        assertTrue("'1d' debe devolver Double", lower instanceof Double);
+        assertEquals(Double.valueOf(1.0d), lower);
+        assertTrue("'1D' debe devolver Double", upper instanceof Double);
+        assertEquals(Double.valueOf(1.0d), upper);
+        assertTrue("'1.5d' debe devolver Double", decimalLower instanceof Double);
+        assertEquals(Double.valueOf(1.5d), decimalLower);
+        assertTrue("'1.5D' debe devolver Double", decimalUpper instanceof Double);
+        assertEquals(Double.valueOf(1.5d), decimalUpper);
+    }
+
+    @Test
+    public void createNumberWithoutSuffixReturnsSmallestIntegerType() {
+        Number zero = NumberUtils.createNumber("0");
+        Number maxInt = NumberUtils.createNumber("2147483647");
+        Number minLongCandidate = NumberUtils.createNumber("2147483648");
+        Number maxLong = NumberUtils.createNumber("9223372036854775807");
+        Number bigger = NumberUtils.createNumber("9223372036854775808");
+
+        assertTrue("'0' debe ser Integer", zero instanceof Integer);
+        assertEquals(Integer.valueOf(0), zero);
+        assertTrue("Integer.MAX_VALUE debe ser Integer", maxInt instanceof Integer);
+        assertEquals(Integer.valueOf(Integer.MAX_VALUE), maxInt);
+        assertTrue("Integer.MAX_VALUE+1 debe ser Long", minLongCandidate instanceof Long);
+        assertEquals(Long.valueOf(2147483648L), minLongCandidate);
+        assertTrue("Long.MAX_VALUE debe ser Long", maxLong instanceof Long);
+        assertEquals(Long.valueOf(Long.MAX_VALUE), maxLong);
+        assertTrue("Long.MAX_VALUE+1 debe ser BigInteger", bigger instanceof BigInteger);
+        assertEquals(new BigInteger("9223372036854775808"), bigger);
+    }
+
+    @Test
+    public void createNumberWithDecimalPointReturnsFloatWhenRepresentable() {
+        Number n1 = NumberUtils.createNumber("1.5");
+        Number n2 = NumberUtils.createNumber("1.1");
+
+        assertTrue("'1.5' debe ser Float", n1 instanceof Float);
+        assertEquals(Float.valueOf(1.5f), n1);
+        assertTrue("'1.1' debe ser Float", n2 instanceof Float);
+        assertEquals(Float.valueOf(1.1f), n2);
+    }
+
+    @Test
+    public void createNumberLargeExponentReturnsDouble() {
+        // 1e300 no cabe en float (infinito) pero sí en double
+        Number n = NumberUtils.createNumber("1e300");
+        assertTrue("'1e300' debe ser Double", n instanceof Double);
+        assertEquals(Double.valueOf(1e300d), n);
+    }
+
+    @Test
+    public void createNumberOverflowingDoubleReturnsBigDecimal() {
+        // 1e400 desborda float y double, así que debe devolver BigDecimal
+        Number n = NumberUtils.createNumber("1e400");
+        assertTrue("'1e400' debe ser BigDecimal", n instanceof BigDecimal);
+        assertEquals(new BigDecimal("1e400"), n);
+    }
+
+    @Test
+    public void createNumberLongSuffixWithDecimalPointIsInvalid() {
+        assertThrowsNumberFormat("1.5L");
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: hexadecimal y ceros iniciales
+    // ------------------------------------------------------------------
+
+    @Test
+    public void createNumberHexadecimalReturnsInteger() {
+        Number positive = NumberUtils.createNumber("0x1F");
+        Number negative = NumberUtils.createNumber("-0x1F");
+        Number max = NumberUtils.createNumber("0x7FFFFFFF");
+
+        assertTrue("'0x1F' debe ser Integer", positive instanceof Integer);
+        assertEquals(Integer.valueOf(31), positive);
+        assertTrue("'-0x1F' debe ser Integer", negative instanceof Integer);
+        assertEquals(Integer.valueOf(-31), negative);
+        assertEquals(Integer.valueOf(Integer.MAX_VALUE), max);
+    }
+
+    /**
+     * La documentación de createNumber indica que los valores con ceros iniciales
+     * NO se interpretan como octal, por lo que "0777" debe ser 777 decimal.
+     * La implementación delega en Integer.decode, que sí interpreta octal (511),
+     * así que esta prueba expone esa discrepancia.
+     */
+    @Test
+    public void createNumberLeadingZerosAreNotOctal() {
+        Number n = NumberUtils.createNumber("0777");
+        assertEquals("'0777' debe interpretarse como decimal 777 según la documentación",
+                Integer.valueOf(777), n);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: sin recorte y entradas inválidas lanzan NumberFormatException
+    // ------------------------------------------------------------------
+
+    @Test
+    public void createNumberDoesNotTrimLeadingSpaces() {
+        assertThrowsNumberFormat(" 1");
+        assertThrowsNumberFormat(" 1.5");
+    }
+
+    @Test
+    public void createNumberDoesNotTrimTrailingSpaces() {
+        assertThrowsNumberFormat("1 ");
+        assertThrowsNumberFormat("1.5 ");
+    }
+
+    @Test
+    public void createNumberInvalidInputsThrowNumberFormatException() {
+        assertThrowsNumberFormat("");
+        assertThrowsNumberFormat("   ");
+        assertThrowsNumberFormat("abc");
+        assertThrowsNumberFormat("1 2");
+        assertThrowsNumberFormat("1.2.3");
+        assertThrowsNumberFormat("1e");
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: createInteger con notación hexadecimal y octal
+    // ------------------------------------------------------------------
+
+    @Test
+    public void createIntegerHandlesHexadecimal() {
+        assertEquals(Integer.valueOf(31), NumberUtils.createInteger("0x1F"));
+        assertEquals(Integer.valueOf(-31), NumberUtils.createInteger("-0x1F"));
+        assertEquals(Integer.valueOf(255), NumberUtils.createInteger("#FF"));
+    }
+
+    @Test
+    public void createIntegerHandlesOctal() {
+        assertEquals(Integer.valueOf(511), NumberUtils.createInteger("0777"));
+        assertEquals(Integer.valueOf(-511), NumberUtils.createInteger("-0777"));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: valores por defecto con entrada null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void defaultOverloadsReturnDefaultForNull() {
+        assertEquals(7, NumberUtils.toInt(null, 7));
+        assertEquals(7L, NumberUtils.toLong(null, 7L));
+        assertEquals(1.1d, NumberUtils.toDouble(null, 1.1d), 0.0d);
+        assertEquals((byte) 3, NumberUtils.toByte(null, (byte) 3));
+        assertEquals((short) 4, NumberUtils.toShort(null, (short) 4));
+    }
+
+    /**
+     * El Javadoc de toFloat(null, 1.1f) indica 1.0f, pero el código devuelve el
+     * valor por defecto (1.1f). Esta prueba verifica el comportamiento real del código.
+     */
+    @Test
+    public void toFloatWithDefaultReturnsDefaultForNull() {
+        assertEquals(1.1f, NumberUtils.toFloat(null, 1.1f), 0.0f);
+    }
+
+    @Test
+    public void defaultOverloadsReturnDefaultForEmptyString() {
+        assertEquals(7, NumberUtils.toInt("", 7));
+        assertEquals(7L, NumberUtils.toLong("", 7L));
+        assertEquals(1.1f, NumberUtils.toFloat("", 1.1f), 0.0f);
+        assertEquals(1.1d, NumberUtils.toDouble("", 1.1d), 0.0d);
+        assertEquals((byte) 3, NumberUtils.toByte("", (byte) 3));
+        assertEquals((short) 4, NumberUtils.toShort("", (short) 4));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 7: isNumber
+    // ------------------------------------------------------------------
+
+    @Test
+    public void isNumberReturnsFalseForNullAndEmpty() {
+        assertFalse("isNumber(null)", NumberUtils.isNumber(null));
+        assertFalse("isNumber('')", NumberUtils.isNumber(""));
+    }
+
+    @Test
+    public void isNumberAcceptsHexadecimal() {
+        assertTrue("0x1F", NumberUtils.isNumber("0x1F"));
+        assertFalse("0x sin dígitos", NumberUtils.isNumber("0x"));
+        assertFalse("0xG no es hexadecimal", NumberUtils.isNumber("0xG"));
+    }
+
+    @Test
+    public void isNumberAcceptsScientificNotation() {
+        assertTrue("1e10", NumberUtils.isNumber("1e10"));
+        assertTrue("1.5E-3", NumberUtils.isNumber("1.5E-3"));
+        assertTrue("-1.5", NumberUtils.isNumber("-1.5"));
+        assertFalse("1e sin exponente", NumberUtils.isNumber("1e"));
+        assertFalse("1.2.3 con dos puntos", NumberUtils.isNumber("1.2.3"));
+        assertFalse("solo signo", NumberUtils.isNumber("-"));
+    }
+
+    @Test
+    public void isNumberAcceptsTypeQualifiers() {
+        assertTrue("123L", NumberUtils.isNumber("123L"));
+        assertTrue("1.5f", NumberUtils.isNumber("1.5f"));
+        assertFalse("12a no es número", NumberUtils.isNumber("12a"));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 8: isDigits con dígitos Unicode
+    // ------------------------------------------------------------------
+
+    @Test
+    public void isDigitsAcceptsArabicIndicDigits() {
+        // U+0661..U+0663 son dígitos arábigo-indios (categoría Nd)
+        assertTrue("dígitos arábigo-indios", NumberUtils.isDigits("\u0661\u0662\u0663"));
+    }
+
+    @Test
+    public void isDigitsAcceptsFullWidthDigits() {
+        // U+FF11, U+FF12 son dígitos de ancho completo (categoría Nd)
+        assertTrue("dígitos de ancho completo", NumberUtils.isDigits("\uFF11\uFF12"));
+    }
+
+    @Test
+    public void isDigitsAcceptsMixedAsciiAndUnicodeDigits() {
+        assertTrue("mezcla ASCII y Unicode", NumberUtils.isDigits("1\u0661"));
+    }
+
+    @Test
+    public void isDigitsRejectsNonDecimalNumericCharacters() {
+        // U+00B2 (superíndice dos) es numérico pero no es un dígito (categoría No)
+        assertFalse("superíndice no es dígito", NumberUtils.isDigits("\u00B2"));
+        assertFalse("espacio intermedio", NumberUtils.isDigits("1 2"));
+        assertFalse("signo menos", NumberUtils.isDigits("-1"));
+    }
+
+    // ------------------------------------------------------------------
+    // Utilidad
+    // ------------------------------------------------------------------
+
+    private static void assertThrowsNumberFormat(String input) {
+        try {
+            Object result = NumberUtils.createNumber(input);
+            fail("Se esperaba NumberFormatException para '" + input + "', resultado: " + result);
+        } catch (NumberFormatException expected) {
+            // comportamiento esperado
+        }
+    }
+}
+```
+
+**Notas para el revisor:**
+
+- **`createNumberLeadingZerosAreNotOctal` fallará con la implementación actual.** La Javadoc de `createNumber` dice que los ceros iniciales no se interpretan como octal, pero el método delega en `Integer.decode`, que sí lo hace (`"0777"` → 511). La prueba verifica el contrato documentado, así que expone una discrepancia real. Si prefieres una suite en verde, puedes marcarla con `@Ignore` y registrar el defecto.
+- **`toFloatWithDefaultReturnsDefaultForNull` verifica el comportamiento real (1.1f), no la Javadoc (1.0f).** La discrepancia de documentación queda señalada en el comentario.
+- Existe una tensión entre los requisitos 3 y 5: `createInteger` debe aceptar octal, mientras que `createNumber` no debe interpretarlo así. Las pruebas reflejan ambos contratos tal como están redactados.

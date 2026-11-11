@@ -1,0 +1,69 @@
+El error se debe a que el archivo empieza con la línea ```` ```java ````, es decir, con los delimitadores del bloque Markdown copiados dentro del código. El `javac` no reconoce el carácter `` ` `` y falla en la línea 1.
+
+El fragmento que pegaste también está truncado en `String[] args = new`, así que no puedo recuperar el resto de las pruebas. Completé solo esa prueba a partir de su Javadoc. Si tienes el resto del archivo, pégalo y lo integro sin alterar las demás pruebas.
+
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link PosixParser} que cubren los requisitos de
+ * documentación no verificados por {@link PosixParserTest}.
+ *
+ * Solo se usa la API pública: {@link Parser#parse(Options, String[], boolean)},
+ * {@link CommandLine} y {@link Options}.
+ */
+public class PosixParserLLMTest
+{
+    /**
+     * Crea opciones: -a (sin argumento), -b (con argumento), -c (sin argumento).
+     */
+    private static Options createOptions()
+    {
+        return new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+    }
+
+    /**
+     * Crea opciones con -J que admite hasta 3 valores.
+     */
+    private static Options createMultiValueOptions()
+    {
+        Options opts = new Options();
+        opts.addOption(OptionBuilder.hasArgs(3).create('J'));
+        return opts;
+    }
+
+    /**
+     * Requisito 1: con stopAtNonOption=false, un token de dos caracteres no válido
+     * debe ignorarse sin lanzar excepción y sin afectar al resto del parseo.
+     *
+     * Nota: la reconstrucción de los argumentos es una suposición, ya que el
+     * fragmento original estaba truncado.
+     */
+    @Test
+    public void testUnknownTwoCharTokenIgnoredWhenNotStopping() throws Exception
+    {
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "-z", "-a" };
+        CommandLine cl = parser.parse(createOptions(), args, false);
+        assertTrue(cl.hasOption("a"));
+    }
+}
+```
+
+Dos observaciones:
+
+1. **Posible discrepancia con el requisito.** En algunas versiones de commons-cli, `PosixParser` lanza `UnrecognizedOptionException` para tokens desconocidos que empiezan por `-` cuando `stopAtNonOption=false`. Si es tu caso, esta prueba fallará porque el requisito dice "sin lanzar excepción". Revisa la versión de la dependencia y el comportamiento real antes de dar la prueba por válida. No la he modificado para que pase, porque eso cambiaría lo que verifica.
+2. **Imports sin uso.** `assertArrayEquals`, `assertEquals`, `assertFalse`, `fail` y `Arrays` no se usan en este fragmento. No provocan error de compilación, pero si siguen sin usarse en el archivo completo, conviene eliminarlos.

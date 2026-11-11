@@ -1,0 +1,168 @@
+```java
+/*
+ * Pruebas adicionales para org.apache.commons.cli.PosixParser.
+ * Usan solo la API pública (Parser.parse, CommandLine, Options, excepciones).
+ */
+package org.apache.commons.cli;
+
+import java.util.Arrays;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+public class PosixParserLLMTest
+{
+    /**
+     * Crea las mismas opciones que usa PosixParserTest:
+     * -a (sin argumento), -b (con argumento), -c (sin argumento).
+     */
+    private static Options createOptions()
+    {
+        return new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+    }
+
+    /**
+     * Requisito 1: con stopAtNonOption=false, una entrada de dos caracteres
+     * con guion y sin Option válida se ignora. No se añade a los tokens ni
+     * detiene el análisis, por lo que las opciones siguientes se procesan.
+     */
+    @Test
+    public void testUnknownTwoCharShortOptionIsIgnoredWhenNotStopping() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "-z", "-a", "foo" };
+
+        CommandLine cl = parser.parse(options, args, false);
+
+        Assert.assertTrue("-a debe activarse aunque -z sea desconocida", cl.hasOption("a"));
+        Assert.assertEquals("Solo 'foo' debe quedar como argumento posicional",
+                Arrays.asList("foo"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 2: con stopAtNonOption=false, las opciones que aparecen después
+     * de argumentos no opcionales siguen reconociéndose.
+     */
+    @Test
+    public void testOptionsAfterPositionalArgumentsAreRecognizedWhenNotStopping() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "foo", "-a", "-btoast", "bar" };
+
+        CommandLine cl = parser.parse(options, args, false);
+
+        Assert.assertTrue("-a posterior a 'foo' debe reconocerse", cl.hasOption("a"));
+        Assert.assertTrue("-b posterior a 'foo' debe reconocerse", cl.hasOption("b"));
+        Assert.assertEquals("El valor de -b debe ser 'toast'", "toast", cl.getOptionValue("b"));
+        Assert.assertEquals("Los argumentos posicionales deben ser 'foo' y 'bar' en orden",
+                Arrays.asList("foo", "bar"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 3: en burstToken, si un carácter no tiene Option y
+     * stopAtNonOption=false, la documentación indica que se añade ese
+     * carácter precedido de "-" (en este caso "-z"), de modo que el parser
+     * informa de "-z" como opción no reconocida.
+     *
+     * NOTA: esta prueba detecta la discrepancia entre documentación y código.
+     * El código actual añade el token completo ("-az"), por lo que la
+     * excepción se lanza con getOption() == "-az" y la aserción falla.
+     */
+    @Test
+    public void testBurstUnknownCharacterReportsSingleCharacterOption() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "-az" };
+
+        try
+        {
+            parser.parse(options, args, false);
+            Assert.fail("Debe lanzarse UnrecognizedOptionException para el carácter 'z'");
+        }
+        catch (UnrecognizedOptionException e)
+        {
+            Assert.assertEquals("Según la documentación, se añade '-' seguido del carácter desconocido",
+                    "-z", e.getOption());
+        }
+    }
+
+    /**
+     * Requisito 4: tras una opción con argumento dentro de una ráfaga, los
+     * caracteres restantes son su valor y no se interpretan como opciones.
+     * Con "-bac", b toma el valor "ac" y ni a ni c se activan.
+     */
+    @Test
+    public void testRemainingCharactersAfterArgOptionAreValueNotOptions() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "-bac" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertEquals("El valor de -b debe ser 'ac'", "ac", cl.getOptionValue("b"));
+        Assert.assertFalse("'a' no debe activarse: es parte del valor de -b", cl.hasOption("a"));
+        Assert.assertFalse("'c' no debe activarse: es parte del valor de -b", cl.hasOption("c"));
+        Assert.assertTrue("No debe quedar ningún argumento posicional", cl.getArgList().isEmpty());
+    }
+
+    /**
+     * Requisito 5: una opción con argumento situada al final de una ráfaga
+     * ("-acb") toma el token siguiente ("toast") como valor.
+     */
+    @Test
+    public void testArgOptionAtEndOfBurstTakesNextToken() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+        String[] args = new String[] { "-acb", "toast" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("-a debe estar activa", cl.hasOption("a"));
+        Assert.assertTrue("-c debe estar activa", cl.hasOption("c"));
+        Assert.assertTrue("-b debe estar activa", cl.hasOption("b"));
+        Assert.assertEquals("El valor de -b debe ser el token siguiente 'toast'",
+                "toast", cl.getOptionValue("b"));
+        Assert.assertTrue("'toast' no debe quedar como argumento posicional",
+                cl.getArgList().isEmpty());
+    }
+
+    /**
+     * Requisito 6: currentOption se restablece a null al inicio de cada
+     * invocación de flatten. Si quedara un valor de la llamada anterior
+     * (-b pendiente de argumento), "foo" se trataría como valor de -b y
+     * "-a" se reconocería como opción. Con el reinicio correcto, "foo"
+     * activa el corte ("--"), y "-a" se trata como argumento posicional.
+     */
+    @Test
+    public void testCurrentOptionIsResetBetweenFlattenCalls() throws Exception
+    {
+        Options options = createOptions();
+        Parser parser = new PosixParser();
+
+        // Primera llamada: deja currentOption = b (-b espera argumento y "x" lo consume).
+        CommandLine first = parser.parse(options, new String[] { "-b", "x" }, false);
+        Assert.assertEquals("Primera llamada: el valor de -b debe ser 'x'", "x", first.getOptionValue("b"));
+
+        // Segunda llamada con la misma instancia: no debe heredar currentOption.
+        CommandLine second = parser.parse(options, new String[] { "foo", "-a" }, true);
+
+        Assert.assertFalse("'-a' no debe reconocerse como opción tras 'foo' (currentOption debe estar a null)",
+                second.hasOption("a"));
+        Assert.assertEquals("'foo' y '-a' deben quedar como argumentos posicionales",
+                Arrays.asList("foo", "-a"), second.getArgList());
+    }
+}
+```
+
+Notas breves:
+- Las pruebas usan únicamente `Parser.parse`, `CommandLine`, `Options` y las excepciones públicas; no acceden a `flatten` ni a `burstToken`, que son `protected`.
+- `testBurstUnknownCharacterReportsSingleCharacterOption` (requisito 3) está escrita según lo que documenta el Javadoc. Contra el código actual debería fallar, porque el código añade el token completo `"-az"` en lugar de `"-z"`. Ese fallo es precisamente la discrepancia que el requisito pide detectar; si se quiere una suite en verde, habría que corregir el código o documentar el comportamiento real.
+- Las pruebas existentes no se han modificado.

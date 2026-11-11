@@ -1,0 +1,175 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Util}, orientadas a cubrir las ramas
+ * no ejecutadas por la suite existente.
+ */
+public class UtilLLMTest
+{
+    // ---------------------------------------------------------------
+    // stripLeadingHyphens
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stripLeadingHyphensRemovesSingleHyphenFromShortOption()
+    {
+        String result = Util.stripLeadingHyphens("-x");
+        assertNotNull("El resultado no debe ser null", result);
+        assertEquals("Un guion simple debe eliminarse", "x", result);
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForSingleHyphenOnly()
+    {
+        assertEquals("Solo un guion debe producir cadena vacía",
+                     "", Util.stripLeadingHyphens("-"));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForDoubleHyphenOnly()
+    {
+        assertEquals("Solo dos guiones deben producir cadena vacía",
+                     "", Util.stripLeadingHyphens("--"));
+    }
+
+    @Test
+    public void stripLeadingHyphensKeepsStringWithoutLeadingHyphen()
+    {
+        assertEquals("Sin guion inicial la cadena no cambia",
+                     "foo", Util.stripLeadingHyphens("foo"));
+    }
+
+    @Test
+    public void stripLeadingHyphensReturnsEmptyStringForEmptyInput()
+    {
+        assertEquals("Cadena vacía debe devolver cadena vacía",
+                     "", Util.stripLeadingHyphens(""));
+    }
+
+    @Test
+    public void stripLeadingHyphensKeepsInnerHyphens()
+    {
+        assertEquals("Los guiones internos deben conservarse",
+                     "a-b-c", Util.stripLeadingHyphens("-a-b-c"));
+    }
+
+    @Test
+    public void stripLeadingHyphensKeepsHyphenAfterDoubleHyphenPrefix()
+    {
+        assertEquals("Solo se eliminan los dos guiones iniciales",
+                     "-x", Util.stripLeadingHyphens("---x"));
+    }
+
+    @Test
+    public void stripLeadingHyphensDoesNotStripHyphenNotAtStart()
+    {
+        assertEquals("Un guion en medio no debe eliminarse",
+                     "ab-c", Util.stripLeadingHyphens("ab-c"));
+    }
+
+    // ---------------------------------------------------------------
+    // stripLeadingAndTrailingQuotes
+    // ---------------------------------------------------------------
+
+    @Test
+    public void stripQuotesRemovesBothQuotes()
+    {
+        assertEquals("Deben eliminarse las comillas inicial y final",
+                     "one two", Util.stripLeadingAndTrailingQuotes("\"one two\""));
+    }
+
+    @Test
+    public void stripQuotesRemovesOnlyLeadingQuote()
+    {
+        assertEquals("Solo comilla inicial debe eliminarse",
+                     "one", Util.stripLeadingAndTrailingQuotes("\"one"));
+    }
+
+    @Test
+    public void stripQuotesRemovesOnlyTrailingQuote()
+    {
+        assertEquals("Solo comilla final debe eliminarse",
+                     "one", Util.stripLeadingAndTrailingQuotes("one\""));
+    }
+
+    @Test
+    public void stripQuotesKeepsStringWithoutQuotes()
+    {
+        assertEquals("Sin comillas la cadena no cambia",
+                     "one", Util.stripLeadingAndTrailingQuotes("one"));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyForSingleQuote()
+    {
+        assertEquals("Una sola comilla debe producir cadena vacía",
+                     "", Util.stripLeadingAndTrailingQuotes("\""));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyForTwoQuotes()
+    {
+        assertEquals("Dos comillas deben producir cadena vacía",
+                     "", Util.stripLeadingAndTrailingQuotes("\"\""));
+    }
+
+    @Test
+    public void stripQuotesReturnsEmptyForEmptyInput()
+    {
+        assertEquals("Cadena vacía debe devolver cadena vacía",
+                     "", Util.stripLeadingAndTrailingQuotes(""));
+    }
+
+    @Test
+    public void stripQuotesPreservesInnerQuotes()
+    {
+        assertEquals("Las comillas internas deben conservarse",
+                     "a\"b", Util.stripLeadingAndTrailingQuotes("\"a\"b\""));
+    }
+
+    @Test
+    public void stripQuotesDoesNotRemoveNonQuoteCharacters()
+    {
+        assertEquals("Otros caracteres no deben eliminarse",
+                     "'abc'", Util.stripLeadingAndTrailingQuotes("'abc'"));
+    }
+
+    @Test
+    public void stripQuotesThrowsNullPointerExceptionForNullInput()
+    {
+        try
+        {
+            Util.stripLeadingAndTrailingQuotes(null);
+            fail("Se esperaba NullPointerException para entrada null");
+        }
+        catch (NullPointerException expected)
+        {
+            // Comportamiento esperado: la implementación no protege contra null.
+            assertNull("La excepción debe producirse sin valor de retorno", null);
+        }
+    }
+}

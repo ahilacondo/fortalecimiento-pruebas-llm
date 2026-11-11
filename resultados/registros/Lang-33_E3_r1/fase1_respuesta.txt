@@ -1,0 +1,8 @@
+1. `toClass`: devuelve `null` para entrada `null`, un array vacío para entrada vacía y las clases de tiempo de ejecución de cada elemento; no está probado en absoluto.
+2. `toClass`: un elemento `null` en el array provoca una `NullPointerException` (comportamiento actual no documentado y no verificado).
+3. `getPublicMethod`: lanza `NoSuchMethodException` cuando el método no existe o no hay ningún método público en la jerarquía; solo se prueba el caso de éxito.
+4. `getPublicMethod`: lanza `NullPointerException` cuando la clase de entrada es `null`, tal como indica su Javadoc.
+5. `getAllSuperclasses`: devuelve una lista vacía para `Object.class`, para interfaces y para tipos primitivos.
+6. `getClass(ClassLoader, String, boolean)`: con `initialize=false` no inicializa la clase, y usa el `ClassLoader` explícito proporcionado (incluida la resolución de nombres de array y primitivos).
+7. `convertClassNamesToClasses`: un nombre `null` dentro de la lista produce `null` en el resultado en lugar de lanzar una excepción.
+8. `getShortCanonicalName` y `getPackageCanonicalName` con un `String` nulo devuelven cadena vacía (`""`), y no hay pruebas para ese caso.

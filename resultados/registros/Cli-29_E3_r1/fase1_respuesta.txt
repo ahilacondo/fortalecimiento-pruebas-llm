@@ -1,0 +1,8 @@
+1. `stripLeadingAndTrailingQuotes` no tiene ninguna prueba en `UtilTest`.
+2. Con `"one two"` (comillas en ambos extremos) devuelve `one two`.
+3. Con `"abc` (solo comilla inicial) elimina la comilla inicial y devuelve `abc`.
+4. Con `abc"` (solo comilla final) elimina la comilla final y devuelve `abc`.
+5. Con una cadena sin comillas en los extremos la devuelve sin cambios.
+6. Con una cadena formada por una sola comilla devuelve la cadena vacía.
+7. Con una cadena vacía devuelve la cadena vacía, y con `null` lanza `NullPointerException`, sin protección similar a la de `stripLeadingHyphens`.
+8. `stripLeadingHyphens` no se verifica con `-` (devuelve vacío), `--` (devuelve vacío) ni con cadena vacía.

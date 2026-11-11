@@ -1,0 +1,8 @@
+1. Parseo con `ParsePosition` en un índice inicial distinto de cero, incluyendo el avance correcto de `pos` tras una coincidencia.
+2. Fallo de `parse(String, ParsePosition)` que devuelve `null` sin modificar el índice, y `parse(String)` que lanza `ParseException` con el patrón en el mensaje (incluida la nota del locale ja_JP_JP).
+3. Lanzamiento de `IllegalArgumentException` cuando el patrón no empieza por un token reconocido ("Invalid pattern").
+4. Ventana de años de dos dígitos de `adjustYear` (entre -80 y +20 años respecto al año de instanciación), especialmente en sus límites.
+5. Parseo de nombres de zona horaria cortos y largos (por ejemplo "EDT", "Eastern Daylight Time") y de desplazamientos con dos puntos ("+05:00"), dado que `testParseZone` está vacío y comentado.
+6. Interpretación de los campos sin zona horaria en la zona del parser (no solo la comprobación del getter `getTimeZone()`), y cambio de zona cuando el patrón incluye `Z` o `z`.
+7. Coincidencia insensible a mayúsculas en nombres de meses, días de la semana, AM/PM y era, y `IllegalArgumentException` al recibir un nombre no válido.
+8. Equivalencia con `SimpleDateFormat` en casos de fallo: `testSdfAndFdp` está definido pero nunca se invoca.

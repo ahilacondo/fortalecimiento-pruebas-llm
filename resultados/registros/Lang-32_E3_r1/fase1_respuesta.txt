@@ -1,0 +1,8 @@
+1. El constructor sin argumentos (valores por defecto 17 y 37) no tiene ninguna prueba que verifique su resultado.
+2. La sobrecarga de reflexión con `reflectUpToClass` no se prueba: no hay verificación de que la recursión se detenga en la superclase indicada (inclusive) ni de que con `null` suba hasta `Object`.
+3. El parámetro `excludeFields` no se verifica para campos heredados de superclases en la sobrecarga de seis parámetros.
+4. La protección contra ciclos de referencias en la reflexión no se prueba: los fixtures `ReflectionTestCycleA` y `ReflectionTestCycleB` están definidos pero no se usan en ningún test.
+5. No se verifica que el registro ThreadLocal se limpie tras una excepción durante el cálculo por reflexión (bloque finally con unregister).
+6. La sobrecarga `reflectionHashCode(Object, Collection<String>)` no tiene pruebas directas.
+7. No se verifica que los campos estáticos y los sintéticos (nombres con `$`) queden excluidos del cálculo por reflexión, ya que el fixture no contiene ninguno.
+8. No se verifica el tratamiento de `double` y `float` con NaN y con -0.0 frente a 0.0, que depende de `doubleToLongBits` y `floatToIntBits`.

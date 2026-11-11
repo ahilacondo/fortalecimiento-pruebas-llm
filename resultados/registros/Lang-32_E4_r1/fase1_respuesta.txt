@@ -1,0 +1,8 @@
+1. Con `reflectUpToClass` especificado, la reflexión solo incluye los campos de superclases hasta esa clase inclusive; el método de 5 parámetros nunca se invoca en las pruebas.
+2. Con `reflectUpToClass` nulo, la reflexión recorre la jerarquía hasta `java.lang.Object`, sin verificación explícita.
+3. Los campos estáticos no deben participar en el cálculo de `reflectionHashCode`; ningún fixture de prueba tiene campos estáticos.
+4. Todas las sobrecargas de reflexión deben lanzar `IllegalArgumentException` si el objeto es `null`; solo se prueba una combinación.
+5. La sobrecarga `reflectionHashCode(Object, Collection<String>)` debe excluir los campos indicados; no tiene pruebas.
+6. Los campos excluidos por nombre deben omitirse en toda la jerarquía de clases; la prueba de exclusión usa una clase sin superclase.
+7. Las clases `ReflectionTestCycleA` y `ReflectionTestCycleB` están definidas pero no se usan: no se verifica que las referencias cíclicas no provoquen un bucle infinito.
+8. El constructor debe rechazar un multiplicador cero o par aunque el valor inicial sea válido; las pruebas existentes solo usan casos en los que ambos parámetros son inválidos.

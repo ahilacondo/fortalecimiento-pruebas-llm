@@ -1,0 +1,8 @@
+1. isNumber no tiene ninguna prueba: no se verifican cadenas nulas o vacías, hexadecimales, notación científica, signos, sufijos de tipo ni entradas inválidas como "1e", "." o "1E-".
+2. createNumber no verifica el tipo devuelto según la magnitud del valor (Integer, Long, BigInteger, Float, Double o BigDecimal).
+3. createNumber no verifica el resultado de los sufijos explícitos l/L, f/F y d/D; testLang300 solo comprueba que no lance excepción.
+4. createNumber no verifica que "--" devuelva null, que una cadena en blanco lance NumberFormatException ni que los espacios no se recorten.
+5. createNumber y createInteger no verifican la conversión de hexadecimales (0x y -0x) ni el tratamiento de ceros iniciales (octal frente a decimal), lo que contradice la Javadoc de createNumber.
+6. Los métodos toInt, toLong, toByte y toShort no verifican desbordamiento, es decir, que un valor fuera de rango devuelva el valor por defecto.
+7. toFloat y toDouble no verifican cadenas especiales como "NaN", "Infinity" o "-Infinity", ni la aceptación de sufijos de tipo.
+8. min(float[]) no verifica el comportamiento con NaN (testLang381 solo cubre max(float[])), e isDigits no verifica dígitos Unicode no ASCII ni la combinación de signos.

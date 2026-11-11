@@ -1,0 +1,8 @@
+1. Si el grupo añadido con addOptionGroup es obligatorio, debe aparecer en getRequiredOptions.
+2. addOptionGroup debe forzar required=false en todas las opciones del grupo.
+3. getOptionGroup debe devolver el grupo al que pertenece una opción y null si la opción no pertenece a ningún grupo.
+4. addOption(opt, description) debe crear una opción que no acepta argumento (hasArg es false).
+5. addOption(opt, hasArg, description) debe respetar el valor de hasArg en la opción creada.
+6. getOption debe localizar una opción por su nombre largo y devolver la misma opción que con el nombre corto.
+7. getOption y hasOption deben ignorar hasta dos guiones iniciales en el nombre consultado.
+8. getOptions y getRequiredOptions deben devolver colecciones de solo lectura que rechazan modificaciones.

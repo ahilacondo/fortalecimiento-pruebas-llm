@@ -1,0 +1,6 @@
+1. Regla 4 de `flatten`: con `stopAtNonOption=false`, una entrada de dos caracteres con guion y sin Option válida se ignora (no se añade a los tokens ni detiene el análisis); no hay prueba que lo verifique.
+2. Regla 1 de `flatten`: con `stopAtNonOption=false`, las opciones que aparecen después de argumentos no opcionales siguen reconociéndose; las pruebas existentes solo colocan las opciones antes de los argumentos posicionales.
+3. `burstToken`, rama sin Option y `stopAtNonOption=false`: la documentación indica que se añade el carácter precedido de "-"; el código añade el token completo. Ninguna prueba detecta esta discrepancia.
+4. `burstToken`: tras una opción con argumento, los caracteres restantes del token son su valor y no se interpretan como opciones (por ejemplo, "-bac" debe dar b="ac" y dejar a sin activar); las pruebas existentes no lo comprueban.
+5. `burstToken`: una opción con argumento situada al final de una ráfaga (por ejemplo, "-acb toast") toma el token siguiente como valor; solo se prueba la forma "-b toast" aislada.
+6. `init()`: `currentOption` se restablece a null entre invocaciones de `flatten`; las pruebas solo verifican el reinicio de `tokens` y `eatTheRest`.

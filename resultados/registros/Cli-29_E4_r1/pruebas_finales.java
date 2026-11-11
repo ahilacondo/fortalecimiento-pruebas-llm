@@ -1,0 +1,136 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Util} que cubren los requisitos de la
+ * documentación no verificados por {@code UtilTest}.
+ */
+public class UtilLLMTest
+{
+    // ---------------------------------------------------------------
+    // stripLeadingHyphens
+    // ---------------------------------------------------------------
+
+    /** Requisito 1: sin guiones iniciales la cadena se devuelve sin cambios. */
+    @Test
+    public void testStripLeadingHyphensReturnsUnchangedWhenNoLeadingHyphen()
+    {
+        assertEquals("abc", Util.stripLeadingHyphens("abc"));
+        assertEquals("foo", Util.stripLeadingHyphens("foo"));
+    }
+
+    /** Requisito 2: entrada formada solo por guiones devuelve cadena vacía. */
+    @Test
+    public void testStripLeadingHyphensReturnsEmptyForSingleHyphen()
+    {
+        assertEquals("", Util.stripLeadingHyphens("-"));
+    }
+
+    /** Requisito 2: entrada formada solo por dos guiones devuelve cadena vacía. */
+    @Test
+    public void testStripLeadingHyphensReturnsEmptyForDoubleHyphen()
+    {
+        assertEquals("", Util.stripLeadingHyphens("--"));
+    }
+
+    /** Requisito 3: entrada vacía devuelve cadena vacía. */
+    @Test
+    public void testStripLeadingHyphensReturnsEmptyForEmptyInput()
+    {
+        assertEquals("", Util.stripLeadingHyphens(""));
+    }
+
+    /** Requisito 4: los guiones intermedios no se eliminan. */
+    @Test
+    public void testStripLeadingHyphensKeepsInnerHyphens()
+    {
+        assertEquals("a-b", Util.stripLeadingHyphens("a-b"));
+        assertEquals("a-b", Util.stripLeadingHyphens("-a-b"));
+        assertEquals("a-b", Util.stripLeadingHyphens("--a-b"));
+    }
+
+    /** Requisito 4: los guiones finales no se eliminan. */
+    @Test
+    public void testStripLeadingHyphensKeepsTrailingHyphens()
+    {
+        assertEquals("foo-", Util.stripLeadingHyphens("foo-"));
+        assertEquals("foo-", Util.stripLeadingHyphens("-foo-"));
+        assertEquals("foo-", Util.stripLeadingHyphens("--foo-"));
+    }
+
+    // ---------------------------------------------------------------
+    // stripLeadingAndTrailingQuotes
+    // ---------------------------------------------------------------
+
+    /** Requisito 5: elimina las comillas de inicio y fin y devuelve el interior. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesRemovesBothQuotes()
+    {
+        assertEquals("one two", Util.stripLeadingAndTrailingQuotes("\"one two\""));
+        assertEquals("abc", Util.stripLeadingAndTrailingQuotes("\"abc\""));
+    }
+
+    /** Requisito 5: comillas vacías devuelven cadena vacía. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesReturnsEmptyForEmptyQuotes()
+    {
+        assertEquals("", Util.stripLeadingAndTrailingQuotes("\"\""));
+    }
+
+    /** Requisito 6: solo una comilla inicial, se elimina únicamente esa. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesRemovesOnlyLeadingQuote()
+    {
+        assertEquals("one two", Util.stripLeadingAndTrailingQuotes("\"one two"));
+    }
+
+    /** Requisito 6: solo una comilla final, se elimina únicamente esa. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesRemovesOnlyTrailingQuote()
+    {
+        assertEquals("one two", Util.stripLeadingAndTrailingQuotes("one two\""));
+    }
+
+    /** Requisito 7: cadena sin comillas se devuelve sin cambios. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesReturnsUnchangedWhenNotQuoted()
+    {
+        assertEquals("one two", Util.stripLeadingAndTrailingQuotes("one two"));
+        assertEquals("abc", Util.stripLeadingAndTrailingQuotes("abc"));
+    }
+
+    /** Requisito 7: cadena vacía se devuelve vacía. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesReturnsEmptyForEmptyInput()
+    {
+        assertEquals("", Util.stripLeadingAndTrailingQuotes(""));
+    }
+
+    /** Requisito 8: las comillas interiores se conservan. */
+    @Test
+    public void testStripLeadingAndTrailingQuotesKeepsInnerQuotes()
+    {
+        assertEquals("a\"b\"c", Util.stripLeadingAndTrailingQuotes("a\"b\"c"));
+        assertEquals("a\"b", Util.stripLeadingAndTrailingQuotes("\"a\"b\""));
+    }
+}

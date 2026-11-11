@@ -1,0 +1,440 @@
+package org.apache.commons.lang3;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link ClassUtils} usando solo su API pública.
+ */
+public class ClassUtilsLLMTest {
+
+    // ------------------------------------------------------------------
+    // Constantes
+    // ------------------------------------------------------------------
+
+    @Test
+    public void constantsHaveExpectedValues() {
+        assertEquals('.', ClassUtils.PACKAGE_SEPARATOR_CHAR);
+        assertEquals(".", ClassUtils.PACKAGE_SEPARATOR);
+        assertEquals('$', ClassUtils.INNER_CLASS_SEPARATOR_CHAR);
+        assertEquals("$", ClassUtils.INNER_CLASS_SEPARATOR);
+    }
+
+    @Test
+    public void constructorCreatesInstance() {
+        assertNotNull(new ClassUtils());
+    }
+
+    // ------------------------------------------------------------------
+    // getShortClassName
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getShortClassNameObjectReturnsValueIfNullForNullObject() {
+        assertEquals("fallback", ClassUtils.getShortClassName(null, "fallback"));
+        assertNull(ClassUtils.getShortClassName(null, null));
+    }
+
+    @Test
+    public void getShortClassNameObjectUsesRuntimeClass() {
+        assertEquals("Integer", ClassUtils.getShortClassName(Integer.valueOf(3), "x"));
+        assertEquals("int[]", ClassUtils.getShortClassName(new int[0], "x"));
+    }
+
+    @Test
+    public void getShortClassNameClassForNestedClassReplacesDollarWithDot() {
+        assertEquals("AbstractMap.SimpleEntry",
+                ClassUtils.getShortClassName(java.util.AbstractMap.SimpleEntry.class));
+    }
+
+    @Test
+    public void getShortClassNameStringHandlesNullAndEmpty() {
+        assertEquals("", ClassUtils.getShortClassName((String) null));
+        assertEquals("", ClassUtils.getShortClassName(""));
+    }
+
+    @Test
+    public void getShortClassNameStringStripsPackage() {
+        assertEquals("String", ClassUtils.getShortClassName("java.lang.String"));
+        assertEquals("Map.Entry", ClassUtils.getShortClassName("java.util.Map$Entry"));
+    }
+
+    @Test
+    public void getShortClassNameStringDecodesObjectArrayEncoding() {
+        assertEquals("String[]", ClassUtils.getShortClassName("[Ljava.lang.String;"));
+        assertEquals("String[][]", ClassUtils.getShortClassName("[[Ljava.lang.String;"));
+    }
+
+    @Test
+    public void getShortClassNameStringDecodesPrimitiveAbbreviations() {
+        assertEquals("int[]", ClassUtils.getShortClassName("[I"));
+        assertEquals("boolean[][]", ClassUtils.getShortClassName("[[Z"));
+        assertEquals("int", ClassUtils.getShortClassName("int"));
+    }
+
+    // ------------------------------------------------------------------
+    // getPackageName
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getPackageNameObjectReturnsValueIfNullForNullObject() {
+        assertEquals("fallback", ClassUtils.getPackageName(null, "fallback"));
+    }
+
+    @Test
+    public void getPackageNameObjectUsesRuntimeClass() {
+        assertEquals("java.lang", ClassUtils.getPackageName("text", "x"));
+        assertEquals("java.lang", ClassUtils.getPackageName(new String[0], "x"));
+    }
+
+    @Test
+    public void getPackageNameClassForNestedClass() {
+        assertEquals("java.util", ClassUtils.getPackageName(Map.Entry.class));
+    }
+
+    @Test
+    public void getPackageNameStringForUnpackagedName() {
+        assertEquals("", ClassUtils.getPackageName("Map"));
+    }
+
+    @Test
+    public void getPackageNameStringDecodesObjectArrayEncoding() {
+        assertEquals("java.lang", ClassUtils.getPackageName("[Ljava.lang.String;"));
+        assertEquals("java.lang", ClassUtils.getPackageName("[[Ljava.lang.String;"));
+    }
+
+    // ------------------------------------------------------------------
+    // getAllSuperclasses / getAllInterfaces
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getAllSuperclassesForIntegerReturnsNumberThenObject() {
+        List<Class<?>> list = ClassUtils.getAllSuperclasses(Integer.class);
+        assertEquals(2, list.size());
+        assertEquals(Number.class, list.get(0));
+        assertEquals(Object.class, list.get(1));
+    }
+
+    @Test
+    public void getAllSuperclassesForObjectIsEmpty() {
+        assertTrue(ClassUtils.getAllSuperclasses(Object.class).isEmpty());
+    }
+
+    @Test
+    public void getAllInterfacesForStringContainsExpectedInterfaces() {
+        List<Class<?>> list = ClassUtils.getAllInterfaces(String.class);
+        assertTrue(list.contains(java.io.Serializable.class));
+        assertTrue(list.contains(Comparable.class));
+        assertTrue(list.contains(CharSequence.class));
+    }
+
+    @Test
+    public void getAllInterfacesHasNoDuplicates() {
+        List<Class<?>> list = ClassUtils.getAllInterfaces(String.class);
+        assertEquals(new HashSet<Class<?>>(list).size(), list.size());
+    }
+
+    @Test
+    public void getAllInterfacesForClassWithoutInterfacesIsEmpty() {
+        assertTrue(ClassUtils.getAllInterfaces(Object.class).isEmpty());
+    }
+
+    // ------------------------------------------------------------------
+    // convertClassNamesToClasses / convertClassesToClassNames
+    // ------------------------------------------------------------------
+
+    @Test
+    public void convertClassNamesToClassesMapsUnknownNamesAndNullEntriesToNull() {
+        List<String> names = Arrays.asList("java.lang.Integer", "no.such.Clazz", null);
+        List<Class<?>> result = ClassUtils.convertClassNamesToClasses(names);
+        assertEquals(3, result.size());
+        assertEquals(Integer.class, result.get(0));
+        assertNull(result.get(1));
+        assertNull(result.get(2));
+    }
+
+    @Test
+    public void convertClassNamesToClassesReturnsNewListForEmptyInput() {
+        List<Class<?>> result = ClassUtils.convertClassNamesToClasses(new ArrayList<String>());
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void convertClassesToClassNamesHandlesPrimitivesAndArrays() {
+        List<Class<?>> classes = new ArrayList<Class<?>>();
+        classes.add(int.class);
+        classes.add(String[].class);
+        List<String> names = ClassUtils.convertClassesToClassNames(classes);
+        assertEquals("int", names.get(0));
+        assertEquals("[Ljava.lang.String;", names.get(1));
+    }
+
+    // ------------------------------------------------------------------
+    // isAssignable (Class, Class, boolean)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void isAssignableWithNullClassDependsOnPrimitiveTarget() {
+        assertTrue(ClassUtils.isAssignable((Class<?>) null, Object.class, false));
+        assertFalse(ClassUtils.isAssignable((Class<?>) null, int.class, false));
+        assertFalse(ClassUtils.isAssignable((Class<?>) null, (Class<?>) null, false));
+    }
+
+    @Test
+    public void isAssignablePrimitiveToReferenceRequiresAutoboxing() {
+        assertFalse(ClassUtils.isAssignable(int.class, Number.class, false));
+        assertTrue(ClassUtils.isAssignable(int.class, Number.class, true));
+    }
+
+    @Test
+    public void isAssignableReferenceToPrimitiveRequiresAutoboxing() {
+        assertFalse(ClassUtils.isAssignable(Integer.class, long.class, false));
+        assertTrue(ClassUtils.isAssignable(Integer.class, long.class, true));
+    }
+
+    @Test
+    public void isAssignableWideningReferenceTypes() {
+        assertTrue(ClassUtils.isAssignable(Integer.class, Number.class, false));
+        assertFalse(ClassUtils.isAssignable(Number.class, Integer.class, false));
+    }
+
+    @Test
+    public void isAssignableNarrowingPrimitivesIsNotAllowed() {
+        assertFalse(ClassUtils.isAssignable(long.class, int.class, true));
+        assertFalse(ClassUtils.isAssignable(double.class, float.class, true));
+    }
+
+    // ------------------------------------------------------------------
+    // isAssignable (Class[], Class[], boolean)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void isAssignableArraysDifferentLengthsIsFalse() {
+        Class<?>[] one = new Class<?>[] {String.class};
+        Class<?>[] none = new Class<?>[0];
+        assertFalse(ClassUtils.isAssignable(one, none, false));
+        assertFalse(ClassUtils.isAssignable(none, one, true));
+    }
+
+    @Test
+    public void isAssignableArraysElementWise() {
+        Class<?>[] from = new Class<?>[] {int.class, String.class};
+        Class<?>[] to = new Class<?>[] {long.class, Object.class};
+        assertTrue(ClassUtils.isAssignable(from, to, false));
+
+        Class<?>[] badTo = new Class<?>[] {long.class, Integer.class};
+        assertFalse(ClassUtils.isAssignable(from, badTo, false));
+    }
+
+    @Test
+    public void isAssignableArraysDefaultOverloadUsesAutoboxingOnJava11() {
+        Class<?>[] from = new Class<?>[] {int.class};
+        Class<?>[] to = new Class<?>[] {Integer.class};
+        assertTrue(ClassUtils.isAssignable(from, to));
+    }
+
+    // ------------------------------------------------------------------
+    // Primitive / wrapper conversions
+    // ------------------------------------------------------------------
+
+    @Test
+    public void primitiveToWrapperConvertsEachPrimitive() {
+        assertEquals(Integer.class, ClassUtils.primitiveToWrapper(int.class));
+        assertEquals(Character.class, ClassUtils.primitiveToWrapper(char.class));
+    }
+
+    @Test
+    public void primitivesToWrappersHandlesNullElement() {
+        Class<?>[] input = new Class<?>[] {null, int.class};
+        Class<?>[] result = ClassUtils.primitivesToWrappers(input);
+        assertEquals(2, result.length);
+        assertNull(result[0]);
+        assertEquals(Integer.class, result[1]);
+    }
+
+    @Test
+    public void primitivesToWrappersOfEmptyArrayIsEmpty() {
+        assertEquals(0, ClassUtils.primitivesToWrappers(new Class<?>[0]).length);
+    }
+
+    @Test
+    public void wrapperToPrimitiveForNonWrapperReturnsNull() {
+        assertNull(ClassUtils.wrapperToPrimitive(Object.class));
+    }
+
+    @Test
+    public void wrapperToPrimitiveForVoidWrapperReturnsNull() {
+        // Void.class no está mapeada: el mapa inverso sólo contiene wrappers de primitivos distintos de sí mismos.
+        assertNull(ClassUtils.wrapperToPrimitive(Void.class));
+    }
+
+    @Test
+    public void wrapperToPrimitiveForIntegerReturnsInt() {
+        assertEquals(int.class, ClassUtils.wrapperToPrimitive(Integer.class));
+    }
+
+    @Test
+    public void wrappersToPrimitivesMixedArray() {
+        Class<?>[] input = new Class<?>[] {Integer.class, String.class};
+        Class<?>[] result = ClassUtils.wrappersToPrimitives(input);
+        assertArrayEquals(new Class<?>[] {int.class, null}, result);
+    }
+
+    @Test
+    public void wrappersToPrimitivesOfEmptyArrayIsEmpty() {
+        assertEquals(0, ClassUtils.wrappersToPrimitives(new Class<?>[0]).length);
+    }
+
+    // ------------------------------------------------------------------
+    // isInnerClass
+    // ------------------------------------------------------------------
+
+    @Test
+    public void isInnerClassForTopLevelClassesIsFalse() {
+        assertFalse(ClassUtils.isInnerClass(String.class));
+        assertFalse(ClassUtils.isInnerClass(Integer.TYPE));
+    }
+
+    @Test
+    public void isInnerClassForNestedJdkClassIsTrue() {
+        assertTrue(ClassUtils.isInnerClass(java.util.AbstractMap.SimpleEntry.class));
+    }
+
+    // ------------------------------------------------------------------
+    // getClass
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getClassStringResolvesNestedClassWithDollar() throws ClassNotFoundException {
+        assertEquals(Map.Entry.class, ClassUtils.getClass("java.util.Map$Entry"));
+    }
+
+    @Test
+    public void getClassStringWithoutInitializeResolvesClass() throws ClassNotFoundException {
+        assertEquals(String.class, ClassUtils.getClass("java.lang.String", false));
+    }
+
+    @Test
+    public void getClassWithClassLoaderResolvesObjectArrayMatrix() throws ClassNotFoundException {
+        ClassLoader loader = ClassUtils.class.getClassLoader();
+        assertEquals(Object[][].class, ClassUtils.getClass(loader, "java.lang.Object[][]"));
+    }
+
+    @Test
+    public void getClassWithClassLoaderResolvesPrimitiveArrayMatrix() throws ClassNotFoundException {
+        ClassLoader loader = ClassUtils.class.getClassLoader();
+        assertEquals(int[][].class, ClassUtils.getClass(loader, "int[][]"));
+    }
+
+    @Test
+    public void getClassWithClassLoaderResolvesPrimitiveAbbreviation() throws ClassNotFoundException {
+        ClassLoader loader = ClassUtils.class.getClassLoader();
+        assertEquals(long.class, ClassUtils.getClass(loader, "long"));
+    }
+
+    @Test(expected = ClassNotFoundException.class)
+    public void getClassThrowsForUnknownClass() throws ClassNotFoundException {
+        ClassUtils.getClass("org.example.DoesNotExist");
+    }
+
+    // ------------------------------------------------------------------
+    // getPublicMethod
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getPublicMethodReturnsMethodWithParameters() throws Exception {
+        Method expected = String.class.getMethod("charAt", int.class);
+        Method actual = ClassUtils.getPublicMethod(String.class, "charAt", new Class<?>[] {int.class});
+        assertEquals(expected, actual);
+    }
+
+    @Test(expected = NoSuchMethodException.class)
+    public void getPublicMethodThrowsWhenMethodMissing() throws Exception {
+        ClassUtils.getPublicMethod(String.class, "noSuchMethodXyz", new Class<?>[0]);
+    }
+
+    // ------------------------------------------------------------------
+    // toClass
+    // ------------------------------------------------------------------
+
+    @Test
+    public void toClassReturnsRuntimeClassOfEachElement() {
+        Object[] input = new Object[] {"text", Integer.valueOf(1)};
+        assertArrayEquals(new Class<?>[] {String.class, Integer.class}, ClassUtils.toClass(input));
+    }
+
+    @Test
+    public void toClassOfNullIsNull() {
+        assertNull(ClassUtils.toClass((Object[]) null));
+    }
+
+    @Test
+    public void toClassOfEmptyArrayIsEmpty() {
+        assertEquals(0, ClassUtils.toClass(new Object[0]).length);
+    }
+
+    // ------------------------------------------------------------------
+    // getShortCanonicalName / getPackageCanonicalName
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getShortCanonicalNameStringNullReturnsEmpty() {
+        assertEquals("", ClassUtils.getShortCanonicalName((String) null));
+    }
+
+    @Test
+    public void getShortCanonicalNameForNestedClassUsesDot() {
+        assertEquals("Map.Entry", ClassUtils.getShortCanonicalName("java.util.Map$Entry"));
+        assertEquals("Map.Entry", ClassUtils.getShortCanonicalName(Map.Entry.class));
+    }
+
+    @Test
+    public void getShortCanonicalNameForObjectArrayBinaryName() {
+        assertEquals("Map.Entry[]", ClassUtils.getShortCanonicalName("[Ljava.util.Map$Entry;"));
+        assertEquals("String[]", ClassUtils.getShortCanonicalName(new String[0], "<null>"));
+    }
+
+    @Test
+    public void getPackageCanonicalNameStringNullReturnsEmpty() {
+        assertEquals("", ClassUtils.getPackageCanonicalName((String) null));
+    }
+
+    @Test
+    public void getPackageCanonicalNameForObjectArrayBinaryName() {
+        assertEquals("java.util", ClassUtils.getPackageCanonicalName("[Ljava.util.Map$Entry;"));
+    }
+
+    @Test
+    public void getPackageCanonicalNameForCanonicalArrayName() {
+        assertEquals("java.lang", ClassUtils.getPackageCanonicalName("java.lang.String[]"));
+    }
+
+    @Test
+    public void getPackageCanonicalNameForNullObjectReturnsFallback() {
+        assertEquals("fallback", ClassUtils.getPackageCanonicalName(null, "fallback"));
+    }
+
+    @Test
+    public void getShortCanonicalNameReturnsSameInstanceNotRequired() {
+        // Garantiza que dos llamadas equivalentes devuelven el mismo valor (determinismo).
+        String first = ClassUtils.getShortCanonicalName("org.apache.commons.lang3.ClassUtils[]");
+        String second = ClassUtils.getShortCanonicalName("org.apache.commons.lang3.ClassUtils[]");
+        assertEquals(first, second);
+        assertSame(first.getClass(), second.getClass());
+    }
+}

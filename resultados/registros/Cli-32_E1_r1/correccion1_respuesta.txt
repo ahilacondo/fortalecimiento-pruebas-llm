@@ -1,0 +1,181 @@
+Los errores estaban en el propio texto del archivo, no en la lógica de las pruebas:
+
+1. **Cercas de Markdown copiadas dentro del código:** el archivo empezaba con dos líneas ```` ```java ````, y el carácter `` ` `` no es válido en Java.
+2. **Literal de cadena roto:** en `testUsageLongOnlyOptionUsesDoubleDash`, la cadena `"usage: app [--verbose]` cruzaba un salto de línea sin cerrarse.
+3. **Archivo truncado:** el fragmento termina en mitad de esa prueba, así que no puedo recuperar las pruebas posteriores. Las que aparecen aquí se conservan tal cual y la clase se cierra correctamente. Si tienes el resto del archivo original, pégalo para completarlo.
+
+Además, sustituí la expresión lambda del `Comparator` por una clase anónima. Así el archivo compila también con niveles de fuente anteriores a Java 8, que es común en proyectos como Cli. El comportamiento que verifica cada prueba no cambia.
+
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Comparator;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link HelpFormatter} que usan exclusivamente
+ * la API pública de la clase.
+ */
+public class HelpFormatterLLMTest
+{
+    private static final String EOL = System.getProperty("line.separator");
+
+    // ------------------------------------------------------------ utilidades
+
+    private static String usageOf(HelpFormatter hf, int width, String app, Options opts)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, width, app, opts);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String optionsOf(HelpFormatter hf, int width, Options opts, int leftPad, int descPad)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, width, opts, leftPad, descPad);
+        pw.flush();
+        return sw.toString();
+    }
+
+    private static String helpOf(HelpFormatter hf, int width, String syntax, String header,
+                                 Options opts, int leftPad, int descPad, String footer, boolean autoUsage)
+    {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printHelp(pw, width, syntax, header, opts, leftPad, descPad, footer, autoUsage);
+        pw.flush();
+        return sw.toString();
+    }
+
+    // ------------------------------------------------------ valores por defecto
+
+    @Test
+    public void testDefaultConstantValues()
+    {
+        assertEquals(74, HelpFormatter.DEFAULT_WIDTH);
+        assertEquals(1, HelpFormatter.DEFAULT_LEFT_PAD);
+        assertEquals(3, HelpFormatter.DEFAULT_DESC_PAD);
+        assertEquals("usage: ", HelpFormatter.DEFAULT_SYNTAX_PREFIX);
+        assertEquals("-", HelpFormatter.DEFAULT_OPT_PREFIX);
+        assertEquals("--", HelpFormatter.DEFAULT_LONG_OPT_PREFIX);
+        assertEquals(" ", HelpFormatter.DEFAULT_LONG_OPT_SEPARATOR);
+        assertEquals("arg", HelpFormatter.DEFAULT_ARG_NAME);
+    }
+
+    @Test
+    public void testNewFormatterUsesDefaultAccessorValues()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        assertEquals(HelpFormatter.DEFAULT_WIDTH, hf.getWidth());
+        assertEquals(HelpFormatter.DEFAULT_LEFT_PAD, hf.getLeftPadding());
+        assertEquals(HelpFormatter.DEFAULT_DESC_PAD, hf.getDescPadding());
+        assertEquals(HelpFormatter.DEFAULT_SYNTAX_PREFIX, hf.getSyntaxPrefix());
+        assertEquals(HelpFormatter.DEFAULT_OPT_PREFIX, hf.getOptPrefix());
+        assertEquals(HelpFormatter.DEFAULT_LONG_OPT_PREFIX, hf.getLongOptPrefix());
+        assertEquals(HelpFormatter.DEFAULT_LONG_OPT_SEPARATOR, hf.getLongOptSeparator());
+        assertEquals(HelpFormatter.DEFAULT_ARG_NAME, hf.getArgName());
+    }
+
+    @Test
+    public void testDefaultNewLineIsLineSeparator()
+    {
+        assertEquals(EOL, new HelpFormatter().getNewLine());
+    }
+
+    @Test
+    public void testDefaultOptionComparatorIsNotNull()
+    {
+        assertNotNull(new HelpFormatter().getOptionComparator());
+    }
+
+    // ------------------------------------------------------ comparador
+
+    @Test
+    public void testSetOptionComparatorStoresInstance()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator<Option> custom = new Comparator<Option>()
+        {
+            public int compare(Option o1, Option o2)
+            {
+                return o1.getKey().compareTo(o2.getKey());
+            }
+        };
+        hf.setOptionComparator(custom);
+        assertSame(custom, hf.getOptionComparator());
+    }
+
+    @Test
+    public void testSetOptionComparatorNullRestoresDefault()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator<Option> custom = new Comparator<Option>()
+        {
+            public int compare(Option o1, Option o2)
+            {
+                return 0;
+            }
+        };
+        hf.setOptionComparator(custom);
+        hf.setOptionComparator(null);
+        assertNotNull(hf.getOptionComparator());
+        assertNotSame(custom, hf.getOptionComparator());
+    }
+
+    // ------------------------------------------------------ accesores simples
+
+    @Test
+    public void testSetLongOptSeparatorRoundTrip()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setLongOptSeparator("=");
+        assertEquals("=", hf.getLongOptSeparator());
+    }
+
+    @Test
+    public void testSetNewLineRoundTrip()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        assertEquals("\n", hf.getNewLine());
+    }
+
+    // ------------------------------------------------------ printUsage
+
+    @Test
+    public void testUsageWithEmptyOptionsContainsOnlyApp()
+    {
+        assertEquals("usage: app" + EOL, usageOf(new HelpFormatter(), 80, "app", new Options()));
+    }
+
+    @Test
+    public void testUsageSingleOptionWithDefaultArgName()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("f", true, "file"));
+        assertEquals("usage: app [-f <arg>]" + EOL, usageOf(new HelpFormatter(), 80, "app", opts));
+    }
+
+    @Test
+    public void testUsageLongOnlyOptionUsesDoubleDash()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option(null, "verbose", false, "Verbose output"));
+        assertEquals("usage: app [--verbose]" + EOL, usageOf(new HelpFormatter(), 80, "app", opts));
+    }
+}
+```
+
+Una observación sobre `testSetOptionComparatorNullRestoresDefault`: en algunas versiones de commons-cli, `setOptionComparator(null)` deja el comparador en `null` en lugar de restaurar el valor por defecto. Si esa prueba falla, el problema estaría en el comportamiento de la librería, no en la prueba. No la modifiqué, porque me pediste conservar lo que verifica cada una.

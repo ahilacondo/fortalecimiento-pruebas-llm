@@ -1,0 +1,8 @@
+1. Verificar que `parse` lanza `MissingOptionException` con la lista de opciones requeridas que faltan.
+2. Verificar que `parse` lanza `MissingArgumentException` cuando la última opción requiere un argumento y no lo recibe.
+3. Verificar que, con `stopAtNonOption` en false, un token desconocido que empieza por guion lanza `UnrecognizedOptionException`.
+4. Verificar que, con `stopAtNonOption` en true, el primer token no reconocido detiene el análisis y todos los tokens restantes se añaden tal cual a los argumentos.
+5. Verificar que, tras el token especial de fin de opciones, todos los tokens siguientes se tratan como argumentos aunque empiecen por guion.
+6. Verificar que `handleProperties` lanza `UnrecognizedOptionException` cuando una clave de las propiedades no corresponde a ninguna opción definida.
+7. Verificar que las propiedades con valor yes, true o 1 activan una opción sin argumento, y que otros valores la omiten.
+8. Verificar la discrepancia entre el Javadoc de `handleConcatenatedOptions` (que indica añadir el token especial de fin de opciones) y el código, que no lo añade al desglosar el token con `stopAtNonOption` activo.

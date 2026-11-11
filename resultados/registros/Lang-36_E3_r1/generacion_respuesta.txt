@@ -1,0 +1,167 @@
+```java
+package org.apache.commons.lang3.math;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales (fase 2) para {@link NumberUtils}.
+ * Cubren los comportamientos no verificados por {@code NumberUtilsTest}.
+ * Solo utilizan la API pública de {@link NumberUtils}.
+ */
+public class NumberUtilsLLMTest {
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    private static Number createNumberOrFail(String str) {
+        return NumberUtils.createNumber(str);
+    }
+
+    private static void assertCreateNumberThrows(String str) {
+        try {
+            Number n = NumberUtils.createNumber(str);
+            fail("createNumber(\"" + str + "\") debería lanzar NumberFormatException pero devolvió " + n);
+        } catch (NumberFormatException expected) {
+            // comportamiento esperado
+        }
+    }
+
+    private static void assertCreateIntegerThrows(String str) {
+        try {
+            Integer n = NumberUtils.createInteger(str);
+            fail("createInteger(\"" + str + "\") debería lanzar NumberFormatException pero devolvió " + n);
+        } catch (NumberFormatException expected) {
+            // comportamiento esperado
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 1. isNumber: casos básicos, hex, notación científica, signos, sufijos e inválidos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void isNumberRejectsNullAndEmptyString() {
+        assertFalse("isNumber(null) debe ser false", NumberUtils.isNumber(null));
+        assertFalse("isNumber(\"\") debe ser false", NumberUtils.isNumber(""));
+    }
+
+    @Test
+    public void isNumberAcceptsPlainIntegers() {
+        assertTrue("isNumber(\"0\") debe ser true", NumberUtils.isNumber("0"));
+        assertTrue("isNumber(\"123\") debe ser true", NumberUtils.isNumber("123"));
+        assertTrue("isNumber(\"-123\") debe ser true", NumberUtils.isNumber("-123"));
+    }
+
+    @Test
+    public void isNumberRejectsLeadingPlusSign() {
+        // El implementado no admite el signo '+' inicial
+        assertFalse("isNumber(\"+1\") debe ser false con la implementación actual",
+                NumberUtils.isNumber("+1"));
+    }
+
+    @Test
+    public void isNumberAcceptsHexadecimal() {
+        assertTrue("isNumber(\"0x1F\") debe ser true", NumberUtils.isNumber("0x1F"));
+        assertTrue("isNumber(\"0x1f\") debe ser true", NumberUtils.isNumber("0x1f"));
+        assertTrue("isNumber(\"-0x1A\") debe ser true", NumberUtils.isNumber("-0x1A"));
+        assertTrue("isNumber(\"0x7FFFFFFF\") debe ser true", NumberUtils.isNumber("0x7FFFFFFF"));
+    }
+
+    @Test
+    public void isNumberRejectsInvalidHexadecimal() {
+        assertFalse("isNumber(\"0x\") debe ser false", NumberUtils.isNumber("0x"));
+        assertFalse("isNumber(\"-0x\") debe ser false", NumberUtils.isNumber("-0x"));
+        assertFalse("isNumber(\"0xG\") debe ser false", NumberUtils.isNumber("0xG"));
+        assertFalse("isNumber(\"0x1G\") debe ser false", NumberUtils.isNumber("0x1G"));
+        assertFalse("isNumber(\"0X1F\") debe ser false (prefijo en mayúscula no soportado)",
+                NumberUtils.isNumber("0X1F"));
+    }
+
+    @Test
+    public void isNumberAcceptsScientificNotation() {
+        assertTrue("isNumber(\"1.5e10\") debe ser true", NumberUtils.isNumber("1.5e10"));
+        assertTrue("isNumber(\"1e5\") debe ser true", NumberUtils.isNumber("1e5"));
+        assertTrue("isNumber(\"1E-5\") debe ser true", NumberUtils.isNumber("1E-5"));
+        assertTrue("isNumber(\"1.5E+10\") debe ser true", NumberUtils.isNumber("1.5E+10"));
+        assertTrue("isNumber(\"-2.5e3\") debe ser true", NumberUtils.isNumber("-2.5e3"));
+    }
+
+    @Test
+    public void isNumberRejectsInvalidScientificNotation() {
+        assertFalse("isNumber(\"1e\") debe ser false", NumberUtils.isNumber("1e"));
+        assertFalse("isNumber(\"1E\") debe ser false", NumberUtils.isNumber("1E"));
+        assertFalse("isNumber(\"e5\") debe ser false", NumberUtils.isNumber("e5"));
+        assertFalse("isNumber(\"1e5e5\") debe ser false (dos exponentes)", NumberUtils.isNumber("1e5e5"));
+        assertFalse("isNumber(\"1e+\") debe ser false", NumberUtils.isNumber("1e+"));
+        assertFalse("isNumber(\"1E-\") debe ser false", NumberUtils.isNumber("1E-"));
+        assertFalse("isNumber(\"1.2.3\") debe ser false (dos puntos decimales)", NumberUtils.isNumber("1.2.3"));
+    }
+
+    @Test
+    public void isNumberRejectsLoneDotSignAndMisplacedSigns() {
+        assertFalse("isNumber(\".\") debe ser false", NumberUtils.isNumber("."));
+        assertFalse("isNumber(\"-\") debe ser false", NumberUtils.isNumber("-"));
+        assertFalse("isNumber(\"+\") debe ser false", NumberUtils.isNumber("+"));
+        assertFalse("isNumber(\"--5\") debe ser false", NumberUtils.isNumber("--5"));
+        assertFalse("isNumber(\"1-2\") debe ser false", NumberUtils.isNumber("1-2"));
+    }
+
+    @Test
+    public void isNumberAcceptsTypeQualifiers() {
+        assertTrue("isNumber(\"1.5f\") debe ser true", NumberUtils.isNumber("1.5f"));
+        assertTrue("isNumber(\"1.5F\") debe ser true", NumberUtils.isNumber("1.5F"));
+        assertTrue("isNumber(\"1.5d\") debe ser true", NumberUtils.isNumber("1.5d"));
+        assertTrue("isNumber(\"1.5D\") debe ser true", NumberUtils.isNumber("1.5D"));
+        assertTrue("isNumber(\"10L\") debe ser true", NumberUtils.isNumber("10L"));
+        assertTrue("isNumber(\"10l\") debe ser true", NumberUtils.isNumber("10l"));
+    }
+
+    @Test
+    public void isNumberRejectsLongSuffixWithExponentOrUnknownSuffix() {
+        assertFalse("isNumber(\"1e5L\") debe ser false (no se admite L con exponente)",
+                NumberUtils.isNumber("1e5L"));
+        assertFalse("isNumber(\"1.5x\") debe ser false", NumberUtils.isNumber("1.5x"));
+    }
+
+    @Test
+    public void isNumberRejectsNonAsciiDigits() {
+        // isNumber solo reconoce dígitos ASCII '0'-'9'
+        assertFalse("isNumber con dígitos arábigo-indios debe ser false",
+                NumberUtils.isNumber("\u0661\u0662"));
+        assertFalse("isNumber con dígitos de ancho completo debe ser false",
+                NumberUtils.isNumber("\uFF11"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 8 (parte isDigits). Dígitos Unicode, superíndices y combinación de signos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void isDigitsAcceptsUnicodeDecimalDigits() {
+        assertTrue("isDigits con dígitos arábigo-indios debe ser true",
+                NumberUtils.isDigits("\u0661\u0662\u0663"));
+        assertTrue("isDigits con dígitos de ancho completo debe ser true",
+                NumberUtils.isDigits("\uFF11\uFF12"));
+    }
+
+    @Test
+    public void isDigitsRejectsSuperscriptDigits() {
+        assertFalse("isDigits con superíndice '²' debe ser false",
+                NumberUtils.isDigits("\u00B2"));
+    }
+
+    @Test
+    public void isDigitsRejectsSignCombinations() {
+        assertFalse("isDigits(\"+1\") debe ser false", NumberUtils.isDigits("+1"));
+        assertFalse("isDigits(\"-1\") debe ser false", NumberUtils.isDigits("-1"));
+        assertFalse("isDigits(\"+\") debe ser false", NumberUtils.isDigits("+"

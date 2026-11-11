@@ -1,0 +1,8 @@
+1. formatDuration(durationMillis, format, padWithZeros) con padWithZeros=false no genera relleno con ceros; las pruebas solo usan el caso con relleno.
+2. formatDurationHMS debe expresar las horas superiores a 24 como horas acumuladas, sin convertirlas en días; las pruebas solo llegan a 1 hora.
+3. formatDurationISO debe representar duraciones de uno o más días en el campo de días, con horas, minutos y segundos inferiores; las pruebas solo cubren duraciones menores de un día.
+4. formatDurationWords debe devolver "N days" para valores de 2 a 30 días; el bucle de prueba no tiene aserciones y su comentario muestra que el resultado es incorrecto.
+5. formatPeriodISO(startMillis, endMillis) debe devolver el periodo ISO8601; ninguna prueba invoca este método directamente.
+6. Token.hashCode debe devolver el mismo valor para tokens con el mismo valor y distinto recuento (por ejemplo, 'TT' y 'TTTT'); no hay pruebas de este contrato.
+7. Token.toString debe devolver la representación del valor repetida tantas veces como indique el recuento; no hay pruebas de este método.
+8. formatPeriod con un TimeZone distinto debe calcular los campos según esa zona horaria; solo se prueba la zona GMT-3 en un caso concreto.

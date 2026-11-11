@@ -1,0 +1,343 @@
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Collection;
+import java.util.List;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Options}, orientadas a los requisitos de la documentación
+ * que la suite existente no cubre. Solo se usa la API pública de la clase.
+ */
+@SuppressWarnings({"deprecation", "rawtypes", "unchecked"})
+public class OptionsLLMTest
+{
+    /**
+     * Requisito 1: un grupo obligatorio añadido con addOptionGroup debe aparecer en getRequiredOptions.
+     */
+    @Test
+    public void testRequiredOptionGroupAppearsInRequiredOptions()
+    {
+        Options options = new Options();
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", "alpha", false, "alpha option"));
+        group.addOption(new Option("b", "beta", false, "beta option"));
+        group.setRequired(true);
+
+        options.addOptionGroup(group);
+
+        List required = options.getRequiredOptions();
+        assertNotNull("getRequiredOptions no debe devolver null", required);
+        assertTrue("El grupo obligatorio debe estar en getRequiredOptions", required.contains(group));
+        assertEquals("Solo debe haber un elemento obligatorio", 1, required.size());
+    }
+
+    /**
+     * Requisito 1 (complemento): un grupo no obligatorio no debe aparecer en getRequiredOptions.
+     */
+    @Test
+    public void testNonRequiredOptionGroupNotInRequiredOptions()
+    {
+        Options options = new Options();
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("a", "alpha", false, "alpha option"));
+        group.setRequired(false);
+
+        options.addOptionGroup(group);
+
+        assertTrue("Un grupo no obligatorio no debe aparecer en getRequiredOptions",
+                   options.getRequiredOptions().isEmpty());
+    }
+
+    /**
+     * Requisito 2: addOptionGroup debe forzar required=false en todas las opciones del grupo.
+     */
+    @Test
+    public void testAddOptionGroupForcesOptionsNotRequired()
+    {
+        Options options = new Options();
+
+        Option a = new Option("a", "alpha", false, "alpha option");
+        a.setRequired(true);
+        Option b = new Option("b", "beta", false, "beta option");
+        b.setRequired(true);
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(a);
+        group.addOption(b);
+        group.setRequired(true);
+
+        options.addOptionGroup(group);
+
+        assertFalse("La opción 'a' no puede ser obligatoria dentro de un grupo", a.isRequired());
+        assertFalse("La opción 'b' no puede ser obligatoria dentro de un grupo", b.isRequired());
+    }
+
+    /**
+     * Requisito 2 (complemento): ninguna opción del grupo debe quedar en la lista de obligatorias
+     * individuales; solo el propio grupo puede figurar allí.
+     */
+    @Test
+    public void testAddOptionGroupDoesNotRegisterMembersAsRequired()
+    {
+        Options options = new Options();
+
+        Option a = new Option("a", "alpha", false, "alpha option");
+        a.setRequired(true);
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(a);
+        group.setRequired(true);
+
+        options.addOptionGroup(group);
+
+        List required = options.getRequiredOptions();
+        assertFalse("La clave de la opción no debe aparecer como obligatoria", required.contains("a"));
+        assertEquals("Solo el grupo debe figurar como obligatorio", 1, required.size());
+        assertSame("El elemento obligatorio debe ser el grupo", group, required.get(0));
+    }
+
+    /**
+     * Requisito 3: getOptionGroup devuelve el grupo al que pertenece una opción.
+     */
+    @Test
+    public void testGetOptionGroupReturnsOwningGroup()
+    {
+        Options options = new Options();
+
+        Option a = new Option("a", "alpha", false, "alpha option");
+        Option b = new Option("b", "beta", false, "beta option");
+        Option x = new Option("x", "xray", false, "xray option");
+
+        OptionGroup group1 = new OptionGroup();
+        group1.addOption(a);
+        group1.addOption(b);
+
+        OptionGroup group2 = new OptionGroup();
+        group2.addOption(x);
+
+        options.addOptionGroup(group1);
+        options.addOptionGroup(group2);
+
+        assertSame("'a' pertenece a group1", group1, options.getOptionGroup(a));
+        assertSame("'b' pertenece a group1", group1, options.getOptionGroup(b));
+        assertSame("'x' pertenece a group2", group2, options.getOptionGroup(x));
+    }
+
+    /**
+     * Requisito 3: getOptionGroup devuelve null si la opción no pertenece a ningún grupo.
+     */
+    @Test
+    public void testGetOptionGroupReturnsNullForOptionWithoutGroup()
+    {
+        Options options = new Options();
+
+        Option grouped = new Option("g", "group", false, "grouped option");
+        OptionGroup group = new OptionGroup();
+        group.addOption(grouped);
+        options.addOptionGroup(group);
+
+        Option plain = new Option("p", "plain", false, "plain option");
+        options.addOption(plain);
+
+        assertNull("Una opción sin grupo debe devolver null", options.getOptionGroup(plain));
+    }
+
+    /**
+     * Requisito 3 (complemento): una opción que nunca fue añadida a Options tampoco pertenece a un grupo.
+     */
+    @Test
+    public void testGetOptionGroupReturnsNullForUnknownOption()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha");
+
+        Option unknown = new Option("z", "zeta", false, "unknown");
+        assertNull("Una opción desconocida debe devolver null", options.getOptionGroup(unknown));
+    }
+
+    /**
+     * Requisito 4: addOption(opt, description) crea una opción que no acepta argumento.
+     */
+    @Test
+    public void testAddOptionWithoutHasArgCreatesOptionWithoutArgument()
+    {
+        Options options = new Options();
+        options.addOption("a", "toggle a");
+
+        Option opt = options.getOption("a");
+        assertNotNull("La opción 'a' debe existir", opt);
+        assertFalse("La opción creada con (opt, description) no debe aceptar argumento", opt.hasArg());
+        assertEquals("La descripción debe conservarse", "toggle a", opt.getDescription());
+    }
+
+    /**
+     * Requisito 5: addOption(opt, hasArg, description) respeta el valor de hasArg.
+     */
+    @Test
+    public void testAddOptionRespectsHasArgTrue()
+    {
+        Options options = new Options();
+        options.addOption("b", true, "requires value");
+
+        Option opt = options.getOption("b");
+        assertNotNull("La opción 'b' debe existir", opt);
+        assertTrue("La opción con hasArg=true debe aceptar argumento", opt.hasArg());
+    }
+
+    /**
+     * Requisito 5 (complemento): hasArg=false produce una opción sin argumento.
+     */
+    @Test
+    public void testAddOptionRespectsHasArgFalse()
+    {
+        Options options = new Options();
+        options.addOption("c", false, "no value");
+
+        Option opt = options.getOption("c");
+        assertNotNull("La opción 'c' debe existir", opt);
+        assertFalse("La opción con hasArg=false no debe aceptar argumento", opt.hasArg());
+    }
+
+    /**
+     * Requisito 6: getOption localiza una opción por su nombre largo y devuelve la misma
+     * instancia que con el nombre corto.
+     */
+    @Test
+    public void testGetOptionByLongNameReturnsSameOptionAsShortName()
+    {
+        Options options = new Options();
+        options.addOption("v", "verbose", false, "verbose output");
+
+        Option byShort = options.getOption("v");
+        Option byLong = options.getOption("verbose");
+
+        assertNotNull("Debe localizarse por nombre corto", byShort);
+        assertNotNull("Debe localizarse por nombre largo", byLong);
+        assertSame("Nombre corto y largo deben devolver la misma opción", byShort, byLong);
+        assertEquals("verbose output", byLong.getDescription());
+    }
+
+    /**
+     * Requisito 7: getOption ignora hasta dos guiones iniciales en el nombre consultado.
+     */
+    @Test
+    public void testGetOptionIgnoresLeadingHyphens()
+    {
+        Options options = new Options();
+        options.addOption("v", "verbose", false, "verbose output");
+
+        Option expected = options.getOption("v");
+        assertNotNull(expected);
+
+        assertSame("Un guion inicial debe ignorarse (nombre corto)", expected, options.getOption("-v"));
+        assertSame("Dos guiones iniciales deben ignorarse (nombre corto)", expected, options.getOption("--v"));
+        assertSame("Un guion inicial debe ignorarse (nombre largo)", expected, options.getOption("-verbose"));
+        assertSame("Dos guiones iniciales deben ignorarse (nombre largo)", expected, options.getOption("--verbose"));
+    }
+
+    /**
+     * Requisito 7: hasOption ignora hasta dos guiones iniciales en el nombre consultado.
+     */
+    @Test
+    public void testHasOptionIgnoresLeadingHyphens()
+    {
+        Options options = new Options();
+        options.addOption("v", "verbose", false, "verbose output");
+
+        assertTrue("hasOption debe aceptar nombre corto sin guiones", options.hasOption("v"));
+        assertTrue("hasOption debe aceptar nombre corto con un guion", options.hasOption("-v"));
+        assertTrue("hasOption debe aceptar nombre corto con dos guiones", options.hasOption("--v"));
+        assertTrue("hasOption debe aceptar nombre largo sin guiones", options.hasOption("verbose"));
+        assertTrue("hasOption debe aceptar nombre largo con un guion", options.hasOption("-verbose"));
+        assertTrue("hasOption debe aceptar nombre largo con dos guiones", options.hasOption("--verbose"));
+    }
+
+    /**
+     * Requisito 8: getOptions devuelve una colección de solo lectura que rechaza modificaciones.
+     */
+    @Test
+    public void testGetOptionsIsReadOnly()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha");
+        options.addOption("b", "beta");
+
+        Collection<Option> view = options.getOptions();
+        int sizeBefore = view.size();
+
+        try
+        {
+            view.add(new Option("c", "gamma"));
+            fail("getOptions debe ser de solo lectura: add debe lanzar UnsupportedOperationException");
+        }
+        catch (UnsupportedOperationException expected)
+        {
+            // esperado
+        }
+
+        try
+        {
+            view.clear();
+            fail("getOptions debe ser de solo lectura: clear debe lanzar UnsupportedOperationException");
+        }
+        catch (UnsupportedOperationException expected)
+        {
+            // esperado
+        }
+
+        assertEquals("La colección no debe cambiar tras intentos de modificación", sizeBefore, options.getOptions().size());
+        assertTrue("Las opciones originales deben seguir presentes", options.hasOption("a"));
+        assertTrue("Las opciones originales deben seguir presentes", options.hasOption("b"));
+    }
+
+    /**
+     * Requisito 8: getRequiredOptions devuelve una lista de solo lectura que rechaza modificaciones.
+     */
+    @Test
+    public void testGetRequiredOptionsIsReadOnly()
+    {
+        Options options = new Options();
+
+        Option required = new Option("r", "required", false, "required option");
+        required.setRequired(true);
+        options.addOption(required);
+
+        List list = options.getRequiredOptions();
+        int sizeBefore = list.size();
+        assertEquals("Debe haber una opción obligatoria", 1, sizeBefore);
+
+        try
+        {
+            list.add("otra");
+            fail("getRequiredOptions debe ser de solo lectura: add debe lanzar UnsupportedOperationException");
+        }
+        catch (UnsupportedOperationException expected)
+        {
+            // esperado
+        }
+
+        try
+        {
+            list.clear();
+            fail("getRequiredOptions debe ser de solo lectura: clear debe lanzar UnsupportedOperationException");
+        }
+        catch (UnsupportedOperationException expected)
+        {
+            // esperado
+        }
+
+        assertEquals("La lista no debe cambiar tras intentos de modificación", sizeBefore, options.getRequiredOptions().size());
+        assertTrue("La clave obligatoria debe seguir presente", options.getRequiredOptions().contains("r"));
+    }
+}

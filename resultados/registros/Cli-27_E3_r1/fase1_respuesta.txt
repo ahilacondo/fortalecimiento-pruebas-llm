@@ -1,0 +1,8 @@
+1. `setSelected(null)` restablece la selección previa a `null`, y no hay pruebas que lo verifiquen.
+2. Volver a seleccionar la misma opción del grupo no lanza `AlreadySelectedException`; `testTwoOptionsFromGroup` solo cubre dos opciones distintas.
+3. `getSelected()` devuelve `null` cuando ningún elemento del grupo ha sido seleccionado.
+4. Tras lanzar `AlreadySelectedException`, la selección original del grupo permanece sin cambios (solo se comprueba indirectamente mediante `getSelected()`).
+5. `addOption` con una clave ya existente sustituye la opción anterior, por lo que `getNames()` y `getOptions()` no crecen.
+6. `isRequired()` devuelve `false` por defecto, y `setRequired` cambia el valor de forma correcta; no hay pruebas para ello.
+7. `toString()` de un grupo vacío devuelve `"[]"`, y `toString()` prefiere la forma corta (`-x`) cuando la opción tiene `opt` y `longOpt` a la vez.
+8. La clase es `Serializable`, pero ninguna prueba verifica que un `OptionGroup` con opciones y selección se serialice y deserialice correctamente.

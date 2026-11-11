@@ -1,0 +1,401 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Comparator;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link HelpFormatter} que usan solo su API pública.
+ */
+public class HelpFormatterLLMTest
+{
+    private static final String EOL = System.lineSeparator();
+
+    @Test
+    public void testDefaultConstants()
+    {
+        assertEquals(74, HelpFormatter.DEFAULT_WIDTH);
+        assertEquals(1, HelpFormatter.DEFAULT_LEFT_PAD);
+        assertEquals(3, HelpFormatter.DEFAULT_DESC_PAD);
+        assertEquals("usage: ", HelpFormatter.DEFAULT_SYNTAX_PREFIX);
+        assertEquals("-", HelpFormatter.DEFAULT_OPT_PREFIX);
+        assertEquals("--", HelpFormatter.DEFAULT_LONG_OPT_PREFIX);
+        assertEquals("arg", HelpFormatter.DEFAULT_ARG_NAME);
+    }
+
+    @Test
+    public void testDefaultAccessorValues()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        assertEquals(74, hf.getWidth());
+        assertEquals(1, hf.getLeftPadding());
+        assertEquals(3, hf.getDescPadding());
+        assertEquals("usage: ", hf.getSyntaxPrefix());
+        assertEquals("-", hf.getOptPrefix());
+        assertEquals("--", hf.getLongOptPrefix());
+        assertEquals("arg", hf.getArgName());
+        assertEquals(System.getProperty("line.separator"), hf.getNewLine());
+    }
+
+    @Test
+    public void testSetWidthRoundTrip()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setWidth(120);
+        assertEquals(120, hf.getWidth());
+    }
+
+    @Test
+    public void testSetOptPrefixRoundTrip()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setOptPrefix("+");
+        assertEquals("+", hf.getOptPrefix());
+    }
+
+    @Test
+    public void testDefaultOptionComparatorIsCaseInsensitive()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator cmp = hf.getOptionComparator();
+        assertNotNull(cmp);
+        // "b" > "A" ignoring case
+        assertTrue(cmp.compare(new Option("b", "x"), new Option("A", "y")) > 0);
+        assertTrue(cmp.compare(new Option("A", "x"), new Option("b", "y")) < 0);
+    }
+
+    @Test
+    public void testSetOptionComparatorNullRestoresDefault()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setOptionComparator(new Comparator()
+        {
+            public int compare(Object o1, Object o2)
+            {
+                return 0;
+            }
+        });
+        hf.setOptionComparator(null);
+
+        Comparator cmp = hf.getOptionComparator();
+        assertNotNull(cmp);
+        assertTrue(cmp.compare(new Option("b", "x"), new Option("A", "y")) > 0);
+    }
+
+    @Test
+    public void testSetOptionComparatorStoresCustomComparator()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        Comparator custom = new Comparator()
+        {
+            public int compare(Object o1, Object o2)
+            {
+                return 0;
+            }
+        };
+        hf.setOptionComparator(custom);
+        assertSame(custom, hf.getOptionComparator());
+    }
+
+    @Test
+    public void testPrintHelpRejectsEmptySyntaxWithWriter()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        try
+        {
+            hf.printHelp(pw, 80, "", null, new Options(), 1, 3, null, false);
+            fail("Se esperaba IllegalArgumentException para sintaxis vacía");
+        }
+        catch (IllegalArgumentException e)
+        {
+            // esperado
+        }
+    }
+
+    @Test
+    public void testPrintUsageWithoutOptions()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, 80, "app", new Options());
+        pw.flush();
+        assertEquals("usage: app" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintUsageSortsIgnoringCase()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("c", "third"));
+        opts.addOption(new Option("A", "first"));
+        opts.addOption(new Option("b", "second"));
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, 80, "app", opts);
+        pw.flush();
+        assertEquals("usage: app [-A] [-b] [-c]" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintUsageRequiredOptionHasNoBrackets()
+    {
+        Option f = new Option("f", true, "file");
+        f.setArgName("file");
+        f.setRequired(true);
+
+        Options opts = new Options();
+        opts.addOption(f);
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, 80, "app", opts);
+        pw.flush();
+        assertEquals("usage: app -f <file>" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintUsageUsesCustomSyntaxPrefix()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "first"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setSyntaxPrefix("Use: ");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printUsage(pw, 80, "app", opts);
+        pw.flush();
+        assertEquals("Use: app [-a]" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintWrappedWrapsAtWordBoundary()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printWrapped(pw, 10, "aaaa aaaa aaaa");
+        pw.flush();
+        assertEquals("aaaa aaaa\naaaa" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintWrappedKeepsExplicitNewLines()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printWrapped(pw, 80, "line1\nline2");
+        pw.flush();
+        assertEquals("line1\nline2" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintWrappedTrimsTrailingWhitespace()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printWrapped(pw, 80, "abc   ");
+        pw.flush();
+        assertEquals("abc" + EOL, sw.toString());
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testPrintWrappedNoRoomForIndentThrows()
+    {
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printWrapped(pw, 10, 10, "aaaa aaaa aaaa");
+    }
+
+    @Test
+    public void testPrintOptionsSingleShortOption()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, "desc"));
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals(" -a   desc" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintOptionsLongOptionWithArgName()
+    {
+        Option a = new Option("a", "aaa", true, "d");
+        a.setArgName("file");
+
+        Options opts = new Options();
+        opts.addOption(a);
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals(" -a,--aaa <file>   d" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintOptionsWithoutShortOpt()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option(null, "bbb", false, "bbbbbbb"));
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals("    --bbb   bbbbbbb" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintOptionsUsesCustomOptPrefix()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, "desc"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setOptPrefix("+");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals(" +a   desc" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintOptionsUsesCustomLongOptPrefix()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "aaa", false, "d"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setLongOptPrefix("++");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals(" -a,++aaa   d" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintOptionsRespectsCustomComparator()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", "aa"));
+        opts.addOption(new Option("b", "bb"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        hf.setOptionComparator(new Comparator()
+        {
+            public int compare(Object o1, Object o2)
+            {
+                Option opt1 = (Option) o1;
+                Option opt2 = (Option) o2;
+                return opt2.getKey().compareToIgnoreCase(opt1.getKey());
+            }
+        });
+
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printOptions(pw, 80, opts, 1, 3);
+        pw.flush();
+        assertEquals(" -b   bb\n -a   aa" + EOL, sw.toString());
+    }
+
+    @Test
+    public void testPrintHelpWithHeaderAndFooter()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, "desc"));
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printHelp(pw, 80, "app", "HEADER", opts, 1, 3, "FOOTER", false);
+        pw.flush();
+        assertEquals(
+                "usage: app" + EOL +
+                "HEADER" + EOL +
+                " -a   desc" + EOL +
+                "FOOTER" + EOL,
+                sw.toString());
+    }
+
+    @Test
+    public void testPrintHelpIgnoresBlankHeaderAndEmptyFooter()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, "desc"));
+
+        HelpFormatter hf = new HelpFormatter();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printHelp(pw, 80, "app", "   ", opts, 1, 3, "", false);
+        pw.flush();
+        assertEquals(
+                "usage: app" + EOL +
+                " -a   desc" + EOL,
+                sw.toString());
+    }
+
+    @Test
+    public void testPrintHelpWithAutoUsageListsOptions()
+    {
+        Options opts = new Options();
+        opts.addOption(new Option("a", false, "aa"));
+        opts.addOption(new Option("b", false, "bb"));
+
+        HelpFormatter hf = new HelpFormatter();
+        hf.setNewLine("\n");
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        hf.printHelp(pw, 80, "app", null, opts, 1, 3, null, true);
+        pw.flush();
+        assertEquals(
+                "usage: app [-a] [-b]" + EOL +
+                " -a   aa\n -b   bb" + EOL,
+                sw.toString());
+    }
+}

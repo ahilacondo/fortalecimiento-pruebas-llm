@@ -1,0 +1,136 @@
+El error se debe a que el texto explicativo al principio ("Este archivo añade pruebas...") y la primera línea de la cerca de código formaban parte del `.java`, antes de `package`. Lo he eliminado.
+
+El fragmento original también estaba truncado al final, en `testTokenHashCodeFromLexxIgnoresCount`. No tengo la firma exacta de `lexx`, así que he completado esa prueba con una suposición razonable (`lexx(String)` devuelve `Token[]`). Conviene verificarla contra el código fuente real antes de ejecutar la suite.
+
+```java
+package org.apache.commons.lang.time;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.TimeZone;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DurationFormatUtils} (JUnit 4).
+ */
+public class DurationFormatUtilsLLMTest {
+
+    private static final long MILLIS_PER_SECOND = 1000L;
+    private static final long MILLIS_PER_MINUTE = 60L * MILLIS_PER_SECOND;
+    private static final long MILLIS_PER_HOUR = 60L * MILLIS_PER_MINUTE;
+    private static final long MILLIS_PER_DAY = 24L * MILLIS_PER_HOUR;
+
+    // ------------------------------------------------------------------
+    // Requisito 1: padWithZeros = false no genera relleno con ceros
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFormatDurationWithoutPaddingOmitsLeadingZeros() {
+        // 60 000 ms = 1 minuto, 0 segundos
+        assertEquals("1:0", DurationFormatUtils.formatDuration(60000L, "mm:ss", false));
+        // 5 000 ms = 5 segundos
+        assertEquals("5", DurationFormatUtils.formatDuration(5000L, "ss", false));
+        assertEquals("0", DurationFormatUtils.formatDuration(0L, "yyyy", false));
+    }
+
+    @Test
+    public void testFormatDurationWithPaddingPadsLeadingZeros() {
+        // Mismo caso que el anterior, pero con relleno: confirma la diferencia de comportamiento.
+        assertEquals("01:00", DurationFormatUtils.formatDuration(60000L, "mm:ss", true));
+        assertEquals("05", DurationFormatUtils.formatDuration(5000L, "ss", true));
+        assertEquals("0000", DurationFormatUtils.formatDuration(0L, "yyyy", true));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: formatDurationHMS expresa las horas acumuladas (>24)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFormatDurationHMSKeepsHoursAbove24() {
+        assertEquals("25:00:00.000", DurationFormatUtils.formatDurationHMS(25L * MILLIS_PER_HOUR));
+        assertEquals("100:00:00.000", DurationFormatUtils.formatDurationHMS(100L * MILLIS_PER_HOUR));
+    }
+
+    @Test
+    public void testFormatDurationHMSMixedComponents() {
+        // 1 h, 2 min, 3 s, 4 ms
+        long millis = MILLIS_PER_HOUR + 2L * MILLIS_PER_MINUTE + 3L * MILLIS_PER_SECOND + 4L;
+        assertEquals("1:02:03.004", DurationFormatUtils.formatDurationHMS(millis));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: formatDurationISO representa días en el campo de días
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFormatDurationISOWithOneDayAndTime() {
+        // 1 día, 2 h, 3 min, 4.005 s
+        long millis = MILLIS_PER_DAY + 2L * MILLIS_PER_HOUR + 3L * MILLIS_PER_MINUTE
+                + 4L * MILLIS_PER_SECOND + 5L;
+        assertEquals("P0Y0M1DT2H3M4.005S", DurationFormatUtils.formatDurationISO(millis));
+    }
+
+    @Test
+    public void testFormatDurationISOWithWholeDays() {
+        assertEquals("P0Y0M3DT0H0M0.000S", DurationFormatUtils.formatDurationISO(3L * MILLIS_PER_DAY));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: formatDurationWords devuelve "N days" de 2 a 30 días
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFormatDurationWordsDaysFrom2To30() {
+        for (int i = 2; i <= 30; i++) {
+            // Se usa long para evitar el desbordamiento de int en la multiplicación.
+            long millis = i * MILLIS_PER_DAY;
+            String expected = i + " days 0 hours 0 minutes 0 seconds";
+            assertEquals("Días: " + i, expected,
+                    DurationFormatUtils.formatDurationWords(millis, false, false));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: formatPeriodISO(start, end) devuelve el periodo ISO8601
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFormatPeriodISOShortPeriod() {
+        assertEquals("P0Y0M0DT0H1M15.321S", DurationFormatUtils.formatPeriodISO(0L, 75321L));
+        assertEquals("P0Y0M0DT0H0M0.000S", DurationFormatUtils.formatPeriodISO(1000L, 1000L));
+    }
+
+    @Test
+    public void testFormatPeriodISOWithDaysBelowThreshold() {
+        // 3 días + 4.005 s, periodo menor de 28 días: no depende de la zona horaria.
+        long end = 3L * MILLIS_PER_DAY + 4005L;
+        assertEquals("P0Y0M3DT0H0M4.005S", DurationFormatUtils.formatPeriodISO(0L, end));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: Token.hashCode coincide para mismo valor y distinto recuento
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testTokenHashCodeIgnoresCount() {
+        DurationFormatUtils.Token twoY = new DurationFormatUtils.Token(DurationFormatUtils.y, 2);
+        DurationFormatUtils.Token fourY = new DurationFormatUtils.Token(DurationFormatUtils.y, 4);
+        assertEquals(twoY.hashCode(), fourY.hashCode());
+        assertEquals(DurationFormatUtils.y.hashCode(), fourY.hashCode());
+    }
+
+    @Test
+    public void testTokenHashCodeFromLexxIgnoresCount() {
+        // Reconstruido: el original estaba truncado. Verificar la firma real de lexx.
+        DurationFormatUtils.Token[] short1 = DurationFormatUtils.lexx("y");
+        DurationFormatUtils.Token[] long1 = DurationFormatUtils.lexx("yyyy");
+        assertNotNull(short1);
+        assertNotNull(long1);
+        assertEquals(short1[0].hashCode(), long1[0].hashCode());
+    }
+}
+```

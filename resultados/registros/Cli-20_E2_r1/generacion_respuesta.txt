@@ -1,0 +1,136 @@
+```java
+package org.apache.commons.cli;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link PosixParser}, centradas en la API pública
+ * (parse) y en los caminos de ejecución no cubiertos por la suite existente:
+ * sintaxis {@code --opt=valor}, ráfagas de opciones con argumento separado,
+ * bursting con caracteres desconocidos en modo stopAtNonOption, y
+ * tratamiento de tokens no opción.
+ */
+public class PosixParserLLMTest {
+
+    private static Options createOptions() {
+        return new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+    }
+
+    @Test
+    public void testLongOptionWithEqualsSetsValue() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "--bfile=toast" });
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("El valor de -b debe ser 'toast'", "toast", cl.getOptionValue("b"));
+        Assert.assertEquals("No deben quedar argumentos extra", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testLongOptionWithEqualsSplitsOnFirstEqualsOnly() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "--bfile=a=b" });
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("El valor debe conservar el segundo '='", "a=b", cl.getOptionValue("b"));
+        Assert.assertEquals("No deben quedar argumentos extra", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testLongFlagOptionWithEqualsLeavesValueAsArgument() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "--enable-a=x" });
+
+        Assert.assertTrue("La opción -a debe estar presente", cl.hasOption("a"));
+        Assert.assertEquals("El valor tras '=' debe quedar como argumento extra", 1, cl.getArgList().size());
+        Assert.assertEquals("x", cl.getArgList().get(0));
+    }
+
+    @Test
+    public void testBurstedClusterWithArgumentInNextToken() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "-cb", "toast" });
+
+        Assert.assertTrue("La opción -c debe estar presente", cl.hasOption("c"));
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("toast", cl.getOptionValue("b"));
+        Assert.assertEquals("No deben quedar argumentos extra", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testStopAtNonOptionWithUnknownLeadingCharInCluster() throws Exception {
+        // 'z' no es opción: con stopAtNonOption, toda la ráfaga y el resto pasan como argumentos.
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "-zab", "foo" }, true);
+
+        Assert.assertFalse("La opción -a no debe activarse", cl.hasOption("a"));
+        Assert.assertFalse("La opción -b no debe activarse", cl.hasOption("b"));
+        Assert.assertEquals("Deben quedar 2 argumentos", 2, cl.getArgList().size());
+        Assert.assertEquals("zab", cl.getArgList().get(0));
+        Assert.assertEquals("foo", cl.getArgList().get(1));
+    }
+
+    @Test
+    public void testStopAtNonOptionConsumesArgumentThenStops() throws Exception {
+        String[] args = new String[] { "-b", "toast", "foo", "-a" };
+        CommandLine cl = new PosixParser().parse(createOptions(), args, true);
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("toast", cl.getOptionValue("b"));
+        Assert.assertFalse("La opción -a no debe procesarse tras un no-opción", cl.hasOption("a"));
+        Assert.assertEquals("Deben quedar 2 argumentos", 2, cl.getArgList().size());
+        Assert.assertEquals("foo", cl.getArgList().get(0));
+        Assert.assertEquals("-a", cl.getArgList().get(1));
+    }
+
+    @Test
+    public void testNonOptionBeforeOptionWithoutStopIsKept() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "foo", "-a" });
+
+        Assert.assertTrue("La opción -a debe procesarse sin detenerse", cl.hasOption("a"));
+        Assert.assertEquals("Debe quedar 1 argumento", 1, cl.getArgList().size());
+        Assert.assertEquals("foo", cl.getArgList().get(0));
+    }
+
+    @Test
+    public void testDoubleDashPreservesFollowingOptionLikeTokens() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[] { "-a", "--", "-c", "x" });
+
+        Assert.assertTrue("La opción -a debe estar presente", cl.hasOption("a"));
+        Assert.assertFalse("Tras '--' la opción -c no debe reconocerse", cl.hasOption("c"));
+        Assert.assertEquals("Deben quedar 2 argumentos", 2, cl.getArgList().size());
+        Assert.assertEquals("-c", cl.getArgList().get(0));
+        Assert.assertEquals("x", cl.getArgList().get(1));
+    }
+
+    @Test
+    public void testEmptyArgumentsProduceNoOptionsAndNoArgs() throws Exception {
+        CommandLine cl = new PosixParser().parse(createOptions(), new String[0]);
+
+        Assert.assertFalse("-a no debe estar presente", cl.hasOption("a"));
+        Assert.assertFalse("-b no debe estar presente", cl.hasOption("b"));
+        Assert.assertFalse("-c no debe estar presente", cl.hasOption("c"));
+        Assert.assertEquals("No deben existir argumentos", 0, cl.getArgList().size());
+    }
+
+    @Test
+    public void testUnknownLongOptionThrowsUnrecognizedOption() throws Exception {
+        try {
+            new PosixParser().parse(createOptions(), new String[] { "--zzz" });
+            Assert.fail("Debe lanzarse UnrecognizedOptionException");
+        } catch (UnrecognizedOptionException e) {
+            Assert.assertEquals("--zzz", e.getOption());
+        }
+    }
+
+    @Test
+    public void testLongOnlyOptionAcceptedWithSingleDash() throws Exception {
+        Options opts = new Options();
+        opts.addOption(OptionBuilder.withLongOpt("verbose").create());
+
+        CommandLine cl = new PosixParser().parse(opts, new String[] { "-verbose" });
+
+        Assert.assertTrue("La opción 'verbose' debe reconocerse con un guion", cl.hasOption("verbose"));
+        Assert.assertEquals("No deben quedar argumentos", 0, cl.getArgList().size());
+    }
+}
+```

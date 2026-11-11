@@ -1,0 +1,313 @@
+```java
+package org.apache.commons.lang;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+import java.io.IOException;
+import java.io.StringWriter;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Entities}, que cubren los comportamientos
+ * no verificados por {@code EntitiesTest}. Solo usan la API pública de la clase.
+ */
+public class EntitiesLLMTest {
+
+    private static final Entities[] ALL_INSTANCES = {
+        Entities.XML, Entities.HTML32, Entities.HTML40
+    };
+
+    private static String escapeViaWriter(Entities e, String s) throws IOException {
+        StringWriter writer = new StringWriter();
+        e.escape(writer, s);
+        return writer.toString();
+    }
+
+    private static String unescapeViaWriter(Entities e, String s) throws IOException {
+        StringWriter writer = new StringWriter();
+        e.unescape(writer, s);
+        return writer.toString();
+    }
+
+    // ---------------------------------------------------------------------
+    // 1. Entidades representativas de HTML32 y HTML40
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testHtml32RepresentativeEntitiesEscapeAndUnescape() throws Exception {
+        assertEquals("&eacute;", Entities.HTML32.escape("\u00E9"));
+        assertEquals("\u00E9", Entities.HTML32.unescape("&eacute;"));
+        assertEquals("&copy;", Entities.HTML32.escape("\u00A9"));
+        assertEquals("\u00A9", Entities.HTML32.unescape("&copy;"));
+        assertEquals("&eacute;", escapeViaWriter(Entities.HTML32, "\u00E9"));
+        assertEquals("\u00E9", unescapeViaWriter(Entities.HTML32, "&eacute;"));
+    }
+
+    @Test
+    public void testHtml40RepresentativeEntitiesEscapeAndUnescape() throws Exception {
+        assertEquals("&alpha;", Entities.HTML40.escape("\u03B1"));
+        assertEquals("&euro;", Entities.HTML40.escape("\u20AC"));
+        assertEquals("&hearts;", Entities.HTML40.escape("\u2665"));
+        assertEquals("\u2026", Entities.HTML40.unescape("&hellip;"));
+        assertEquals("\u03A9", Entities.HTML40.unescape("&Omega;"));
+        assertEquals("&alpha;", escapeViaWriter(Entities.HTML40, "\u03B1"));
+        assertEquals("\u20AC", unescapeViaWriter(Entities.HTML40, "&euro;"));
+    }
+
+    @Test
+    public void testHtml32DoesNotContainHtml40OnlyEntities() throws Exception {
+        assertEquals(-1, Entities.HTML32.entityValue("alpha"));
+        assertEquals(-1, Entities.HTML32.entityValue("euro"));
+        assertEquals("&#945;", Entities.HTML32.escape("\u03B1"));
+        assertEquals("&euro;", Entities.HTML32.unescape("&euro;"));
+        assertEquals("&#945;", escapeViaWriter(Entities.HTML32, "\u03B1"));
+    }
+
+    @Test
+    public void testHtml40NameAndValueAreConsistent() throws Exception {
+        assertEquals(945, Entities.HTML40.entityValue("alpha"));
+        assertEquals("alpha", Entities.HTML40.entityName(945));
+        assertEquals(8364, Entities.HTML40.entityValue("euro"));
+        assertEquals("euro", Entities.HTML40.entityName(8364));
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Entidad apos de XML
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testXmlApostropheEntityValueAndName() throws Exception {
+        assertEquals(39, Entities.XML.entityValue("apos"));
+        assertEquals("apos", Entities.XML.entityName(39));
+    }
+
+    @Test
+    public void testXmlApostropheEscapeAndUnescape() throws Exception {
+        assertEquals("&apos;", Entities.XML.escape("'"));
+        assertEquals("'", Entities.XML.unescape("&apos;"));
+        assertEquals("&apos;", escapeViaWriter(Entities.XML, "'"));
+        assertEquals("'", unescapeViaWriter(Entities.XML, "&apos;"));
+    }
+
+    @Test
+    public void testXmlBasicEntitiesEscapeOutput() throws Exception {
+        assertEquals("&lt;&amp;&gt;&quot;", Entities.XML.escape("<&>\""));
+        assertEquals("&lt;&amp;&gt;&quot;", escapeViaWriter(Entities.XML, "<&>\""));
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. escape: carácter > 0x7F sin entidad nombrada -> &#N;
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeHighCharWithoutEntityUsesNumericReference() throws Exception {
+        assertEquals("&#20013;", Entities.XML.escape("\u4E2D"));
+        assertEquals("&#233;", Entities.XML.escape("\u00E9"));
+        assertEquals("&#255;", Entities.XML.escape("\u00FF"));
+        assertEquals("&#20013;", escapeViaWriter(Entities.XML, "\u4E2D"));
+        assertEquals("&#255;", escapeViaWriter(Entities.XML, "\u00FF"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. escape: ASCII (<= 0x7F) sin entidad pasa sin cambios
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeAsciiWithoutEntityIsUnchanged() throws Exception {
+        String ascii = "Hello, World 123 #@~!%()*+-/:;=?[]{}\u007F";
+        assertEquals(ascii, Entities.XML.escape(ascii));
+        assertEquals(ascii, Entities.HTML40.escape(ascii));
+        assertEquals(ascii, escapeViaWriter(Entities.XML, ascii));
+        assertEquals(ascii, escapeViaWriter(Entities.HTML40, ascii));
+    }
+
+    @Test
+    public void testEscapeEmptyStringReturnsEmpty() throws Exception {
+        assertEquals("", Entities.HTML40.escape(""));
+        assertEquals("", escapeViaWriter(Entities.HTML40, ""));
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. unescape: referencias numéricas decimales y hexadecimales en minúscula
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testUnescapeDecimalNumericReference() throws Exception {
+        assertEquals("A", new Entities().unescape("&#65;"));
+        assertEquals("ab", new Entities().unescape("&#97;&#98;"));
+        assertEquals("A", unescapeViaWriter(new Entities(), "&#65;"));
+        assertEquals("ab", unescapeViaWriter(new Entities(), "&#97;&#98;"));
+    }
+
+    @Test
+    public void testUnescapeLowercaseHexNumericReference() throws Exception {
+        assertEquals("A", new Entities().unescape("&#x41;"));
+        assertEquals("\u4E2D", new Entities().unescape("&#x4e2d;"));
+        assertEquals("A", unescapeViaWriter(new Entities(), "&#x41;"));
+        assertEquals("\u4E2D", unescapeViaWriter(new Entities(), "&#x4e2d;"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. unescape: rama &...&...; y hexadecimal mal formado
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testUnescapeKeepsAmpersandWhenAnotherAmpersandPrecedesSemicolon() throws Exception {
+        Entities e = new Entities();
+        e.addEntity("foo", 161);
+        assertEquals("&foo&bar;", e.unescape("&foo&bar;"));
+        assertEquals("a&b&c;", e.unescape("a&b&c;"));
+        assertEquals("&foo&bar;", unescapeViaWriter(e, "&foo&bar;"));
+        assertEquals("a&b&c;", unescapeViaWriter(e, "a&b&c;"));
+    }
+
+    @Test
+    public void testUnescapeMalformedHexNumericIsKept() throws Exception {
+        assertEquals("&#xZZ;", new Entities().unescape("&#xZZ;"));
+        assertEquals("&#x;", new Entities().unescape("&#x;"));
+        assertEquals("&#xZZ;", unescapeViaWriter(new Entities(), "&#xZZ;"));
+        assertEquals("&#x;", unescapeViaWriter(new Entities(), "&#x;"));
+    }
+
+    @Test
+    public void testUnescapeLoneAmpersandAndNoSemicolonAreKept() throws Exception {
+        assertEquals("&", new Entities().unescape("&"));
+        assertEquals("a & b", new Entities().unescape("a & b"));
+        assertEquals("&foo", new Entities().unescape("&foo"));
+        assertEquals("&", unescapeViaWriter(new Entities(), "&"));
+        assertEquals("&foo", unescapeViaWriter(new Entities(), "&foo"));
+    }
+
+    @Test
+    public void testUnescapeTextWithoutAmpersandIsUnchanged() throws Exception {
+        assertEquals("plain text", new Entities().unescape("plain text"));
+        assertEquals("plain text", unescapeViaWriter(new Entities(), "plain text"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. addEntity: sobrescritura y LookupEntityMap (valores >= 256)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testAddEntityOverwritesValueForExistingName() throws Exception {
+        Entities e = new Entities();
+        e.addEntity("foo", 300);
+        e.addEntity("foo", 400);
+        assertEquals(400, e.entityValue("foo"));
+        assertEquals("foo", e.entityName(400));
+        assertEquals("\u0190", e.unescape("&foo;"));
+    }
+
+    @Test
+    public void testAddEntityOverwritesNameForExistingValue() throws Exception {
+        Entities e = new Entities();
+        e.addEntity("a", 300);
+        e.addEntity("b", 300);
+        assertEquals("b", e.entityName(300));
+        assertEquals(300, e.entityValue("b"));
+        assertEquals("&b;", e.escape("\u012C"));
+    }
+
+    @Test
+    public void testLookupEntityMapValuesAroundTableBoundary() throws Exception {
+        Entities e = new Entities();
+        e.addEntity("last", 255);
+        e.addEntity("edge", 256);
+        e.addEntity("high", 1000);
+        assertEquals("last", e.entityName(255));
+        assertEquals("edge", e.entityName(256));
+        assertEquals("high", e.entityName(1000));
+        assertEquals(255, e.entityValue("last"));
+        assertEquals(256, e.entityValue("edge"));
+        assertEquals(1000, e.entityValue("high"));
+        assertNull(e.entityName(257));
+    }
+
+    @Test
+    public void testUnknownValueAndNameReturnNullAndMinusOne() throws Exception {
+        Entities e = new Entities();
+        e.addEntity("x", 10);
+        assertNull(e.entityName(11));
+        assertNull(e.entityName(1000));
+        assertEquals(-1, e.entityValue("missing"));
+        assertNull(Entities.XML.entityName(9999));
+        assertEquals(-1, Entities.XML.entityValue("nope"));
+    }
+
+    @Test
+    public void testAddEntitiesWithEmptyArrayLeavesEntityUnchanged() throws Exception {
+        Entities e = new Entities();
+        e.addEntities(new String[0][]);
+        assertEquals(-1, e.entityValue("x"));
+        assertNull(e.entityName(65));
+    }
+
+    // ---------------------------------------------------------------------
+    // 8. Equivalencia String/Writer y ida y vuelta con HTML40
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeStringAndWriterProduceIdenticalOutput() throws Exception {
+        String[] inputs = {
+            "",
+            "plain",
+            "caf\u00E9 & cr\u00E8me",
+            "\u03B1\u03B2\u03B3 \u20AC5",
+            "<tag attr=\"v\">'x'</tag>",
+            "\u4E2D\u6587 \u00FF",
+            "\u00A0\u00A9\u00AE"
+        };
+        for (Entities e : ALL_INSTANCES) {
+            for (String s : inputs) {
+                assertEquals("escape vs writer para: " + s,
+                        e.escape(s), escapeViaWriter(e, s));
+            }
+        }
+    }
+
+    @Test
+    public void testUnescapeStringAndWriterProduceIdenticalOutput() throws Exception {
+        String[] inputs = {
+            "&eacute;&alpha;",
+            "&amp;&lt;&gt;&quot;",
+            "&#65;&#x42;&#X43;",
+            "&unknown; &#xZZ; &#;",
+            "&foo&bar;",
+            "a&b",
+            "&",
+            "&#x;",
+            "&euro;&#8364;"
+        };
+        for (Entities e : ALL_INSTANCES) {
+            for (String s : inputs) {
+                assertEquals("unescape vs writer para: " + s,
+                        e.unescape(s), unescapeViaWriter(e, s));
+            }
+        }
+    }
+
+    @Test
+    public void testHtml40RoundTripUnescapeOfEscapeReturnsOriginal() throws Exception {
+        StringBuilder sb = new StringBuilder();
+        for (int c = 0x20; c <= 0x3FF; c++) {
+            sb.append((char) c);
+        }
+        String original = sb.toString();
+        String escaped = Entities.HTML40.escape(original);
+        assertEquals(original, Entities.HTML40.unescape(escaped));
+        assertEquals(original,
+                unescapeViaWriter(Entities.HTML40, escapeViaWriter(Entities.HTML40, original)));
+    }
+
+    @Test
+    public void testHtml40RoundTripKnownEntitiesAndSpecialCharacters() throws Exception {
+        String original = "a & b < c > d \" e \u00E9 \u03B1 \u20AC \u4E2D";
+        String escaped = Entities.HTML40.escape(original);
+        assertEquals("a &amp; b &lt; c &gt; d &quot; e &eacute; &alpha; &euro; &#20013;", escaped);
+        assertEquals(original, Entities.HTML40.unescape(escaped));
+        assertEquals(original, unescapeViaWriter(Entities.HTML40, escapeViaWriter(Entities.HTML40, original)));
+    }
+}
+```

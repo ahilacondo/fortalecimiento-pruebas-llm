@@ -1,0 +1,8 @@
+1. Ninguna prueba se ejecuta: el registro indica 0 pruebas, así que ni siquiera las heredadas de `ParserTestCase` verifican el comportamiento.
+2. Una propiedad sin opción definida lanza `UnrecognizedOptionException` en `handleProperties`.
+3. Una propiedad no se aplica si la opción ya aparece en la línea de comandos o si otra opción de su grupo está seleccionada.
+4. Una opción booleana con un valor distinto de yes/true/1 no se añade al `CommandLine`.
+5. Con `stopAtNonOption=true`, el primer token no reconocido detiene el parseo y el resto pasa a los argumentos sin error.
+6. Un argumento numérico negativo (por ejemplo `-1`) se trata como valor de la opción anterior y no como opción.
+7. Seleccionar dos opciones del mismo `OptionGroup` lanza `AlreadySelectedException`, y la selección de grupos se limpia entre llamadas a `parse`.
+8. Los formatos `-Dclave=valor` y `-Xmx512m` (prefijo de opción larga) y las opciones cortas concatenadas con valor final se interpretan correctamente.

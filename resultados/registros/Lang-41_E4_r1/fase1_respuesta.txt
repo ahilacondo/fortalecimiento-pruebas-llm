@@ -1,0 +1,8 @@
+1. El método `getPublicMethod` debe lanzar `NoSuchMethodException` cuando no existe ningún método público accesible con ese nombre y esos parámetros, y no hay prueba para ese caso.
+2. El método `getPublicMethod` debe lanzar `NullPointerException` cuando la clase de entrada es nula, según su `@throws`, y no hay prueba para ello.
+3. La sobrecarga `isAssignable(Class[], Class[], boolean)` con `autoboxing = true` no se prueba; las pruebas de arrays solo usan la sobrecarga de dos parámetros, que fija `autoboxing = false`.
+4. La sobrecarga de arrays con `autoboxing = false` no se contrasta frente a `autoboxing = true` para pares primitivo/envoltorio, así que no se verifica que el flag cambie el resultado.
+5. El método `convertClassNamesToClasses` debe almacenar `null` en la lista de salida cuando un elemento de la lista de entrada es `null`, y no hay prueba para ese elemento nulo.
+6. El método `getPackageName(String)` debe devolver una cadena vacía para un nombre de clase sin paquete (por ejemplo, "String"); las pruebas solo cubren la entrada `null` y la cadena vacía.
+7. Las constantes `PACKAGE_SEPARATOR_CHAR`, `PACKAGE_SEPARATOR`, `INNER_CLASS_SEPARATOR_CHAR` e `INNER_CLASS_SEPARATOR` no tienen ninguna prueba que verifique sus valores documentados ('.', ".", '$', "$").
+8. El parámetro `initialize` de `getClass` no se prueba con `false`, por lo que no se verifica que la clase pueda cargarse sin inicializarse, tal como describe la documentación.

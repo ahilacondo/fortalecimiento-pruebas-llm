@@ -1,0 +1,8 @@
+1. Un token de dos caracteres con id no válido y `stopAtNonOption=false` debe ignorarse; ninguna prueba lo verifica.
+2. Un token de dos caracteres con id no válido y `stopAtNonOption=true` debe descartarse y copiar los restantes sin procesar; no hay prueba que lo compruebe.
+3. En `burstToken` con carácter no válido y `stopAtNonOption=false`, la Javadoc indica añadir ese carácter precedido de "-", pero el código añade el token completo; la discrepancia no está verificada.
+4. En `burstToken` con carácter no válido y `stopAtNonOption=true`, debe emitirse el marcador "--" seguido del resto del token; `testStopBursting` solo comprueba el argumento sobrante "zc", no el marcador.
+5. En `process` sin opción actual, debe añadirse el marcador "--" seguido del valor; `testStop` solo cuenta los argumentos sobrantes y no verifica el marcador.
+6. Para una opción que solo tiene `hasArgs` (sin `hasArg`), la Javadoc describe añadir el token; la rama correspondiente es inalcanzable en el código y ninguna prueba la cubre.
+7. Un array de argumentos vacío debe devolver un array de tokens vacío; no hay prueba de este caso límite.
+8. `init()` debe reiniciar `tokens`, `eatTheRest` y `currentOption` entre invocaciones del mismo parser; no hay prueba que aísle ese reinicio.

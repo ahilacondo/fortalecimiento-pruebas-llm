@@ -1,0 +1,192 @@
+/**
+ * Pruebas adicionales para {@link PosixParser}, complementarias a PosixParserTest.
+ * Solo usan la API pública de Parser, CommandLine y Options.
+ */
+package org.apache.commons.cli;
+
+import java.util.Arrays;
+import java.util.Collections;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
+public class PosixParserLLMTest
+{
+    private Options options;
+    private Parser parser;
+
+    @Before
+    public void setUp()
+    {
+        options = new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+
+        parser = new PosixParser();
+    }
+
+    /**
+     * Comportamiento 1: "--opcion=valor" se separa en nombre de opción y valor.
+     */
+    @Test
+    public void longOptionWithEqualsIsSplitIntoNameAndValue() throws Exception
+    {
+        String[] args = new String[] { "--bfile=toast", "foo" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("El valor debe ser 'toast'", "toast", cl.getOptionValue("bfile"));
+        Assert.assertEquals("Solo 'foo' debe quedar como argumento",
+                            Collections.singletonList("foo"), cl.getArgList());
+    }
+
+    /**
+     * Comportamiento 2: con varios '=', solo el primero separa; el resto forma parte del valor.
+     */
+    @Test
+    public void onlyFirstEqualsSignActsAsSeparator() throws Exception
+    {
+        String[] args = new String[] { "--bfile=a=b=c" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("El valor debe conservar los '=' posteriores",
+                            "a=b=c", cl.getOptionValue("bfile"));
+        Assert.assertTrue("No deben quedar argumentos sueltos", cl.getArgList().isEmpty());
+    }
+
+    /**
+     * Comportamiento 3: "--opcion=" produce un valor vacío en lugar de descartarse.
+     */
+    @Test
+    public void longOptionWithEmptyValueProducesEmptyValueToken() throws Exception
+    {
+        String[] args = new String[] { "--bfile=" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("La opción -b debe estar presente", cl.hasOption("b"));
+        Assert.assertEquals("El valor debe ser la cadena vacía", "", cl.getOptionValue("bfile"));
+        Assert.assertTrue("No deben quedar argumentos sueltos", cl.getArgList().isEmpty());
+    }
+
+    /**
+     * Comportamiento 4: una opción corta desconocida de dos caracteres se descarta en silencio
+     * (sin stopAtNonOption) y el resto de argumentos se conserva.
+     */
+    @Test
+    public void unknownTwoCharShortOptionIsSilentlyDiscarded() throws Exception
+    {
+        String[] args = new String[] { "-x", "foo", "bar" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertFalse("La opción desconocida no debe marcarse", cl.hasOption("x"));
+        Assert.assertEquals("Los argumentos restantes deben conservarse",
+                            Arrays.asList("foo", "bar"), cl.getArgList());
+    }
+
+    /**
+     * Comportamiento 4 (variante): la opción desconocida no impide procesar una opción conocida previa.
+     */
+    @Test
+    public void unknownShortOptionDoesNotAffectKnownOptions() throws Exception
+    {
+        String[] args = new String[] { "-a", "-x", "foo" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("-a debe seguir activo", cl.hasOption("a"));
+        Assert.assertFalse("-x no debe marcarse", cl.hasOption("x"));
+        Assert.assertEquals(Collections.singletonList("foo"), cl.getArgList());
+    }
+
+    /**
+     * Comportamiento 5: una ráfaga con un carácter desconocido (sin stopAtNonOption)
+     * añade el token original completo, lo que provoca UnrecognizedOptionException
+     * con el token "-azc" como opción no reconocida.
+     */
+    @Test
+    public void burstWithUnknownCharacterReportsWholeOriginalToken() throws Exception
+    {
+        String[] args = new String[] { "-azc" };
+
+        try
+        {
+            parser.parse(options, args);
+            Assert.fail("Debe lanzarse UnrecognizedOptionException para la ráfaga '-azc'");
+        }
+        catch (UnrecognizedOptionException e)
+        {
+            Assert.assertEquals("El token reportado debe ser el original completo",
+                                "-azc", e.getOption());
+        }
+    }
+
+    /**
+     * Comportamiento 6: el token "-" con stopAtNonOption activo se añade como argumento
+     * sin detener el procesamiento de los argumentos siguientes.
+     */
+    @Test
+    public void singleDashWithStopAtNonOptionDoesNotStopProcessing() throws Exception
+    {
+        String[] args = new String[] { "-", "-a", "foo" };
+
+        CommandLine cl = parser.parse(options, args, true);
+
+        Assert.assertTrue("-a debe seguir procesándose tras '-'", cl.hasOption("a"));
+        Assert.assertTrue("'-' debe aparecer como argumento", cl.getArgList().contains("-"));
+    }
+
+    /**
+     * Comportamiento 7a: un token vacío se trata como argumento no opción cuando stopAtNonOption es false.
+     */
+    @Test
+    public void emptyTokenIsTreatedAsNonOptionWithoutStop() throws Exception
+    {
+        String[] args = new String[] { "", "-a", "foo" };
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("-a debe procesarse normalmente", cl.hasOption("a"));
+        Assert.assertEquals("El token vacío y 'foo' deben ser argumentos",
+                            Arrays.asList("", "foo"), cl.getArgList());
+    }
+
+    /**
+     * Comportamiento 7b: con stopAtNonOption activo, el token vacío detiene el procesamiento
+     * y los tokens siguientes se conservan literalmente como argumentos.
+     */
+    @Test
+    public void emptyTokenStopsProcessingWhenStopAtNonOptionIsSet() throws Exception
+    {
+        String[] args = new String[] { "", "-a", "foo" };
+
+        CommandLine cl = parser.parse(options, args, true);
+
+        Assert.assertFalse("-a no debe procesarse tras el token vacío", cl.hasOption("a"));
+        Assert.assertEquals("Todos los tokens restantes deben ser argumentos literales",
+                            Arrays.asList("", "-a", "foo"), cl.getArgList());
+    }
+
+    /**
+     * Comportamiento 8: un array de argumentos vacío produce un CommandLine sin opciones ni argumentos.
+     */
+    @Test
+    public void emptyArgumentArrayProducesEmptyCommandLine() throws Exception
+    {
+        String[] args = new String[0];
+
+        CommandLine cl = parser.parse(options, args);
+
+        Assert.assertTrue("No deben existir argumentos", cl.getArgList().isEmpty());
+        Assert.assertEquals("No deben existir argumentos (array)", 0, cl.getArgs().length);
+        Assert.assertFalse("-a no debe estar presente", cl.hasOption("a"));
+        Assert.assertFalse("-b no debe estar presente", cl.hasOption("b"));
+        Assert.assertFalse("-c no debe estar presente", cl.hasOption("c"));
+    }
+}

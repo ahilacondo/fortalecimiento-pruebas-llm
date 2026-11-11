@@ -1,0 +1,8 @@
+1. `createNumber(null)` debe devolver `null`, pero el método de prueba `testLang300` no contiene ninguna aserción sobre el resultado.
+2. `createNumber` debe interpretar los sufijos `f/F`, `d/D` y `l/L` y devolver el tipo más pequeño que represente el valor; ninguna prueba verifica los tipos devueltos.
+3. `createNumber` debe interpretar `0x` y `-0x` como enteros hexadecimales y no tratar los ceros iniciales como octal; esto no se prueba.
+4. `createNumber` no debe recortar la cadena, de modo que los espacios iniciales o finales provoquen `NumberFormatException`, y las entradas inválidas deben lanzar esa excepción; no hay pruebas para ello.
+5. `createInteger` debe manejar notación hexadecimal y octal, pero `testCreateInteger` solo prueba el valor decimal "12345".
+6. Las sobrecargas con valor por defecto (`toInt`, `toLong`, `toFloat`, `toDouble`, `toByte`, `toShort`) deben devolver el valor por defecto cuando la entrada es `null`; las pruebas no verifican ese caso. Además, el Javadoc de `toFloat(null, 1.1f)` indica `1.0f`, pero el código devuelve `1.1f`, y ninguna prueba detecta esta discrepancia.
+7. `isNumber` no tiene ninguna prueba: no se verifica que devuelva `false` para `null` o vacío, ni que acepte hexadecimales, notación científica o sufijos de tipo (como `123L`).
+8. `isDigits` debe aceptar cualquier carácter numérico Unicode (por ejemplo, dígitos arábigo-indios), pero las pruebas solo usan dígitos ASCII.

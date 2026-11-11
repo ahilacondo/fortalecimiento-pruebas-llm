@@ -1,0 +1,165 @@
+package org.apache.commons.lang.time;
+
+import static org.junit.Assert.assertEquals;
+
+import java.util.TimeZone;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DurationFormatUtils}, centradas en la API pública.
+ */
+public class DurationFormatUtilsLLMTest {
+
+    private static final long MILLIS_PER_SECOND = 1000L;
+    private static final long MILLIS_PER_MINUTE = 60L * MILLIS_PER_SECOND;
+    private static final long MILLIS_PER_HOUR = 60L * MILLIS_PER_MINUTE;
+    private static final long MILLIS_PER_DAY = 24L * MILLIS_PER_HOUR;
+
+    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+    // -----------------------------------------------------------------------
+    // Constante pública
+
+    @Test
+    public void testIsoExtendedPatternConstantValue() {
+        assertEquals("'P'yyyy'Y'M'M'd'DT'H'H'm'M's.S'S'", DurationFormatUtils.ISO_EXTENDED_FORMAT_PATTERN);
+    }
+
+    // -----------------------------------------------------------------------
+    // formatDurationWords: supresión de elementos con valor cero
+
+    @Test
+    public void testFormatDurationWordsZeroWithLeadingSuppressionReturnsZeroSeconds() {
+        assertEquals("0 seconds", DurationFormatUtils.formatDurationWords(0L, true, false));
+    }
+
+    @Test
+    public void testFormatDurationWordsZeroWithoutSuppressionReturnsAllElements() {
+        assertEquals("0 days 0 hours 0 minutes 0 seconds", DurationFormatUtils.formatDurationWords(0L, false, false));
+    }
+
+    @Test
+    public void testFormatDurationWordsZeroWithTrailingSuppressionReturnsZeroDays() {
+        assertEquals("0 days", DurationFormatUtils.formatDurationWords(0L, false, true));
+    }
+
+    @Test
+    public void testFormatDurationWordsOneHourWithBothSuppressionsReturnsSingularHour() {
+        assertEquals("1 hour", DurationFormatUtils.formatDurationWords(MILLIS_PER_HOUR, true, true));
+    }
+
+    @Test
+    public void testFormatDurationWordsOneSecondWithBothSuppressionsReturnsSingularSecond() {
+        assertEquals("1 second", DurationFormatUtils.formatDurationWords(MILLIS_PER_SECOND, true, true));
+    }
+
+    @Test
+    public void testFormatDurationWordsLeadingSuppressionKeepsZeroHoursWhenDaysNonZero() {
+        // Solo se suprimen ceros de los elementos iniciales si el día inicial es cero.
+        assertEquals("1 day 0 hours 0 minutes 5 seconds",
+                DurationFormatUtils.formatDurationWords(MILLIS_PER_DAY + 5 * MILLIS_PER_SECOND, true, false));
+    }
+
+    // -----------------------------------------------------------------------
+    // formatDuration: padding, literales y tokens desconocidos
+
+    @Test
+    public void testFormatDurationMillisecondsWithoutPaddingIsNotZeroPadded() {
+        assertEquals("5", DurationFormatUtils.formatDuration(5L, "SSSS", false));
+    }
+
+    @Test
+    public void testFormatDurationMillisecondsWithPaddingIsZeroPadded() {
+        assertEquals("0005", DurationFormatUtils.formatDuration(5L, "SSSS", true));
+    }
+
+    @Test
+    public void testFormatDurationMinutesAndSecondsWithoutPadding() {
+        assertEquals("1:0", DurationFormatUtils.formatDuration(MILLIS_PER_MINUTE, "m:ss", false));
+    }
+
+    @Test
+    public void testFormatDurationDaysHoursMinutesSecondsMillis() {
+        long duration = MILLIS_PER_DAY + MILLIS_PER_HOUR + MILLIS_PER_MINUTE + MILLIS_PER_SECOND + 1L;
+        assertEquals("1 days 1:01:01.001", DurationFormatUtils.formatDuration(duration, "d' days 'H:mm:ss.SSS"));
+    }
+
+    @Test
+    public void testFormatDurationHoursWithoutDaysTokenIsNotWrapped() {
+        assertEquals("25", DurationFormatUtils.formatDuration(25L * MILLIS_PER_HOUR, "H"));
+    }
+
+    @Test
+    public void testFormatDurationLiteralOnlyReturnsLiteralText() {
+        assertEquals("abc", DurationFormatUtils.formatDuration(0L, "'abc'"));
+    }
+
+    @Test
+    public void testFormatDurationUnknownLetterIsCopiedLiterally() {
+        assertEquals("x", DurationFormatUtils.formatDuration(0L, "x"));
+    }
+
+    @Test
+    public void testFormatDurationEmptyPatternReturnsEmptyString() {
+        assertEquals("", DurationFormatUtils.formatDuration(123456L, ""));
+    }
+
+    // -----------------------------------------------------------------------
+    // formatDurationISO
+
+    @Test
+    public void testFormatDurationISOWithThreeDays() {
+        assertEquals("P0Y0M3DT0H0M0.000S", DurationFormatUtils.formatDurationISO(3L * MILLIS_PER_DAY));
+    }
+
+    @Test
+    public void testFormatDurationISOWithDaysHoursMinutesSecondsAndMillis() {
+        long duration = MILLIS_PER_DAY + MILLIS_PER_HOUR + MILLIS_PER_MINUTE + MILLIS_PER_SECOND + 5L;
+        assertEquals("P0Y0M1DT1H1M1.005S", DurationFormatUtils.formatDurationISO(duration));
+    }
+
+    // -----------------------------------------------------------------------
+    // formatPeriod: rama de periodo corto (< 28 días) y rama calendario
+
+    @Test
+    public void testFormatPeriodShorterThan28DaysDelegatesToDuration() {
+        assertEquals("27", DurationFormatUtils.formatPeriod(0L, 27L * MILLIS_PER_DAY, "d", true, UTC));
+    }
+
+    @Test
+    public void testFormatPeriodMonthsBetweenJan1AndMar1() {
+        long jan1 = 0L;
+        long mar1 = 59L * MILLIS_PER_DAY; // 1970 no es bisiesto
+        assertEquals("2", DurationFormatUtils.formatPeriod(jan1, mar1, "M", true, UTC));
+    }
+
+    @Test
+    public void testFormatPeriodMonthsWithoutPadding() {
+        long jan1 = 0L;
+        long mar1 = 59L * MILLIS_PER_DAY;
+        assertEquals("2", DurationFormatUtils.formatPeriod(jan1, mar1, "MM", false, UTC));
+    }
+
+    @Test
+    public void testFormatPeriodMonthsWithPaddingToThreeDigits() {
+        long jan1 = 0L;
+        long mar1 = 59L * MILLIS_PER_DAY;
+        assertEquals("002", DurationFormatUtils.formatPeriod(jan1, mar1, "MMM", true, UTC));
+    }
+
+    @Test
+    public void testFormatPeriodYearsBetweenJan1Of1970And1973() {
+        long jan1970 = 0L;
+        long jan1973 = 1096L * MILLIS_PER_DAY; // 365 + 365 + 366 días
+        assertEquals("3", DurationFormatUtils.formatPeriod(jan1970, jan1973, "y", true, UTC));
+    }
+
+    @Test
+    public void testFormatPeriodBorrowsDaysWhenDayOfMonthIsNegative() {
+        // 15 de enero -> 10 de marzo de 1970: 1 mes y 23 días
+        long jan15 = 14L * MILLIS_PER_DAY;
+        long mar10 = 68L * MILLIS_PER_DAY;
+        assertEquals("1 23", DurationFormatUtils.formatPeriod(jan15, mar10, "M d", true, UTC));
+    }
+}

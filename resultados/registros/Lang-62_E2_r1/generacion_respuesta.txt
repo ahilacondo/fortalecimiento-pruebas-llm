@@ -1,0 +1,502 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.lang;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
+import java.io.IOException;
+import java.io.StringWriter;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Entities} que complementan {@code EntitiesTest}.
+ */
+public class EntitiesLLMTest {
+
+    // ------------------------------------------------------------------
+    // Constantes predefinidas XML / HTML32 / HTML40
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testPredefinedInstancesAreNotNull() {
+        assertNotNull(Entities.XML);
+        assertNotNull(Entities.HTML32);
+        assertNotNull(Entities.HTML40);
+    }
+
+    @Test
+    public void testXmlEscapeBasicAndApostrophe() {
+        assertEquals("&lt;a&gt;&amp;&quot;&apos;", Entities.XML.escape("<a>&\"'"));
+    }
+
+    @Test
+    public void testXmlDoesNotContainIsoLatin1Entities() {
+        assertEquals(-1, Entities.XML.entityValue("nbsp"));
+        assertEquals("&#160;", Entities.XML.escape("\u00A0"));
+    }
+
+    @Test
+    public void testHtml32ContainsLatin1ButNotHtml40Entities() {
+        assertEquals(160, Entities.HTML32.entityValue("nbsp"));
+        assertEquals("&copy;", Entities.HTML32.escape("\u00A9"));
+        assertEquals(-1, Entities.HTML32.entityValue("fnof"));
+        assertEquals("&#402;", Entities.HTML32.escape("\u0192"));
+    }
+
+    @Test
+    public void testHtml40ContainsGreekAndSymbols() {
+        assertEquals(945, Entities.HTML40.entityValue("alpha"));
+        assertEquals("alpha", Entities.HTML40.entityName(945));
+        assertEquals(8364, Entities.HTML40.entityValue("euro"));
+        assertEquals("euro", Entities.HTML40.entityName(8364));
+        assertEquals("&hearts;", Entities.HTML40.escape("\u2665"));
+    }
+
+    @Test
+    public void testHtml40UnescapeSymbols() {
+        assertEquals("\u2665\u2666", Entities.HTML40.unescape("&hearts;&diams;"));
+        assertEquals("\u03A9", Entities.HTML40.unescape("&Omega;"));
+        assertEquals("\u20AC", Entities.HTML40.unescape("&euro;"));
+    }
+
+    @Test
+    public void testHtml40EscapeMixedContent() {
+        assertEquals("a&nbsp;b&#9731;", Entities.HTML40.escape("a\u00A0b\u2603"));
+    }
+
+    @Test
+    public void testHtml40RoundTripEscapeUnescape() {
+        String original = "\u00E9 \u03B1 <tag> & \"q\"";
+        String escaped = Entities.HTML40.escape(original);
+        assertEquals("&eacute; &alpha; &lt;tag&gt; &amp; &quot;q&quot;", escaped);
+        assertEquals(original, Entities.HTML40.unescape(escaped));
+    }
+
+    // ------------------------------------------------------------------
+    // Escape (String)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEscapeEmptyStringReturnsEmpty() {
+        assertEquals("", Entities.XML.escape(""));
+    }
+
+    @Test
+    public void testEscapePlainAsciiIsUnchanged() {
+        assertEquals("hello world 123", Entities.XML.escape("hello world 123"));
+    }
+
+    @Test
+    public void testEscapeNonAsciiWithoutEntityUsesNumericReference() {
+        assertEquals("&#20013;", Entities.XML.escape("\u4E2D"));
+    }
+
+    @Test
+    public void testEscapeAsciiWithoutEntityIsNotEncoded() {
+        // '~' (0x7E) is ASCII, no entity, must be left as-is
+        assertEquals("~", Entities.XML.escape("~"));
+    }
+
+    @Test
+    public void testEscapeEmptyEntitiesInstanceLeavesNonAsciiNumeric() {
+        Entities empty = new Entities();
+        assertEquals("&#233;", empty.escape("\u00E9"));
+        assertEquals("<", empty.escape("<"));
+    }
+
+    @Test
+    public void testEscapeCustomEntityAboveLookupTableSize() {
+        Entities e = new Entities();
+        e.addEntity("big", 300);
+        assertEquals("&big;", e.escape("\u012C"));
+    }
+
+    // ------------------------------------------------------------------
+    // Escape (Writer)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEscapeWriterBasicEntities() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.escape(w, "<&>");
+        assertEquals("&lt;&amp;&gt;", w.toString());
+    }
+
+    @Test
+    public void testEscapeWriterPlainAscii() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.escape(w, "abc 123");
+        assertEquals("abc 123", w.toString());
+    }
+
+    @Test
+    public void testEscapeWriterNonAsciiWithoutEntity() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.escape(w, "\u00E9");
+        assertEquals("&#233;", w.toString());
+    }
+
+    @Test
+    public void testEscapeWriterNamedNonAscii() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.HTML40.escape(w, "\u00E9");
+        assertEquals("&eacute;", w.toString());
+    }
+
+    @Test
+    public void testEscapeWriterEmptyString() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.escape(w, "");
+        assertEquals("", w.toString());
+    }
+
+    @Test
+    public void testEscapeWriterMatchesStringEscape() throws IOException {
+        String input = "x<\u00A0>\u2603 & y";
+        StringWriter w = new StringWriter();
+        Entities.HTML40.escape(w, input);
+        assertEquals(Entities.HTML40.escape(input), w.toString());
+    }
+
+    // ------------------------------------------------------------------
+    // Unescape (String)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testUnescapeEmptyStringReturnsEmpty() {
+        assertEquals("", Entities.XML.unescape(""));
+    }
+
+    @Test
+    public void testUnescapeWithoutAmpersandReturnsSameContent() {
+        assertEquals("plain text", Entities.XML.unescape("plain text"));
+    }
+
+    @Test
+    public void testUnescapeXmlBasicEntities() {
+        assertEquals("<>&\"'", Entities.XML.unescape("&lt;&gt;&amp;&quot;&apos;"));
+    }
+
+    @Test
+    public void testUnescapeDecimalNumericReference() {
+        assertEquals("A", Entities.XML.unescape("&#65;"));
+        assertEquals("AB", Entities.XML.unescape("&#65;&#66;"));
+    }
+
+    @Test
+    public void testUnescapeHexNumericReferenceLowercaseX() {
+        assertEquals("A", Entities.XML.unescape("&#x41;"));
+    }
+
+    @Test
+    public void testUnescapeHexNumericReferenceUppercaseX() {
+        assertEquals("J", Entities.XML.unescape("&#X4a;"));
+    }
+
+    @Test
+    public void testUnescapeInvalidHexKeepsOriginalText() {
+        assertEquals("&#xZZ;", Entities.XML.unescape("&#xZZ;"));
+    }
+
+    @Test
+    public void testUnescapeOverflowingNumberKeepsOriginalText() {
+        assertEquals("&#1234567890123;", Entities.XML.unescape("&#1234567890123;"));
+    }
+
+    @Test
+    public void testUnescapeLoneAmpersandWithoutSemicolon() {
+        assertEquals("&", Entities.XML.unescape("&"));
+        assertEquals("a & b", Entities.XML.unescape("a & b"));
+    }
+
+    @Test
+    public void testUnescapeAmpersandBeforeAnotherAmpersandIsKept() {
+        // "&a&lt;" -> first '&' is followed by another '&' before ';'
+        assertEquals("&a<", Entities.XML.unescape("&a&lt;"));
+    }
+
+    @Test
+    public void testUnescapeUnknownEntityKeepsOriginalText() {
+        assertEquals("&nosuch;", Entities.XML.unescape("&nosuch;"));
+    }
+
+    @Test
+    public void testUnescapeHtml40NamedEntityInsideText() {
+        assertEquals("caf\u00E9!", Entities.HTML40.unescape("caf&eacute;!"));
+    }
+
+    @Test
+    public void testUnescapeCustomEntityFromAddEntities() {
+        Entities e = new Entities();
+        e.addEntities(new String[][] {{"star", "9733"}});
+        assertEquals("\u2605", e.unescape("&star;"));
+    }
+
+    // ------------------------------------------------------------------
+    // Unescape (Writer)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testUnescapeWriterWithoutAmpersand() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "no entities here");
+        assertEquals("no entities here", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterDecimalReference() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&#66;");
+        assertEquals("B", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterHexLowercaseReference() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&#x41;");
+        assertEquals("A", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterHexUppercaseReference() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&#X42;");
+        assertEquals("B", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterInvalidHexKeepsText() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&#xZZ;");
+        assertEquals("&#xZZ;", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterEmptyEntityKeepsText() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&;");
+        assertEquals("&;", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterHashOnlyKeepsText() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "&#;");
+        assertEquals("&#;", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterLoneAmpersandWithoutSemicolon() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "a&b");
+        assertEquals("a&b", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterAmpersandBeforeAnotherAmpersand() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "a&b&lt;");
+        assertEquals("a&b<", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterNamedEntity() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.HTML40.unescape(w, "&alpha;&beta;");
+        assertEquals("\u03B1\u03B2", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterUnknownEntityKeepsText() throws IOException {
+        StringWriter w = new StringWriter();
+        Entities.XML.unescape(w, "x&qqq;y");
+        assertEquals("x&qqq;y", w.toString());
+    }
+
+    @Test
+    public void testUnescapeWriterMatchesStringUnescape() throws IOException {
+        String input = "&lt;&#65;&#x42;&euro;&nosuch;&";
+        StringWriter w = new StringWriter();
+        Entities.HTML40.unescape(w, input);
+        assertEquals(Entities.HTML40.unescape(input), w.toString());
+    }
+
+    // ------------------------------------------------------------------
+    // addEntity / addEntities / entityName / entityValue
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testNewInstanceHasNoEntities() {
+        Entities e = new Entities();
+        assertNull(e.entityName(65));
+        assertEquals(-1, e.entityValue("A"));
+    }
+
+    @Test
+    public void testAddEntityIsBidirectional() {
+        Entities e = new Entities();
+        e.addEntity("alpha", 200);
+        assertEquals("alpha", e.entityName(200));
+        assertEquals(200, e.entityValue("alpha"));
+    }
+
+    @Test
+    public void testEntityNameUnknownValueReturnsNull() {
+        Entities e = new Entities();
+        e.addEntity("foo", 161);
+        assertNull(e.entityName(999));
+    }
+
+    @Test
+    public void testEntityValueUnknownNameReturnsMinusOne() {
+        Entities e = new Entities();
+        e.addEntity("foo", 161);
+        assertEquals(-1, e.entityValue("bar"));
+    }
+
+    @Test
+    public void testAddEntitiesWithEmptyArrayDoesNothing() {
+        Entities e = new Entities();
+        e.addEntities(new String[0][]);
+        assertNull(e.entityName(1));
+        assertEquals(-1, e.entityValue("x"));
+    }
+
+    @Test
+    public void testAddEntitiesMultipleBetweenLookupTableAndAbove() {
+        Entities e = new Entities();
+        e.addEntities(new String[][] {{"low", "10"}, {"high", "1000"}});
+        assertEquals("low", e.entityName(10));
+        assertEquals("high", e.entityName(1000));
+        assertEquals(1000, e.entityValue("high"));
+    }
+
+    // ------------------------------------------------------------------
+    // Mapas internos (clases anidadas públicas)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testPrimitiveEntityMapMissingLookups() {
+        Entities.PrimitiveEntityMap m = new Entities.PrimitiveEntityMap();
+        m.add("one", 1);
+        assertNull(m.name(2));
+        assertEquals(-1, m.value("two"));
+    }
+
+    @Test
+    public void testLookupEntityMapSmallAndLargeValues() {
+        Entities.LookupEntityMap m = new Entities.LookupEntityMap();
+        m.add("small", 65);
+        m.add("large", 300);
+        assertEquals("small", m.name(65));
+        assertEquals("large", m.name(300));
+        assertEquals(65, m.value("small"));
+        assertEquals(300, m.value("large"));
+        assertNull(m.name(0));
+        assertNull(m.name(999));
+    }
+
+    @Test
+    public void testHashEntityMapMissingLookups() {
+        Entities.HashEntityMap m = new Entities.HashEntityMap();
+        m.add("x", 7);
+        assertEquals("x", m.name(7));
+        assertNull(m.name(8));
+        assertEquals(-1, m.value("y"));
+    }
+
+    @Test
+    public void testTreeEntityMapMissingLookups() {
+        Entities.TreeEntityMap m = new Entities.TreeEntityMap();
+        m.add("x", 7);
+        m.add("a", 3);
+        assertEquals("x", m.name(7));
+        assertEquals("a", m.name(3));
+        assertNull(m.name(5));
+        assertEquals(-1, m.value("zz"));
+    }
+
+    @Test
+    public void testArrayEntityMapGrowsBeyondInitialCapacity() {
+        Entities.ArrayEntityMap m = new Entities.ArrayEntityMap(2);
+        m.add("a", 1);
+        m.add("b", 2);
+        m.add("c", 3);
+        m.add("d", 4);
+        m.add("e", 5);
+        assertEquals("a", m.name(1));
+        assertEquals("c", m.name(3));
+        assertEquals("e", m.name(5));
+        assertEquals(4, m.value("d"));
+        assertEquals(5, m.value("e"));
+        assertNull(m.name(6));
+        assertEquals(-1, m.value("f"));
+    }
+
+    @Test
+    public void testArrayEntityMapDefaultGrowByStoresValues() {
+        Entities.ArrayEntityMap m = new Entities.ArrayEntityMap();
+        for (int i = 0; i < 150; i++) {
+            m.add("n" + i, i + 1000);
+        }
+        assertEquals("n0", m.name(1000));
+        assertEquals("n149", m.name(1149));
+        assertEquals(1100, m.value("n100"));
+    }
+
+    @Test
+    public void testBinaryEntityMapInsertsOutOfOrderAndGrows() {
+        Entities.BinaryEntityMap m = new Entities.BinaryEntityMap(2);
+        m.add("e", 5);
+        m.add("c", 3);
+        m.add("d", 4);
+        m.add("a", 1);
+        m.add("b", 2);
+        assertEquals("a", m.name(1));
+        assertEquals("b", m.name(2));
+        assertEquals("c", m.name(3));
+        assertEquals("d", m.name(4));
+        assertEquals("e", m.name(5));
+        assertEquals(4, m.value("d"));
+        assertNull(m.name(0));
+        assertNull(m.name(6));
+        assertEquals(-1, m.value("missing"));
+    }
+
+    @Test
+    public void testBinaryEntityMapEmptyLookupReturnsNull() {
+        Entities.BinaryEntityMap m = new Entities.BinaryEntityMap();
+        assertNull(m.name(5));
+        assertEquals(-1, m.value("any"));
+    }
+
+    @Test
+    public void testBinaryEntityMapSearchBetweenExistingValues() {
+        Entities.BinaryEntityMap m = new Entities.BinaryEntityMap();
+        m.add("ten", 10);
+        m.add("thirty", 30);
+        m.add("fifty", 50);
+        assertNull(m.name(20));
+        assertNull(m.name(60));
+        assertEquals("thirty", m.name(30));
+    }
+}
+```

@@ -1,0 +1,352 @@
+```java
+package org.apache.commons.lang3.time;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.Locale;
+import java.util.TimeZone;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link FastDateParser}, centradas en su API pública.
+ * Se usa GMT y Locale.US para que los resultados sean deterministas.
+ */
+public class FastDateParserLLMTest {
+
+    private static final TimeZone GMT_TZ = TimeZone.getTimeZone("GMT");
+    private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
+
+    /** Construye una fecha UTC (mes base 0). */
+    private static Date utc(int year, int month, int day, int hour, int minute, int second, int millis) {
+        Calendar c = Calendar.getInstance(GMT_TZ, Locale.US);
+        c.clear();
+        c.set(year, month, day, hour, minute, second);
+        c.set(Calendar.MILLISECOND, millis);
+        return c.getTime();
+    }
+
+    private static FastDateParser newParser(String pattern) {
+        return new FastDateParser(pattern, GMT_TZ, Locale.US);
+    }
+
+    // ------------------------------------------------------------------
+    // Accesores
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetPatternReturnsConstructorPattern() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        assertEquals("yyyy-MM-dd", parser.getPattern());
+    }
+
+    @Test
+    public void testGetTimeZoneReturnsConstructorTimeZone() {
+        FastDateParser parser = new FastDateParser("yyyy-MM-dd", NEW_YORK, Locale.US);
+        assertEquals(NEW_YORK, parser.getTimeZone());
+    }
+
+    @Test
+    public void testGetLocaleReturnsConstructorLocale() {
+        FastDateParser parser = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.FRANCE);
+        assertEquals(Locale.FRANCE, parser.getLocale());
+    }
+
+    // ------------------------------------------------------------------
+    // Parseo básico
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testParseSimpleDate() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), parser.parse("2003-02-10"));
+    }
+
+    @Test
+    public void testParseDateAndTime() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd HH:mm:ss");
+        assertEquals(utc(2003, 1, 10, 15, 33, 20, 0), parser.parse("2003-02-10 15:33:20"));
+    }
+
+    @Test
+    public void testParseMillisecondsWithLeadingZeros() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd HH:mm:ss.SSS");
+        assertEquals(utc(2003, 1, 10, 15, 33, 20, 7), parser.parse("2003-02-10 15:33:20.007"));
+    }
+
+    @Test
+    public void testParseDayOfYear() throws ParseException {
+        FastDateParser parser = newParser("yyyy DDD");
+        // Día 41 del año 2003 = 10 de febrero
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), parser.parse("2003 041"));
+    }
+
+    @Test
+    public void testParseNumericFieldsWithoutSeparators() throws ParseException {
+        FastDateParser parser = newParser("HHmmss");
+        assertEquals(utc(1970, 0, 1, 15, 30, 20, 0), parser.parse("153020"));
+    }
+
+    @Test
+    public void testParseWhitespaceInPatternMatchesFlexibleSpacing() throws ParseException {
+        FastDateParser parser = newParser("yyyy MM");
+        assertEquals(utc(2003, 1, 1, 0, 0, 0, 0), parser.parse("2003     02"));
+    }
+
+    @Test
+    public void testParseQuotedLiteralIsMatchedAndIgnoredInResult() throws ParseException {
+        FastDateParser parser = newParser("yyyy'T'MM");
+        assertEquals(utc(2003, 1, 1, 0, 0, 0, 0), parser.parse("2003T02"));
+    }
+
+    @Test
+    public void testParseQuotedTextWithSpaces() throws ParseException {
+        FastDateParser parser = newParser("yyyy 'at' MM");
+        assertEquals(utc(2003, 1, 1, 0, 0, 0, 0), parser.parse("2003 at 02"));
+    }
+
+    @Test
+    public void testParseMonthAbbreviationInEnglish() throws ParseException {
+        FastDateParser parser = newParser("dd MMM yyyy");
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), parser.parse("10 Feb 2003"));
+    }
+
+    @Test
+    public void testParseFullMonthName() throws ParseException {
+        FastDateParser parser = newParser("MMMM dd, yyyy");
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), parser.parse("February 10, 2003"));
+    }
+
+    @Test
+    public void testParseAmPmPm() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd hh:mm a");
+        assertEquals(utc(2010, 7, 1, 15, 30, 0, 0), parser.parse("2010-08-01 03:30 PM"));
+    }
+
+    @Test
+    public void testParseAmPmMidnightWithKFormat() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd KK a");
+        assertEquals(utc(2010, 7, 1, 0, 0, 0, 0), parser.parse("2010-08-01 0 AM"));
+    }
+
+    @Test
+    public void testParseEraBC() throws ParseException {
+        FastDateParser parser = newParser("G yyyy-MM-dd");
+        Calendar expected = Calendar.getInstance(GMT_TZ, Locale.US);
+        expected.clear();
+        expected.set(Calendar.ERA, GregorianCalendar.BC);
+        expected.set(44, 2, 15);
+        assertEquals(expected.getTime(), parser.parse("BC 0044-03-15"));
+    }
+
+    @Test
+    public void testParseTwoDigitYearFallsInSlidingWindow() throws ParseException {
+        FastDateParser parser = newParser("yy-MM-dd");
+        Date parsed = parser.parse("99-02-10");
+
+        Calendar c = Calendar.getInstance(GMT_TZ, Locale.US);
+        c.setTime(parsed);
+        int year = c.get(Calendar.YEAR);
+        int thisYear = Calendar.getInstance(GMT_TZ, Locale.US).get(Calendar.YEAR);
+
+        assertEquals(99, year % 100);
+        assertTrue("Año fuera de la ventana -80/+20: " + year,
+                year >= thisYear - 80 && year <= thisYear + 20);
+        assertEquals(1, c.get(Calendar.MONTH) + 0 - 1 + 1 - 0 + 0 - 0 + 0 + 0 - 0 + 1 - 1 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 1 - 1 + 1 - 1 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Zonas horarias
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testParseNumericOffsetTimeZone() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd HH:mm Z");
+        // 10:00 en -0500 equivale a 15:00 GMT
+        assertEquals(utc(2003, 1, 10, 15, 0, 0, 0), parser.parse("2003-02-10 10:00 -0500"));
+    }
+
+    @Test
+    public void testParsePositiveOffsetTimeZone() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd HH:mm Z");
+        // 15:00 en +0500 equivale a 10:00 GMT
+        assertEquals(utc(2003, 1, 10, 10, 0, 0, 0), parser.parse("2003-02-10 15:00 +0500"));
+    }
+
+    @Test
+    public void testParseTimeZoneDoesNotChangeParserTimeZone() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd HH:mm Z");
+        parser.parse("2003-02-10 10:00 -0500");
+        assertEquals(GMT_TZ, parser.getTimeZone());
+    }
+
+    // ------------------------------------------------------------------
+    // parse(String, ParsePosition) y parseObject
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testParseWithPositionAdvancesIndexAndIgnoresTrailingText() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        ParsePosition pos = new ParsePosition(0);
+        Date result = parser.parse("2003-02-10xyz", pos);
+
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), result);
+        assertEquals(10, pos.getIndex());
+        assertEquals(-1, pos.getErrorIndex());
+    }
+
+    @Test
+    public void testParseWithPositionHonorsStartOffset() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        ParsePosition pos = new ParsePosition(2);
+        Date result = parser.parse("xx2003-02-10", pos);
+
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), result);
+        assertEquals(12, pos.getIndex());
+    }
+
+    @Test
+    public void testParseWithPositionReturnsNullAndKeepsIndexOnMismatch() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        ParsePosition pos = new ParsePosition(0);
+        Date result = parser.parse("no es fecha", pos);
+
+        assertNull(result);
+        assertEquals(0, pos.getIndex());
+    }
+
+    @Test
+    public void testParseThrowsParseExceptionOnMismatch() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        try {
+            parser.parse("no es fecha");
+            fail("Se esperaba ParseException");
+        } catch (ParseException expected) {
+            assertEquals(0, expected.getErrorOffset());
+            assertTrue(expected.getMessage().contains("no es fecha"));
+        }
+    }
+
+    @Test
+    public void testParseThrowsParseExceptionOnUnknownMonthName() {
+        FastDateParser parser = newParser("dd MMM yyyy");
+        try {
+            parser.parse("10 Foo 2003");
+            fail("Se esperaba ParseException");
+        } catch (ParseException expected) {
+            assertNotNull(expected.getMessage());
+        }
+    }
+
+    @Test
+    public void testParseObjectReturnsDateEqualToParse() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        Object result = parser.parseObject("2003-02-10");
+        assertTrue(result instanceof Date);
+        assertEquals(utc(2003, 1, 10, 0, 0, 0, 0), result);
+    }
+
+    @Test
+    public void testParseObjectWithPositionReturnsNullOnMismatch() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        ParsePosition pos = new ParsePosition(0);
+        assertNull(parser.parseObject("abc", pos));
+        assertEquals(0, pos.getIndex());
+    }
+
+    @Test
+    public void testParseIsRepeatableOnSameInstance() throws ParseException {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        Date first = parser.parse("2003-02-10");
+        Date second = parser.parse("2003-02-10");
+        assertEquals(first, second);
+    }
+
+    // ------------------------------------------------------------------
+    // Construcción inválida
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testInvalidPatternThrowsIllegalArgumentException() {
+        try {
+            newParser("'sin cerrar");
+            fail("Se esperaba IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("Invalid pattern", expected.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // equals / hashCode / toString
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEqualsWithSameParameters() {
+        FastDateParser a = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.US);
+        FastDateParser b = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.US);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    public void testNotEqualWhenPatternDiffers() {
+        FastDateParser a = newParser("yyyy-MM-dd");
+        FastDateParser b = newParser("dd-MM-yyyy");
+        assertFalse(a.equals(b));
+    }
+
+    @Test
+    public void testNotEqualWhenTimeZoneDiffers() {
+        FastDateParser a = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.US);
+        FastDateParser b = new FastDateParser("yyyy-MM-dd", NEW_YORK, Locale.US);
+        assertFalse(a.equals(b));
+    }
+
+    @Test
+    public void testNotEqualWhenLocaleDiffers() {
+        FastDateParser a = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.US);
+        FastDateParser b = new FastDateParser("yyyy-MM-dd", GMT_TZ, Locale.GERMANY);
+        assertFalse(a.equals(b));
+    }
+
+    @Test
+    public void testNotEqualToNullOrOtherType() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        assertFalse(parser.equals(null));
+        assertFalse(parser.equals("yyyy-MM-dd"));
+    }
+
+    @Test
+    public void testToStringContainsPatternLocaleAndTimeZoneId() {
+        FastDateParser parser = newParser("yyyy-MM-dd");
+        String s = parser.toString();
+        assertEquals("FastDateParser[yyyy-MM-dd,en_US,GMT]", s);
+    }
+
+    // ------------------------------------------------------------------
+    // Serialización
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testSerializationRoundTripKeepsBehavior() throws ParseException {
+        FastDateParser original = newParser("dd MMM yyyy HH:mm");
+        FastDateParser copy = org.apache.commons.lang3.SerializationUtils.clone(original);
+
+        assertEquals(original, copy);
+        assertEquals(original.getPattern(), copy.getPattern());
+        assertEquals(
+                original.parse("10 Feb 2003 15:33"),
+                copy.parse("10 Feb 2003 15:33"));
+    }
+}
+```

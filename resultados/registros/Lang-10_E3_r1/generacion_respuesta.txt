@@ -1,0 +1,207 @@
+```java
+package org.apache.commons.lang3.time;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.Locale;
+import java.util.TimeZone;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link FastDateParser}, centradas en los comportamientos
+ * que la suite existente no verifica.
+ */
+public class FastDateParserLLMTest {
+
+    private static final TimeZone UTC = TimeZone.getTimeZone("GMT");
+    private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
+    private static final Locale JA_JP_JP = new Locale("ja", "JP", "JP");
+
+    /** Construye una fecha UTC; el mes se indica en base 1 para legibilidad. */
+    private static Date utc(int year, int month, int day, int hour, int minute) {
+        Calendar cal = Calendar.getInstance(UTC, Locale.US);
+        cal.clear();
+        cal.set(year, month - 1, day, hour, minute, 0);
+        return cal.getTime();
+    }
+
+    private static DateParser parser(String pattern, TimeZone tz, Locale locale) {
+        return new FastDateParser(pattern, tz, locale);
+    }
+
+    private static int currentYearUtc() {
+        return Calendar.getInstance(UTC, Locale.US).get(Calendar.YEAR);
+    }
+
+    /** Parsea un año de dos dígitos con el patrón "yy" y devuelve el año resultante. */
+    private static int parsedYearFromTwoDigits(DateParser p, int twoDigits) throws ParseException {
+        String source = String.format(Locale.ROOT, "%02d", Math.floorMod(twoDigits, 100));
+        Date date = p.parse(source);
+        Calendar cal = Calendar.getInstance(UTC, Locale.US);
+        cal.setTime(date);
+        return cal.get(Calendar.YEAR);
+    }
+
+    // ---------------------------------------------------------------------
+    // ParsePosition: índice inicial distinto de cero y avance de pos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void parsePositionStartingAtNonZeroIndexParsesFromThatOffset() {
+        DateParser p = parser("yyyy-MM-dd", UTC, Locale.US);
+        ParsePosition pos = new ParsePosition(2);
+
+        Date date = p.parse("XX2003-02-10 tail", pos);
+
+        assertNotNull("Debe parsear desde el índice 2", date);
+        assertEquals(utc(2003, 2, 10, 0, 0), date);
+        assertEquals("El índice debe avanzar hasta el final de la coincidencia", 12, pos.getIndex());
+    }
+
+    @Test
+    public void parseObjectWithParsePositionAlsoAdvancesIndex() {
+        DateParser p = parser("yyyy-MM-dd", UTC, Locale.US);
+        ParsePosition pos = new ParsePosition(1);
+
+        Object result = p.parseObject("#2003-02-10", pos);
+
+        assertEquals(utc(2003, 2, 10, 0, 0), result);
+        assertEquals(11, pos.getIndex());
+    }
+
+    // ---------------------------------------------------------------------
+    // Fallos: null sin mover el índice y ParseException con el patrón
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void parsePositionFailureReturnsNullAndKeepsIndex() {
+        DateParser p = parser("yyyy-MM-dd", UTC, Locale.US);
+        ParsePosition pos = new ParsePosition(1);
+
+        Date result = p.parse("hello", pos);
+
+        assertNull(result);
+        assertEquals("El índice no debe cambiar tras un fallo", 1, pos.getIndex());
+    }
+
+    @Test
+    public void parseStringFailureThrowsParseExceptionWithSourceAndPatternInfo() {
+        DateParser p = parser("yyyy-MM-dd", UTC, Locale.US);
+        try {
+            p.parse("hello");
+            fail("Se esperaba ParseException");
+        } catch (ParseException e) {
+            assertEquals(0, e.getErrorOffset());
+            assertTrue("El mensaje debe incluir el texto de entrada: " + e.getMessage(),
+                    e.getMessage().contains("\"hello\""));
+            assertTrue("El mensaje debe indicar el fallo: " + e.getMessage(),
+                    e.getMessage().contains("Unparseable date"));
+            assertTrue("El mensaje debe incluir la expresión regular del patrón: " + e.getMessage(),
+                    e.getMessage().contains("\\p{IsNd}"));
+        }
+    }
+
+    @Test
+    public void parseStringFailureForJapaneseImperialIncludesRangeNote() {
+        DateParser p = parser("yyyy/MM/dd", UTC, JA_JP_JP);
+        try {
+            p.parse("bad");
+            fail("Se esperaba ParseException");
+        } catch (ParseException e) {
+            assertTrue("El mensaje debe incluir la nota del locale ja_JP_JP: " + e.getMessage(),
+                    e.getMessage().contains("ja_JP_JP"));
+            assertTrue("El mensaje debe incluir el límite de 1868: " + e.getMessage(),
+                    e.getMessage().contains("1868 AD"));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Patrones inválidos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void emptyPatternIsRejectedAsInvalid() {
+        try {
+            new FastDateParser("", UTC, Locale.US);
+            fail("Se esperaba IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid pattern", e.getMessage());
+        }
+    }
+
+    @Test
+    public void unclosedQuotedPatternIsRejectedAsInvalid() {
+        try {
+            new FastDateParser("'abc", UTC, Locale.US);
+            fail("Se esperaba IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid pattern", e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Ventana de años de dos dígitos (adjustYear), verificada por la API pública
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void twoDigitYearKeepsCurrentCenturyValueForOwnYearSuffix() throws ParseException {
+        int thisYear = currentYearUtc();
+        DateParser p = parser("yy", UTC, Locale.US);
+
+        assertEquals(thisYear, parsedYearFromTwoDigits(p, thisYear % 100));
+    }
+
+    @Test
+    public void twoDigitYearUpperBoundaryIsThisYearPlus19() throws ParseException {
+        int thisYear = currentYearUtc();
+        DateParser p = parser("yy", UTC, Locale.US);
+
+        assertEquals(thisYear + 19, parsedYearFromTwoDigits(p, thisYear + 19));
+    }
+
+    @Test
+    public void twoDigitYearAtThisYearPlus20WrapsToLowerBoundThisYearMinus80() throws ParseException {
+        int thisYear = currentYearUtc();
+        DateParser p = parser("yy", UTC, Locale.US);
+
+        assertEquals(thisYear - 80, parsedYearFromTwoDigits(p, thisYear + 20));
+    }
+
+    @Test
+    public void twoDigitYearJustBelowLowerBoundWrapsToThisYearPlus19() throws ParseException {
+        int thisYear = currentYearUtc();
+        DateParser p = parser("yy", UTC, Locale.US);
+
+        assertEquals(thisYear + 19, parsedYearFromTwoDigits(p, thisYear - 81));
+    }
+
+    // ---------------------------------------------------------------------
+    // Zonas horarias: nombres cortos/largos, desplazamientos y zona del parser
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void parsesShortAndLongDaylightZoneNames() throws ParseException {
+        DateParser p = parser("yyyy-MM-dd HH:mm z", NEW_YORK, Locale.US);
+        Date expected = utc(2003, 7, 10, 20, 33); // 16:33 EDT = 20:33 UTC
+
+        assertEquals(expected, p.parse("2003-07-10 16:33 EDT"));
+        assertEquals(expected, p.parse("2003-07-10 16:33 Eastern Daylight Time"));
+    }
+
+    @Test
+    public void parsesNumericOffsetsWithAndWithoutColon() throws ParseException {
+        DateParser p = parser("yyyy-MM-dd HH:mm Z", UTC, Locale.US);
+
+        assertEquals(utc(2003, 2, 10, 10, 5), p.parse("2003-02-10 15:05 +05:00"));
+        assertEquals(utc(2003, 2, 10, 12, 0), p.parse("2003-02-10 09:

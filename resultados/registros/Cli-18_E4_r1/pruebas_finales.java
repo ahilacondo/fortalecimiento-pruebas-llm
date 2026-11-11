@@ -1,0 +1,224 @@
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link PosixParser}. Solo usan la API pública
+ * (parse y los accesores de CommandLine), por lo que el comportamiento de
+ * flatten, burstToken, process e init se verifica a través de los resultados
+ * observables del análisis.
+ */
+public class PosixParserLLMTest {
+
+    private static Options buildOptions() {
+        return new Options()
+            .addOption("a", "enable-a", false, "turn [a] on or off")
+            .addOption("b", "bfile", true, "set the value of [b]")
+            .addOption("c", "copt", false, "turn [c] on or off");
+    }
+
+    /**
+     * Requisito 1: un token de dos caracteres con id no válido y
+     * stopAtNonOption=false debe ignorarse; el análisis continúa con
+     * los tokens siguientes.
+     */
+    @Test
+    public void invalidTwoCharTokenIsIgnoredWhenNotStopping() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"-x", "-a", "foo"}, false);
+
+        assertTrue("-a debe seguir procesándose tras el token inválido", cl.hasOption("a"));
+        assertFalse("-b no debe estar activo", cl.hasOption("b"));
+        assertFalse("-c no debe estar activo", cl.hasOption("c"));
+        assertEquals("Solo 'foo' debe quedar como argumento", Arrays.asList("foo"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 2: un token de dos caracteres con id no válido y
+     * stopAtNonOption=true debe descartarse y copiar los tokens restantes
+     * sin procesar como argumentos.
+     */
+    @Test
+    public void invalidTwoCharTokenWithStopAtNonOptionDropsTokenAndKeepsRest() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"-x", "foo", "bar"}, true);
+
+        assertFalse("-a no debe estar activo", cl.hasOption("a"));
+        assertFalse("-b no debe estar activo", cl.hasOption("b"));
+        assertFalse("-c no debe estar activo", cl.hasOption("c"));
+        assertEquals("Los restantes deben copiarse como argumentos",
+                     Arrays.asList("foo", "bar"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 3: en burstToken con carácter no válido y stopAtNonOption=false,
+     * el código añade el token completo (no solo el carácter con "-" como indica
+     * la Javadoc). Se verifica el comportamiento real: la excepción de opción no
+     * reconocida referencia el token completo "-azc".
+     */
+    @Test
+    public void burstTokenWithInvalidCharWithoutStopAddsWholeToken() throws Exception {
+        PosixParser parser = new PosixParser();
+        try {
+            parser.parse(buildOptions(), new String[] {"-azc"}, false);
+            fail("Se esperaba UnrecognizedOptionException");
+        } catch (UnrecognizedOptionException e) {
+            assertEquals("El token completo debe añadirse, no solo el carácter", "-azc", e.getOption());
+        }
+    }
+
+    /**
+     * Requisito 4: en burstToken con carácter no válido y stopAtNonOption=true
+     * se emite el marcador "--" seguido del resto del token. El resto ("zc") debe
+     * quedar como argumento, sin interpretarse como opciones.
+     */
+    @Test
+    public void burstTokenWithInvalidCharWithStopEmitsMarkerAndRest() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"-azc"}, true);
+
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertFalse("-c no debe interpretarse tras el marcador", cl.hasOption("c"));
+        assertEquals("El resto del token debe ser el único argumento", Arrays.asList("zc"), cl.getArgList());
+        assertFalse("El marcador '--' no debe aparecer como argumento", cl.getArgList().contains("--"));
+    }
+
+    /**
+     * Requisito 4 (variante): el marcador también corta el bursting del resto
+     * del token, aunque contenga una opción válida ('b').
+     */
+    @Test
+    public void burstTokenMarkerStopsBurstingOfRemainingCharacters() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"-azb"}, true);
+
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertFalse("-b no debe interpretarse tras el marcador", cl.hasOption("b"));
+        assertEquals(Arrays.asList("zb"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 5: en process sin opción actual debe añadirse el marcador "--"
+     * seguido del valor. Los tokens posteriores no deben interpretarse como opciones.
+     */
+    @Test
+    public void processWithoutCurrentOptionEmitsMarkerAndSkipsOptions() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"foo", "-a"}, true);
+
+        assertFalse("-a no debe interpretarse tras el marcador", cl.hasOption("a"));
+        assertEquals("Ambos tokens deben ser argumentos", Arrays.asList("foo", "-a"), cl.getArgList());
+        assertFalse("El marcador '--' no debe aparecer como argumento", cl.getArgList().contains("--"));
+    }
+
+    /**
+     * Requisito 5 (variante): tras una opción sin argumento, el primer valor
+     * no-opción provoca el marcador y el resto se trata como argumentos.
+     */
+    @Test
+    public void processAfterOptionWithoutArgEmitsMarker() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[] {"-c", "foo", "-b", "toast"}, true);
+
+        assertTrue("-c debe estar activo", cl.hasOption("c"));
+        assertFalse("-b no debe interpretarse tras el marcador", cl.hasOption("b"));
+        assertEquals(Arrays.asList("foo", "-b", "toast"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 6: una opción que solo admite múltiples valores (hasArgs, sin
+     * hasArg) debe aceptar los valores siguientes como tokens normales.
+     */
+    @Test
+    public void optionWithMultipleArgsAcceptsFollowingTokens() throws Exception {
+        Options options = new Options();
+        options.addOption(OptionBuilder.hasArgs(2).create('J'));
+
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(options, new String[] {"-J", "x", "y", "z"}, false);
+
+        assertTrue("-J debe estar activo", cl.hasOption("J"));
+        String[] values = cl.getOptionValues("J");
+        assertTrue("Debe haber valores para -J", values != null && values.length >= 1);
+        assertEquals("El primer valor debe ser 'x'", "x", values[0]);
+        assertTrue("'y' debe ser un valor de -J", Arrays.asList(values).contains("y"));
+    }
+
+    /**
+     * Requisito 7: un array de argumentos vacío debe producir un resultado sin
+     * opciones ni argumentos.
+     */
+    @Test
+    public void emptyArgumentArrayProducesEmptyResult() throws Exception {
+        PosixParser parser = new PosixParser();
+        CommandLine cl = parser.parse(buildOptions(), new String[0], false);
+
+        List<String> args = cl.getArgList();
+        assertTrue("No debe haber argumentos sobrantes", args.isEmpty());
+        assertEquals("El array de argumentos debe estar vacío", 0, cl.getArgs().length);
+        assertFalse("-a no debe estar activo", cl.hasOption("a"));
+        assertFalse("-b no debe estar activo", cl.hasOption("b"));
+        assertFalse("-c no debe estar activo", cl.hasOption("c"));
+    }
+
+    /**
+     * Requisito 8: init() debe reiniciar tokens entre invocaciones del mismo
+     * parser. Si no se limpiaran, los argumentos de la primera llamada aparecerían
+     * en la segunda.
+     */
+    @Test
+    public void initClearsTokensBetweenInvocations() throws Exception {
+        PosixParser parser = new PosixParser();
+        Options options = buildOptions();
+
+        CommandLine first = parser.parse(options, new String[] {"-a", "one", "two"}, false);
+        assertEquals(Arrays.asList("one", "two"), first.getArgList());
+
+        CommandLine second = parser.parse(options, new String[] {"-b", "val"}, false);
+        assertTrue("Los argumentos de la primera llamada no deben persistir", second.getArgList().isEmpty());
+        assertEquals("val", second.getOptionValue("b"));
+    }
+
+    /**
+     * Requisito 8: init() debe reiniciar currentOption. Si una llamada anterior
+     * deja -b pendiente de valor, la siguiente llamada no debe usar ese estado.
+     */
+    @Test
+    public void initResetsCurrentOptionBetweenInvocations() throws Exception {
+        PosixParser parser = new PosixParser();
+        Options options = buildOptions();
+
+        parser.parse(options, new String[] {"-b", "toast"}, false);
+
+        CommandLine cl = parser.parse(options, new String[] {"foo", "-a"}, true);
+        assertFalse("-a no debe interpretarse: currentOption debe estar reiniciado", cl.hasOption("a"));
+        assertEquals(Arrays.asList("foo", "-a"), cl.getArgList());
+    }
+
+    /**
+     * Requisito 8: init() debe reiniciar eatTheRest. Si una llamada anterior
+     * dejó el modo "consumir resto" activo, la siguiente no debe copiar tokens
+     * sin procesar: "-bx" debe expandirse a -b con valor "x".
+     */
+    @Test
+    public void initResetsEatTheRestBetweenInvocations() throws Exception {
+        PosixParser parser = new PosixParser();
+        Options options = buildOptions();
+
+        parser.parse(options, new String[] {"-x", "foo"}, true);
+
+        CommandLine cl = parser.parse(options, new String[] {"-a", "-bx"}, false);
+        assertTrue("-a debe estar activo", cl.hasOption("a"));
+        assertTrue("-b debe estar activo", cl.hasOption("b"));
+        assertEquals("El valor de -b debe ser 'x'", "x", cl.getOptionValue("b"));
+        assertTrue("No debe quedar ningún argumento", cl.getArgList().isEmpty());
+    }
+}

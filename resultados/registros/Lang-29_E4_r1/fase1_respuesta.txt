@@ -1,0 +1,8 @@
+1. Si leer una propiedad lanza SecurityException, el campo correspondiente debe quedar en null (getSystemProperty); ninguna prueba lo verifica.
+2. En ese caso debe escribirse un mensaje en System.err; ninguna prueba comprueba esta salida.
+3. Las constantes de propiedad (FILE_SEPARATOR, LINE_SEPARATOR, PATH_SEPARATOR, JAVA_HOME, USER_NAME, etc.) deben coincidir con System.getProperty en el momento de la carga; solo se verifica JAVA_AWT_HEADLESS.
+4. JAVA_VERSION_TRIMMED debe empezar en el primer dígito de java.version y ser null si java.version es null; no se prueba.
+5. JAVA_VERSION_FLOAT y JAVA_VERSION_INT deben valer 0 cuando JAVA_VERSION es null; no se prueba.
+6. toJavaVersionInt debe devolver un int (120 para 1.2, 131 para 1.3.1, 160 para 1.6.0_20); ninguna prueba lo invoca, y la implementación declara float como tipo de retorno.
+7. getJavaHome, getJavaIoTmpDir, getUserDir y getUserHome deben lanzar SecurityException cuando el gestor de seguridad lo impide; solo se prueba el caso normal.
+8. USER_COUNTRY debe tomar el valor de user.region cuando user.country es null; no se verifica.

@@ -1,0 +1,8 @@
+1. getShortClassName(String) con nombres en codificación de array de la JVM (por ejemplo "[Ljava.lang.String;") no está verificado, aunque el código tiene comentarios de manejo de arrays sin implementar.
+2. getPackageName(String) con nombres en codificación de array o de tipo primitivo no está verificado.
+3. getAllSuperclasses no está verificado para Object, para interfaces ni para tipos primitivos, donde debería devolver una lista vacía.
+4. La sobrecarga de isAssignable para arrays de clases con autoboxing=true no está verificada; todas las pruebas de arrays usan solo la versión sin autoboxing.
+5. getClass(ClassLoader, String, boolean) no está verificado con initialize=false ni con un ClassLoader explícito distinto del de contexto.
+6. getPublicMethod no está verificado en sus caminos de excepción: lanzar NoSuchMethodException cuando no existe un método público equivalente, y NullPointerException cuando cls es null.
+7. wrapperToPrimitive(Void.class) no está verificado; devuelve null, mientras que primitiveToWrapper(Void.TYPE) devuelve Void.class, lo que es una asimetría no probada.
+8. toClass con un elemento null en el array no está verificado; el método lanza NullPointerException, comportamiento no documentado ni probado.

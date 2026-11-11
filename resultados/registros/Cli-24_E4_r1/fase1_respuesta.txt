@@ -1,0 +1,8 @@
+1. Las constantes públicas deben tener los valores documentados por defecto (ancho 74, padding izquierdo 1, padding de descripción 3, prefijos "usage: ", "-", "--" y nombre de argumento "arg"), y los campos deprecados deben inicializarse con ellas.
+2. Los métodos printHelp(String, Options) y printHelp(String, Options, boolean) deben escribir en System.out, y ninguna prueba verifica ese destino ni su contenido.
+3. La sobrecarga printHelp(int width, ...) debe respetar el ancho recibido en la salida, y no hay ninguna prueba que lo compruebe.
+4. Cuando la cabecera o el pie son null o solo contienen espacios en blanco, no deben imprimirse; las pruebas solo cubren cadenas vacías y cabeceras que empiezan por salto de línea.
+5. Con autoUsage en false, printHelp debe usar el cmdLineSyntax literal como sentencia de uso; las pruebas solo cubren autoUsage en true a través de printHelp.
+6. printHelp debe lanzar IllegalStateException cuando no hay espacio suficiente para imprimir una línea (anchura menor o igual que la indentación más el argumento), y ninguna prueba lo verifica.
+7. getOptionComparator debe devolver el comparador por defecto con orden alfabético sin distinguir mayúsculas, y setOptionComparator(null) debe restablecerlo; no hay pruebas del getter ni del orden con mayúsculas y minúsculas mezcladas.
+8. Los métodos públicos printOptions y printWrapped(pw, width, text) deben escribir en el PrintWriter con un salto de línea final, y no se prueban directamente, solo sus equivalentes protegidos renderOptions y renderWrappedText.

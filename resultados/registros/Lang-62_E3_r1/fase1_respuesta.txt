@@ -1,0 +1,8 @@
+1. Las instancias estáticas `Entities.HTML32` y `Entities.HTML40` no se verifican con pruebas de escape/unescape de entidades representativas, salvo el caso `&nbsp;`.
+2. `Entities.XML` no verifica la entidad `apos` (valor 39) ni su comportamiento en escape y unescape.
+3. `escape` no verifica que un carácter sin entidad nombrada y mayor que 0x7F se codifique como referencia numérica `&#N;`.
+4. `escape` no verifica que los caracteres ASCII sin entidad (≤ 0x7F) pasen sin cambios.
+5. `unescape` no verifica referencias numéricas decimales válidas (por ejemplo `&#65;`) ni hexadecimales en minúscula (`&#x41;`).
+6. `unescape` no verifica entradas con `&` antes de `;` donde aparece otro `&` intermedio (rama `&...&...;`), ni el caso de hexadecimal mal formado (`&#xZZ;`) en la variante String.
+7. `addEntity` no verifica la sobrescritura de un nombre o valor ya existente, ni el comportamiento de `LookupEntityMap` para valores ≥ 256 (que delega en `PrimitiveEntityMap`).
+8. No se verifica que las variantes `escape(String)`/`escape(Writer)` y `unescape(String)`/`unescape(Writer)` produzcan resultados idénticos para la misma entrada, incluido un ida y vuelta (`unescape(escape(x)) == x`) con entidades HTML40.

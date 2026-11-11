@@ -1,0 +1,7 @@
+1. El método `toClass` debe insertar `null` cuando un elemento del array de entrada es `null`, y ninguna prueba lo verifica.
+2. El método `toClass` debe devolver `null` para un array nulo y un array vacío para una entrada vacía, comportamiento sin cobertura.
+3. El método `getPublicMethod` debe lanzar `NullPointerException` si la clase es `null`, y no hay pruebas para ese caso.
+4. El método `getPublicMethod` debe lanzar `NoSuchMethodException` cuando no encuentra un método público conforme, y esa excepción no se prueba.
+5. El método `getClass(ClassLoader, String, boolean)` debe respetar el parámetro `initialize` y usar el `ClassLoader` indicado; no hay pruebas que lo verifiquen.
+6. El método `getAllSuperclasses` debe devolver una lista vacía para `Object` o para una interfaz, sin superclases; este caso no está probado.
+7. El método `convertClassNamesToClasses` debe almacenar `null` cuando un nombre de la lista de entrada es `null`, y no hay prueba para ese caso.

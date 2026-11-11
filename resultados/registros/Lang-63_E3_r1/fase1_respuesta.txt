@@ -1,0 +1,8 @@
+1. formatDuration(long, String, boolean) con padWithZeros=false no se verifica directamente; solo se ejecuta indirectamente a través de formatDurationISO y formatPeriod.
+2. formatDuration con un patrón sin token d no reduce las horas a módulo 24, por lo que una duración de 25 horas con "H" debería producir 25.
+3. El comportamiento de formatDuration y formatPeriod ante duraciones negativas (endMillis menor que startMillis) no está especificado ni probado.
+4. La sobrecarga formatPeriod(start, end, format), que usa la zona horaria por defecto, no tiene ninguna prueba directa.
+5. La frontera de 28 días en formatPeriod, donde se decide si se delega en formatDuration o se usa el cálculo calendario, no está probada.
+6. La rama de ajuste de días negativos en formatPeriod (sumar 31 días y restar un mes) no está verificada, ya que la prueba de Bugzilla 38401 está comentada.
+7. formatDurationWords con duración 0 y suppressLeadingZeroElements=true devuelve una cadena vacía, comportamiento que no se verifica.
+8. lexx no gestiona el escape de comillas simples dobles (''), y no hay pruebas que documenten ese comportamiento limitado.

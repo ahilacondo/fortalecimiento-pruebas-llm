@@ -1,0 +1,8 @@
+1. Con stopAtNonOption en false, las opciones que aparecen después de un argumento no opción deben seguir interpretándose; ninguna prueba lo verifica.
+2. Con stopAtNonOption en false, una entrada de dos caracteres no válida como "-x" debe ignorarse en flatten; el código la añade a los tokens y ninguna prueba verifica esta regla a nivel de flatten.
+3. Con stopAtNonOption en false, un carácter no válido dentro de un token agrupado debe añadirse como "-" seguido de ese carácter; el código añade el token completo y no hay prueba que lo detecte.
+4. Con stopAtNonOption en true, las entradas "--" y "-" que aparecen tras el primer no opción deben copiarse sin procesar; no hay prueba que lo cubra.
+5. Con stopAtNonOption en true, al interpretar un token agrupado con carácter desconocido, los tokens restantes deben copiarse directamente; testStopBursting solo verifica el argumento sobrante.
+6. Las entradas no manejadas por ninguna regla, como una cadena vacía, deben añadirse tal cual a los tokens; ninguna prueba lo verifica.
+7. Para opciones con múltiples valores, process debe añadir los valores sucesivos; el código anida la misma comprobación de hasArg, haciendo inalcanzable la rama de hasArgs, y no hay prueba que lo detecte.
+8. Entre invocaciones consecutivas, init debe restablecer currentOption a null; ninguna prueba verifica que una opción pendiente no contamine la invocación siguiente.

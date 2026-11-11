@@ -1,0 +1,8 @@
+1. El constructor `Base64(boolean urlSafe)` debe codificar con líneas de 76 caracteres separadas por CRLF, algo que las pruebas solo verifican para los métodos estáticos.
+2. El constructor `Base64()` debe producir salida sin troceado (sin CRLF) también para entradas largas, no solo para la cadena corta "Hello World".
+3. Un `lineLength` menor o igual que cero debe generar salida sin saltos de línea en la codificación de datos largos; las pruebas solo construyen esas instancias sin comprobar la salida.
+4. Al decodificar, el primer carácter '=' debe marcar el fin de los datos, de modo que los bytes que aparezcan después se ignoren; no hay pruebas de esto.
+5. El método público `isBase64(byte octet)` debe aceptar el carácter de relleno '=' y rechazar los valores fuera del alfabeto; las pruebas solo usan la sobrecarga con arrays.
+6. Con `encodeBase64(..., maxResultSize)`, un límite igual al tamaño exacto del resultado no debe lanzar excepción; solo se prueban límites inferiores que sí fallan.
+7. La codificación y la decodificación en varias llamadas parciales (streaming) deben producir la misma salida que una única llamada con todos los datos, lo que no se comprueba.
+8. Si `lineSeparator` es nulo, la codificación no debe trocear aunque `lineLength` sea mayor que cero, y esto no se verifica con entradas que superen una línea.

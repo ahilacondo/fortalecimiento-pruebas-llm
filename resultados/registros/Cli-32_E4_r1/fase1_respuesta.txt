@@ -1,0 +1,8 @@
+1. Los valores por defecto de las constantes y de los getters (ancho 74, padding izquierdo 1, padding de descripción 3, prefijo "usage: ", prefijos "-" y "--", nombre de argumento "arg", separador de línea del sistema) no se verifican.
+2. El comparador por defecto debe ordenar sin distinguir mayúsculas y minúsculas, y no se prueba con claves mixtas ni que el getter devuelva un comparador no nulo por defecto.
+3. El modo de uso no automático (autoUsage=false) no se verifica: no se comprueba que se imprima la sintaxis proporcionada en lugar de la generada a partir de las opciones.
+4. Las sobrecargas de printHelp que escriben en System.out no se verifican en su salida; solo se prueba la excepción por sintaxis nula o vacía.
+5. La sobrecarga de printHelp con el parámetro width explícito no se prueba, ni que las sobrecargas sin width usen el valor configurado con setWidth.
+6. Se prueba el accesor de setNewLine, pero no que el separador personalizado se use realmente al renderizar la salida.
+7. La documentación indica que header y footer se muestran como banners; no se verifica que los valores vacíos o compuestos solo por espacios se omitan.
+8. La Javadoc documenta @throws IllegalStateException si no hay espacio para una línea; ninguna prueba lo verifica y el código no lanza esa excepción (discrepancia entre documentación e implementación).

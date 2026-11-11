@@ -1,0 +1,318 @@
+```java
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.util.List;
+
+import org.junit.Test;
+
+public class OptionsLLMTest
+{
+    /**
+     * Comportamiento 1: hasOption y getOption ignoran guiones iniciales
+     * ("-" y "--") en el nombre consultado.
+     */
+    @Test
+    public void testHasOptionAndGetOptionIgnoreLeadingHyphens()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha", false, "alpha option");
+
+        assertTrue("nombre corto sin guion debe existir", options.hasOption("a"));
+        assertTrue("nombre corto con un guion debe existir", options.hasOption("-a"));
+        assertTrue("nombre largo sin guiones debe existir", options.hasOption("alpha"));
+        assertTrue("nombre largo con dos guiones debe existir", options.hasOption("--alpha"));
+
+        Option shortNoHyphen = options.getOption("a");
+        Option shortOneHyphen = options.getOption("-a");
+        Option longNoHyphen = options.getOption("alpha");
+        Option longTwoHyphens = options.getOption("--alpha");
+
+        assertNotNull(shortNoHyphen);
+        assertSame("'-a' debe resolver a la misma opción que 'a'", shortNoHyphen, shortOneHyphen);
+        assertNotNull(longNoHyphen);
+        assertSame("'--alpha' debe resolver a la misma opción que 'alpha'", longNoHyphen, longTwoHyphens);
+    }
+
+    /**
+     * Comportamiento 1 (complemento): un nombre desconocido sigue siendo desconocido
+     * aunque se le añadan guiones.
+     */
+    @Test
+    public void testUnknownNameWithHyphensIsNotFound()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha", false, "alpha option");
+
+        assertFalse(options.hasOption("--beta"));
+        assertFalse(options.hasOption("-b"));
+        assertNull(options.getOption("--beta"));
+        assertNull(options.getOption("-b"));
+    }
+
+    /**
+     * Comportamiento 2: hasShortOption y hasLongOption distinguen espacios de nombres.
+     */
+    @Test
+    public void testShortAndLongNamespacesAreDistinct()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha", false, "alpha option");
+
+        assertTrue("'a' es un nombre corto", options.hasShortOption("a"));
+        assertFalse("'a' no es un nombre largo", options.hasLongOption("a"));
+
+        assertTrue("'alpha' es un nombre largo", options.hasLongOption("alpha"));
+        assertFalse("'alpha' no es un nombre corto", options.hasShortOption("alpha"));
+
+        assertTrue("hasOption acepta ambos espacios de nombres", options.hasOption("alpha"));
+        assertTrue("hasOption acepta ambos espacios de nombres", options.hasOption("a"));
+    }
+
+    /**
+     * Comportamiento 2 (complemento): hasShortOption y hasLongOption también eliminan
+     * guiones iniciales antes de consultar.
+     */
+    @Test
+    public void testShortAndLongQueriesStripHyphens()
+    {
+        Options options = new Options();
+        options.addOption("a", "alpha", false, "alpha option");
+
+        assertTrue(options.hasShortOption("-a"));
+        assertFalse(options.hasLongOption("-a"));
+        assertTrue(options.hasLongOption("--alpha"));
+        assertFalse(options.hasShortOption("--alpha"));
+    }
+
+    /**
+     * Comportamiento 3: getMatchingOptions solo busca entre nombres largos;
+     * las opciones que solo tienen nombre corto no aparecen.
+     */
+    @Test
+    public void testGetMatchingOptionsOnlyConsidersLongNames()
+    {
+        Options options = new Options();
+        options.addOption("v", false, "short only v");
+        options.addOption("x", "verbose", false, "verbose option");
+
+        List<String> matches = options.getMatchingOptions("v");
+
+        assertEquals("solo debe devolver nombres largos que empiezan por 'v'", 1, matches.size());
+        assertTrue(matches.contains("verbose"));
+        assertFalse("el nombre corto 'v' no debe aparecer", matches.contains("v"));
+    }
+
+    /**
+     * Comportamiento 3: una opción que solo tiene nombre corto no produce coincidencias
+     * aunque el prefijo coincida con su nombre corto.
+     */
+    @Test
+    public void testGetMatchingOptionsIgnoresShortOnlyOptions()
+    {
+        Options options = new Options();
+        options.addOption("a", false, "short only a");
+
+        assertTrue("sin nombres largos no debe haber coincidencias", options.getMatchingOptions("a").isEmpty());
+    }
+
+    /**
+     * Comportamiento 3 (complemento): getMatchingOptions elimina guiones iniciales
+     * del parámetro antes de buscar.
+     */
+    @Test
+    public void testGetMatchingOptionsStripsLeadingHyphens()
+    {
+        Options options = new Options();
+        options.addOption("v", "verbose", false, "verbose");
+        options.addOption("q", "quiet", false, "quiet");
+
+        List<String> withOneHyphen = options.getMatchingOptions("-ver");
+        List<String> withTwoHyphens = options.getMatchingOptions("--ver");
+        List<String> withoutHyphens = options.getMatchingOptions("ver");
+
+        assertEquals(1, withOneHyphen.size());
+        assertTrue(withOneHyphen.contains("verbose"));
+        assertEquals(withoutHyphens, withOneHyphen);
+        assertEquals(withoutHyphens, withTwoHyphens);
+    }
+
+    /**
+     * Comportamiento 4: añadir dos veces una opción requerida con la misma clave
+     * no duplica la entrada en getRequiredOptions.
+     */
+    @Test
+    public void testAddingSameRequiredOptionTwiceDoesNotDuplicate()
+    {
+        Options options = new Options();
+
+        Option first = new Option("f", "file", true, "first file");
+        first.setRequired(true);
+        Option second = new Option("f", "file", true, "second file");
+        second.setRequired(true);
+
+        options.addOption(first);
+        options.addOption(second);
+
+        List<?> required = options.getRequiredOptions();
+        assertEquals("la clave requerida no debe duplicarse", 1, required.size());
+        assertEquals("f", required.get(0));
+    }
+
+    /**
+     * Comportamiento 4 (complemento): una opción requerida se registra en getRequiredOptions
+     * por su clave.
+     */
+    @Test
+    public void testRequiredOptionIsRegisteredByKey()
+    {
+        Options options = new Options();
+
+        Option required = new Option("r", "required", false, "required option");
+        required.setRequired(true);
+        options.addOption(required);
+
+        List<?> requiredList = options.getRequiredOptions();
+        assertEquals(1, requiredList.size());
+        assertEquals("r", requiredList.get(0));
+    }
+
+    /**
+     * Comportamiento 5: un OptionGroup se incluye en getRequiredOptions solo si es requerido,
+     * y en ese caso no se incluyen sus opciones miembro.
+     */
+    @Test
+    public void testRequiredGroupIsIncludedWithoutMembers()
+    {
+        Options options = new Options();
+
+        OptionGroup group = new OptionGroup();
+        group.setRequired(true);
+        group.addOption(new Option("a", "alpha", false, "alpha"));
+        group.addOption(new Option("b", "beta", false, "beta"));
+
+        options.addOptionGroup(group);
+
+        List<?> required = options.getRequiredOptions();
+        assertEquals("solo el grupo debe aparecer", 1, required.size());
+        assertSame("el elemento debe ser el propio grupo", group, required.get(0));
+        assertFalse("la clave 'a' no debe aparecer", required.contains("a"));
+        assertFalse("la clave 'b' no debe aparecer", required.contains("b"));
+    }
+
+    /**
+     * Comportamiento 5 (complemento): un OptionGroup no requerido no aparece en getRequiredOptions.
+     */
+    @Test
+    public void testNonRequiredGroupIsNotIncludedInRequiredOptions()
+    {
+        Options options = new Options();
+
+        OptionGroup group = new OptionGroup();
+        group.setRequired(false);
+        group.addOption(new Option("a", "alpha", false, "alpha"));
+        group.addOption(new Option("b", "beta", false, "beta"));
+
+        options.addOptionGroup(group);
+
+        assertTrue("un grupo no requerido no debe aparecer", options.getRequiredOptions().isEmpty());
+    }
+
+    /**
+     * Comportamiento 6: addOptionGroup fuerza required=false en cada opción miembro,
+     * aunque se hubiera marcado como requerida antes.
+     */
+    @Test
+    public void testAddOptionGroupForcesMembersNotRequired()
+    {
+        Options options = new Options();
+
+        Option member = new Option("m", "member", false, "member option");
+        member.setRequired(true);
+        assertTrue("precondición: la opción está marcada como requerida", member.isRequired());
+
+        OptionGroup group = new OptionGroup();
+        group.setRequired(false);
+        group.addOption(member);
+
+        options.addOptionGroup(group);
+
+        assertFalse("la opción miembro debe quedar no requerida", member.isRequired());
+        assertTrue("no debe aparecer en requeridas", options.getRequiredOptions().isEmpty());
+        assertTrue("la opción sigue registrada", options.hasOption("m"));
+    }
+
+    /**
+     * Comportamiento 7: getOptionGroup(Option) devuelve el grupo al que pertenece la opción.
+     */
+    @Test
+    public void testGetOptionGroupReturnsOwningGroup()
+    {
+        Options options = new Options();
+
+        Option member = new Option("a", "alpha", false, "alpha");
+        Option otherMember = new Option("b", "beta", false, "beta");
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(member);
+        group.addOption(otherMember);
+
+        options.addOptionGroup(group);
+
+        assertSame("la opción 'a' pertenece al grupo", group, options.getOptionGroup(member));
+        assertSame("la opción 'b' pertenece al grupo", group, options.getOptionGroup(otherMember));
+    }
+
+    /**
+     * Comportamiento 7 (complemento): getOptionGroup devuelve null para una opción
+     * que no pertenece a ningún grupo, incluso si tiene la misma clave que una opción agrupada
+     * solo cuando es el mismo nombre registrado; aquí se usa una opción independiente.
+     */
+    @Test
+    public void testGetOptionGroupReturnsNullForUngroupedOption()
+    {
+        Options options = new Options();
+
+        Option grouped = new Option("a", "alpha", false, "alpha");
+        OptionGroup group = new OptionGroup();
+        group.addOption(grouped);
+        options.addOptionGroup(group);
+
+        Option standalone = new Option("z", "zeta", false, "zeta");
+        options.addOption(standalone);
+
+        assertNull("una opción fuera de cualquier grupo debe devolver null", options.getOptionGroup(standalone));
+        assertNull("una opción nunca añadida debe devolver null", options.getOptionGroup(new Option("q", "quux", false, "q")));
+    }
+
+    /**
+     * Comportamiento 8: al sobrescribir una opción con la misma clave corta pero distinto
+     * nombre largo, el nombre largo anterior sigue registrado como alias obsoleto.
+     */
+    @Test
+    public void testOverwrittenLongNameRemainsAsStaleAlias()
+    {
+        Options options = new Options();
+
+        Option oldOption = new Option("a", "alpha", false, "old");
+        Option newOption = new Option("a", "beta", false, "new");
+
+        options.addOption(oldOption);
+        options.addOption(newOption);
+
+        assertSame("la clave corta 'a' apunta a la opción nueva", newOption, options.getOption("a"));
+        assertTrue("el nombre largo nuevo debe existir", options.hasLongOption("beta"));
+
+        assertTrue("el nombre largo obsoleto sigue registrado", options.hasLongOption("alpha"));
+        assertSame("el nombre largo obsoleto sigue resolviendo a la opción anterior",
+                   oldOption, options.getOption("alpha"));
+        assertEquals("old", options.getOption("alpha").getDescription());
+    }
+}
+```

@@ -1,0 +1,8 @@
+1. Métodos de recorte `trim`, `trimToNull` y `trimToEmpty`, incluyendo el caso de caracteres de control (<= 32) y las cadenas nulas.
+2. Métodos `strip`, `stripToNull` y `stripToEmpty` sin conjunto de caracteres, y `strip`, `stripStart` y `stripEnd` con conjunto de caracteres personalizado o vacío.
+3. Métodos `isEmpty`, `isNotEmpty`, `isBlank` e `isNotBlank` con null, cadena vacía y cadenas solo con espacios.
+4. Métodos `equals` y `equalsIgnoreCase` con argumentos null y comparación sensible o insensible a mayúsculas.
+5. Métodos `indexOf` y `lastIndexOf` (variantes con char y String, con posición inicial negativa o mayor que la longitud) y `indexOfIgnoreCase` y `lastIndexOfIgnoreCase`.
+6. Métodos `substring` (de dos y tres argumentos), `left`, `right` y `mid` con índices negativos, fuera de rango o con inicio mayor que fin.
+7. Métodos `substringBefore`, `substringAfter`, `substringBeforeLast`, `substringAfterLast` y `substringBetween`, con separadores null o vacíos y con separador no encontrado.
+8. Métodos `startsWith`, `endsWith` y sus variantes `IgnoreCase`, ya que solo `startsWithAny` está cubierto por la suite.

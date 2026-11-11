@@ -1,0 +1,8 @@
+1. La opción larga con `=` separa nombre y valor, y con varios `=` el valor conserva los restantes (p. ej., `--bfile=a=b`).
+2. Una opción larga con `=` aplicada a una opción que no admite argumento no tiene comportamiento verificado.
+3. Una opción larga desconocida no provoca `UnrecognizedOptionException` durante el aplanado; solo se verifica el caso de opciones cortas.
+4. Una opción larga que requiere argumento y aparece sin valor al final lanza `MissingArgumentException`; solo se prueba la forma corta.
+5. Con `stopAtNonOption=true`, el token siguiente a una opción con argumento se consume como su valor y no detiene el procesado.
+6. En una ráfaga como `-bc`, donde `b` requiere argumento, `c` se trata como valor de `b` y no como la opción `c`; no está verificado.
+7. Las opciones con múltiples argumentos (`hasArgs`) no tienen verificado el consumo de varios valores con `stopAtNonOption=true`; la rama de `hasArgs` en `process()` es inalcanzable porque está anidada bajo `hasArg()`.
+8. Un token vacío `""` se trata como argumento no opción; este caso límite no tiene cobertura.

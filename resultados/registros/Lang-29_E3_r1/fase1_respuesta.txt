@@ -1,0 +1,8 @@
+1. Las constantes de propiedades de cadena (FILE_SEPARATOR, LINE_SEPARATOR, PATH_SEPARATOR, OS_NAME, OS_VERSION, USER_NAME, JAVA_HOME, etc.) no se comparan con los valores de System.getProperty.
+2. USER_COUNTRY recurre a user.region cuando user.country no está definido, y no hay prueba de esa lógica de respaldo.
+3. JAVA_VERSION_TRIMMED elimina los caracteres iniciales no numéricos de JAVA_VERSION y devuelve null cuando JAVA_VERSION es null.
+4. JAVA_VERSION_FLOAT y JAVA_VERSION_INT solo se comprueban de forma relativa (isJavaVersionAtLeast); nunca se verifica que su valor coincida con la versión derivada de JAVA_VERSION.
+5. toJavaVersionIntArray (incluida la variante con límite) no tiene pruebas directas: no se verifica el truncado a tres componentes ni la omisión de segmentos vacíos.
+6. toJavaVersionInt está declarado como float, lo que es inconsistente con su nombre y con getJavaVersionAsInt (que devuelve int); no hay ninguna prueba que lo detecte.
+7. Las banderas IS_OS_* de AIX, HP-UX, Irix, Mac, Linux en mayúsculas, Windows 2000, NT, XP, Vista, 7, 95, 98 y ME no se verifican, ni tampoco que IS_OS_UNIX sea verdadero para todas las plataformas UNIX.
+8. getSystemProperty devuelve null cuando se lanza SecurityException y escribe un mensaje en System.err; no existe ninguna prueba de este camino de error.

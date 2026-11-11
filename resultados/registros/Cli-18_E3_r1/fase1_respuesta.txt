@@ -1,0 +1,8 @@
+1. Las opciones largas con `=` (`--opción=valor`) se dividen en nombre y valor en el primer `=`.
+2. Un valor de opción larga que contiene `=` conserva el resto de la cadena tras el primer `=`.
+3. Una opción corta desconocida de dos caracteres, con stopAtNonOption en falso, se descarta sin añadirse a los tokens.
+4. Una opción corta desconocida de dos caracteres, con stopAtNonOption en verdadero, detiene el procesamiento y copia el resto de argumentos sin interpretarlos.
+5. Una ráfaga de opciones cortas que termina en una opción con argumento consume el siguiente token como valor (p. ej., "-acb" seguido de "toast").
+6. Una opción con argumento escrita sola al final de la línea, sin valor, lanza MissingArgumentException.
+7. Una cadena vacía como argumento se trata como argumento posicional y no como opción.
+8. Una opción larga desconocida (`--xyz`) se añade a los tokens sin validación previa, delegando el rechazo al Parser.

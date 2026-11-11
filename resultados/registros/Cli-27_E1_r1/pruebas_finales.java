@@ -1,0 +1,406 @@
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link OptionGroup} que usan únicamente su API pública.
+ */
+public class OptionGroupLLMTest
+{
+    private static Option shortOpt(String opt, String description)
+    {
+        return new Option(opt, null, false, description);
+    }
+
+    private static Option longOnlyOpt(String longOpt, String description)
+    {
+        return new Option(null, longOpt, false, description);
+    }
+
+    private static Option bothOpt(String opt, String longOpt, String description)
+    {
+        return new Option(opt, longOpt, false, description);
+    }
+
+    private static Set<Object> asSet(Collection<?> collection)
+    {
+        return new HashSet<Object>(collection);
+    }
+
+    @Test
+    public void testNewGroupHasNoOptions()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertNotNull("getNames no debe devolver null", group.getNames());
+        assertNotNull("getOptions no debe devolver null", group.getOptions());
+        assertTrue("Un grupo nuevo no tiene nombres", group.getNames().isEmpty());
+        assertTrue("Un grupo nuevo no tiene opciones", group.getOptions().isEmpty());
+    }
+
+    @Test
+    public void testNewGroupHasNoSelectionAndIsNotRequired()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertNull("Ninguna opción seleccionada al inicio", group.getSelected());
+        assertFalse("Un grupo nuevo no es obligatorio", group.isRequired());
+    }
+
+    @Test
+    public void testAddOptionReturnsSameGroupInstance()
+    {
+        OptionGroup group = new OptionGroup();
+
+        OptionGroup returned = group.addOption(shortOpt("a", "alpha"));
+
+        assertSame("addOption debe devolver el mismo grupo (fluent)", group, returned);
+    }
+
+    @Test
+    public void testAddOptionsChainedFluently()
+    {
+        OptionGroup group = new OptionGroup()
+                .addOption(shortOpt("a", "alpha"))
+                .addOption(shortOpt("b", "beta"))
+                .addOption(shortOpt("c", "gamma"));
+
+        assertEquals("Deben existir tres nombres", 3, group.getNames().size());
+        assertEquals("Deben existir tres opciones", 3, group.getOptions().size());
+    }
+
+    @Test
+    public void testGetNamesUsesShortOptWhenPresent()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(bothOpt("f", "file", "file to process"));
+
+        Set<Object> names = asSet(group.getNames());
+
+        assertEquals("Debe haber exactamente un nombre", 1, names.size());
+        assertTrue("La clave debe ser el nombre corto 'f'", names.contains("f"));
+        assertFalse("No debe aparecer el nombre largo como clave", names.contains("file"));
+    }
+
+    @Test
+    public void testGetNamesUsesLongOptForLongOnlyOption()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(longOnlyOpt("import", "section to process"));
+
+        Set<Object> names = asSet(group.getNames());
+
+        assertEquals("Debe haber exactamente un nombre", 1, names.size());
+        assertTrue("La clave debe ser el nombre largo 'import'", names.contains("import"));
+    }
+
+    @Test
+    public void testGetNamesMixesShortAndLongOnlyKeys()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("x", "x option"));
+        group.addOption(longOnlyOpt("export", "export option"));
+
+        Set<Object> names = asSet(group.getNames());
+
+        assertEquals(2, names.size());
+        assertTrue(names.contains("x"));
+        assertTrue(names.contains("export"));
+    }
+
+    @Test
+    public void testGetOptionsContainsAddedInstances()
+    {
+        OptionGroup group = new OptionGroup();
+        Option a = shortOpt("a", "alpha");
+        Option b = longOnlyOpt("beta", "beta option");
+
+        group.addOption(a);
+        group.addOption(b);
+
+        Collection<?> options = group.getOptions();
+        assertEquals(2, options.size());
+        assertTrue("Debe contener la instancia 'a'", options.contains(a));
+        assertTrue("Debe contener la instancia 'b'", options.contains(b));
+    }
+
+    @Test
+    public void testAddingSameKeyReplacesPreviousOption()
+    {
+        OptionGroup group = new OptionGroup();
+        Option first = shortOpt("k", "first description");
+        Option second = shortOpt("k", "second description");
+
+        group.addOption(first);
+        group.addOption(second);
+
+        assertEquals("Una clave repetida no duplica la opción", 1, group.getNames().size());
+        assertEquals("Una clave repetida no duplica la opción", 1, group.getOptions().size());
+        assertSame("La última opción añadida con la misma clave debe prevalecer",
+                second, group.getOptions().iterator().next());
+    }
+
+    @Test
+    public void testGetNamesAndGetOptionsHaveSameSize()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("p", "p"));
+        group.addOption(shortOpt("q", "q"));
+        group.addOption(longOnlyOpt("r-long", "r"));
+
+        assertEquals(group.getNames().size(), group.getOptions().size());
+    }
+
+    @Test
+    public void testSetSelectedStoresOptionName() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        group.addOption(f);
+
+        group.setSelected(f);
+
+        assertEquals("La selección debe ser el nombre de la opción", "f", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedSameOptionTwiceDoesNotThrow() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        group.addOption(f);
+
+        group.setSelected(f);
+        group.setSelected(f);
+
+        assertEquals("f", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedDifferentInstanceWithSameOptNameIsAccepted() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("f", "file"));
+
+        group.setSelected(shortOpt("f", "another description"));
+
+        assertEquals("La comparación se hace por nombre, no por instancia", "f", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedDifferentOptionThrowsAlreadySelected() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        Option d = shortOpt("d", "directory");
+        group.addOption(f);
+        group.addOption(d);
+
+        group.setSelected(f);
+        try
+        {
+            group.setSelected(d);
+            fail("Seleccionar una segunda opción distinta del grupo debe lanzar AlreadySelectedException");
+        }
+        catch (AlreadySelectedException e)
+        {
+            assertSame("La excepción debe referenciar el grupo", group, e.getOptionGroup());
+            assertSame("La excepción debe referenciar la opción conflictiva", d, e.getOption());
+        }
+    }
+
+    @Test
+    public void testFailedSelectionKeepsOriginalSelection() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        Option d = shortOpt("d", "directory");
+        group.addOption(f);
+        group.addOption(d);
+
+        group.setSelected(f);
+        try
+        {
+            group.setSelected(d);
+            fail("Debe lanzar AlreadySelectedException");
+        }
+        catch (AlreadySelectedException expected)
+        {
+            // esperado
+        }
+
+        assertEquals("Un intento fallido no debe cambiar la selección", "f", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedNullResetsSelection() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        group.addOption(f);
+
+        group.setSelected(f);
+        group.setSelected(null);
+
+        assertNull("Pasar null debe limpiar la selección", group.getSelected());
+    }
+
+    @Test
+    public void testAfterResetAnotherOptionCanBeSelected() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        Option d = shortOpt("d", "directory");
+        group.addOption(f);
+        group.addOption(d);
+
+        group.setSelected(f);
+        group.setSelected(null);
+        group.setSelected(d);
+
+        assertEquals("Tras limpiar, otra opción del grupo puede seleccionarse", "d", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedNullOnFreshGroupIsSafe() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setSelected(null);
+
+        assertNull(group.getSelected());
+    }
+
+    @Test
+    public void testSetRequiredTrueAndFalse()
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setRequired(true);
+        assertTrue("isRequired debe reflejar true", group.isRequired());
+
+        group.setRequired(false);
+        assertFalse("isRequired debe reflejar false", group.isRequired());
+    }
+
+    @Test
+    public void testRequiredDoesNotAffectSelection() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        group.addOption(f);
+
+        group.setRequired(true);
+        group.setSelected(f);
+
+        assertTrue(group.isRequired());
+        assertEquals("f", group.getSelected());
+    }
+
+    @Test
+    public void testToStringEmptyGroup()
+    {
+        assertEquals("[]", new OptionGroup().toString());
+    }
+
+    @Test
+    public void testToStringSingleShortOption()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("f", "file to process"));
+
+        assertEquals("[-f file to process]", group.toString());
+    }
+
+    @Test
+    public void testToStringSingleLongOnlyOption()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(longOnlyOpt("import", "section to process"));
+
+        assertEquals("[--import section to process]", group.toString());
+    }
+
+    @Test
+    public void testToStringContainsEveryEntryAndSeparators()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("a", "alpha"));
+        group.addOption(longOnlyOpt("beta", "beta option"));
+
+        String text = group.toString();
+
+        assertTrue("Debe empezar por '['", text.startsWith("["));
+        assertTrue("Debe terminar por ']'", text.endsWith("]"));
+        assertTrue("Debe contener la entrada corta", text.contains("-a alpha"));
+        assertTrue("Debe contener la entrada larga", text.contains("--beta beta option"));
+        assertTrue("Debe separar entradas con ', '", text.contains(", "));
+    }
+
+    @Test
+    public void testToStringWithTwoEntriesHasExactlyOneSeparator()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("a", "alpha"));
+        group.addOption(shortOpt("b", "beta"));
+
+        String text = group.toString();
+
+        assertTrue("Debe empezar por '['", text.startsWith("["));
+        assertTrue("Debe terminar por ']'", text.endsWith("]"));
+        assertEquals("Con dos entradas debe haber un único separador", 1,
+                text.split(", ", -1).length - 1);
+        assertTrue(text.contains("-a alpha"));
+        assertTrue(text.contains("-b beta"));
+    }
+
+    @Test
+    public void testToStringUsesShortFormWhenBothNamesPresent()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(bothOpt("f", "file", "File"));
+
+        assertEquals("[-f File]", group.toString());
+    }
+
+    @Test
+    public void testToStringDoesNotChangeGroupState() throws Exception
+    {
+        OptionGroup group = new OptionGroup();
+        Option f = shortOpt("f", "file");
+        group.addOption(f);
+        group.setSelected(f);
+        group.setRequired(true);
+
+        group.toString();
+
+        assertEquals("f", group.getSelected());
+        assertTrue(group.isRequired());
+        assertEquals(1, group.getNames().size());
+    }
+
+    @Test
+    public void testGetNamesReflectsOnlyAddedOptions()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(shortOpt("m", "m"));
+
+        Set<Object> names = asSet(group.getNames());
+
+        assertEquals(1, names.size());
+        assertTrue(names.contains("m"));
+        assertFalse(names.contains("n"));
+    }
+}

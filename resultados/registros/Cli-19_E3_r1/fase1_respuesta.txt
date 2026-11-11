@@ -1,0 +1,8 @@
+1. Separación de un token `--opción=valor` en nombre de opción y valor como tokens independientes.
+2. Con varios signos `=` en un token `--opción=valor`, solo el primero actúa como separador.
+3. Un token `--opción=` con valor vacío produce un token de valor vacío en lugar de descartarse.
+4. Una opción corta desconocida de dos caracteres, sin `stopAtNonOption`, se descarta en silencio y el resto de argumentos se conserva.
+5. Una ráfaga con un carácter desconocido, sin `stopAtNonOption`, añade el token original completo (por ejemplo `-azc`) además de las opciones ya extraídas.
+6. El token `-` con `stopAtNonOption` activo se añade como token sin detener el procesamiento de los argumentos siguientes.
+7. Un token vacío `""` se trata como argumento no opción y se añade o procesa según `stopAtNonOption`.
+8. Un array de argumentos vacío produce un resultado sin tokens y un `CommandLine` sin opciones ni argumentos.

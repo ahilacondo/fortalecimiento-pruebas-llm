@@ -1,0 +1,256 @@
+package org.apache.commons.lang3.time;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.text.DateFormat;
+import java.text.FieldPosition;
+import java.text.ParseException;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link FastDateFormat} que cubren requisitos de
+ * documentación no verificados por las pruebas existentes.
+ */
+public class FastDateFormatLLMTest {
+
+    private static final TimeZone NEW_YORK = TimeZone.getTimeZone("America/New_York");
+    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+    // ------------------------------------------------------------------
+    // Utilidades
+    // ------------------------------------------------------------------
+
+    /** 3 de febrero de 2004, 15:04:05 en America/New_York (EST, martes). */
+    private static Date newYorkDate() {
+        GregorianCalendar cal = new GregorianCalendar(NEW_YORK, Locale.US);
+        cal.clear();
+        cal.set(2004, Calendar.FEBRUARY, 3, 15, 4, 5);
+        return cal.getTime();
+    }
+
+    private static void assertSameAsSimpleDateFormat(String pattern, TimeZone tz, Locale locale, Date date) {
+        SimpleDateFormat sdf = new SimpleDateFormat(pattern, locale);
+        sdf.setTimeZone(tz);
+        FastDateFormat fdf = FastDateFormat.getInstance(pattern, tz, locale);
+        assertEquals("Salida distinta a SimpleDateFormat para el patrón " + pattern,
+                sdf.format(date), fdf.format(date));
+    }
+
+    private static void assertIllegalArgument(Runnable action) {
+        try {
+            action.run();
+            fail("Se esperaba IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            // esperado
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: seguridad para hilos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void sameInstanceProducesCorrectResultsFromConcurrentThreads() throws Exception {
+        final String pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS Z";
+        final FastDateFormat fdf = FastDateFormat.getInstance(pattern, UTC, Locale.US);
+
+        final int iterations = 400;
+        final int threadCount = 8;
+        final Date[] dates = new Date[iterations];
+        final String[] expected = new String[iterations];
+
+        SimpleDateFormat reference = new SimpleDateFormat(pattern, Locale.US);
+        reference.setTimeZone(UTC);
+        for (int i = 0; i < iterations; i++) {
+            dates[i] = new Date(1000000000000L + i * 7777777L);
+            expected[i] = reference.format(dates[i]);
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        try {
+            final CountDownLatch start = new CountDownLatch(1);
+            List<Future<Integer>> results = new ArrayList<Future<Integer>>();
+            for (int t = 0; t < threadCount; t++) {
+                final int offset = t;
+                Callable<Integer> task = new Callable<Integer>() {
+                    public Integer call() throws Exception {
+                        start.await();
+                        int mismatches = 0;
+                        for (int k = 0; k < iterations; k++) {
+                            int idx = (k + offset) % iterations;
+                            if (!expected[idx].equals(fdf.format(dates[idx]))) {
+                                mismatches++;
+                            }
+                        }
+                        return Integer.valueOf(mismatches);
+                    }
+                };
+                results.add(pool.submit(task));
+            }
+            start.countDown();
+            for (Future<Integer> f : results) {
+                assertEquals("Hubo resultados corruptos en un hilo",
+                        0, f.get(60, TimeUnit.SECONDS).intValue());
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: patrón 'Z' (RFC822)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void zPatternProducesRfc822PositiveOffset() {
+        FastDateFormat f = FastDateFormat.getInstance("Z", TimeZone.getTimeZone("GMT+08:00"));
+        assertEquals("+0800", f.format(new Date(0L)));
+    }
+
+    @Test
+    public void zPatternProducesRfc822NegativeOffset() {
+        FastDateFormat f = FastDateFormat.getInstance("Z", TimeZone.getTimeZone("GMT-11:00"));
+        assertEquals("-1100", f.format(new Date(0L)));
+    }
+
+    @Test
+    public void zPatternProducesRfc822OffsetWithMinutes() {
+        FastDateFormat f = FastDateFormat.getInstance("Z", TimeZone.getTimeZone("GMT+05:30"));
+        assertEquals("+0530", f.format(new Date(0L)));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: patrón 'ZZ' (ISO8601)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void zzPatternProducesIso8601PositiveOffsetWithColon() {
+        FastDateFormat f = FastDateFormat.getInstance("ZZ", TimeZone.getTimeZone("GMT+08:00"));
+        assertEquals("+08:00", f.format(new Date(0L)));
+    }
+
+    @Test
+    public void zzPatternProducesIso8601NegativeOffsetWithColon() {
+        FastDateFormat f = FastDateFormat.getInstance("ZZ", TimeZone.getTimeZone("GMT-11:00"));
+        assertEquals("-11:00", f.format(new Date(0L)));
+    }
+
+    @Test
+    public void zzPatternProducesIso8601OffsetWithMinutes() {
+        FastDateFormat f = FastDateFormat.getInstance("ZZ", TimeZone.getTimeZone("GMT+05:30"));
+        assertEquals("+05:30", f.format(new Date(0L)));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: compatibilidad con SimpleDateFormat
+    // ------------------------------------------------------------------
+
+    @Test
+    public void eraPatternMatchesSimpleDateFormat() {
+        assertSameAsSimpleDateFormat("G", NEW_YORK, Locale.US, newYorkDate());
+        assertEquals("AD", FastDateFormat.getInstance("G", NEW_YORK, Locale.US).format(newYorkDate()));
+    }
+
+    @Test
+    public void monthPatternsMatchSimpleDateFormat() {
+        Date date = newYorkDate();
+        assertSameAsSimpleDateFormat("M", NEW_YORK, Locale.US, date);
+        assertSameAsSimpleDateFormat("MMM", NEW_YORK, Locale.US, date);
+        assertSameAsSimpleDateFormat("MMMM", NEW_YORK, Locale.US, date);
+        assertEquals("2", FastDateFormat.getInstance("M", NEW_YORK, Locale.US).format(date));
+        assertEquals("Feb", FastDateFormat.getInstance("MMM", NEW_YORK, Locale.US).format(date));
+    }
+
+    @Test
+    public void weekdayPatternsMatchSimpleDateFormat() {
+        Date date = newYorkDate();
+        assertSameAsSimpleDateFormat("E", NEW_YORK, Locale.US, date);
+        assertSameAsSimpleDateFormat("EEEE", NEW_YORK, Locale.US, date);
+        assertEquals("Tue", FastDateFormat.getInstance("E", NEW_YORK, Locale.US).format(date));
+    }
+
+    @Test
+    public void amPmPatternMatchesSimpleDateFormat() {
+        Date date = newYorkDate();
+        assertSameAsSimpleDateFormat("a", NEW_YORK, Locale.US, date);
+        assertEquals("PM", FastDateFormat.getInstance("a", NEW_YORK, Locale.US).format(date));
+    }
+
+    @Test
+    public void timeZoneNamePatternsMatchSimpleDateFormat() {
+        Date date = newYorkDate();
+        assertSameAsSimpleDateFormat("z", NEW_YORK, Locale.US, date);
+        assertSameAsSimpleDateFormat("zzzz", NEW_YORK, Locale.US, date);
+        assertEquals("EST", FastDateFormat.getInstance("z", NEW_YORK, Locale.US).format(date));
+    }
+
+    @Test
+    public void dayInYearPatternsMatchSimpleDateFormat() {
+        Date date = newYorkDate();
+        assertSameAsSimpleDateFormat("D", NEW_YORK, Locale.US, date);
+        assertSameAsSimpleDateFormat("DDD", NEW_YORK, Locale.US, date);
+        assertEquals("34", FastDateFormat.getInstance("D", NEW_YORK, Locale.US).format(date));
+    }
+
+    @Test
+    public void combinedPatternProducesExpectedOutput() {
+        Date date = newYorkDate();
+        String pattern = "G M E a z D";
+        assertSameAsSimpleDateFormat(pattern, NEW_YORK, Locale.US, date);
+        assertEquals("AD 2 Tue PM EST 34",
+                FastDateFormat.getInstance(pattern, NEW_YORK, Locale.US).format(date));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: solo formateo; parseObject devuelve null y resetea posiciones
+    // ------------------------------------------------------------------
+
+    @Test
+    public void parseObjectReturnsNullAndResetsPositionAndErrorIndex() {
+        FastDateFormat f = FastDateFormat.getInstance("yyyy-MM-dd", UTC, Locale.US);
+        ParsePosition pos = new ParsePosition(3);
+        pos.setErrorIndex(4);
+
+        Object result = f.parseObject("2004-02-03", pos);
+
+        assertNull(result);
+        assertEquals(0, pos.getIndex());
+        assertEquals(0, pos.getErrorIndex());
+    }
+
+    @Test
+    public void parseObjectWithDefaultPositionKeepsIndexAndErrorIndexAtZero() {
+        FastDateFormat f = FastDateFormat.getInstance("yyyy-MM-dd", UTC, Locale.US);
+        ParsePosition pos = new ParsePosition(0);
+
+        assertNull(f.parseObject("2004-02-03", pos));
+        assertEquals(0, pos.getIndex());
+        assertEquals(0, pos.getErrorIndex());
+    }
+
+    @Test(expected = ParseException.class)
+    public void parseStringThrowsParseExceptionBecauseParsingIsUnsupported() throws ParseException {
+        FastDateFormat f = FastDateFormat.getInstance("yyyy-MM-dd", UTC, Locale.US);
+        f.parseObject("2004-02-03");
+    }
+}

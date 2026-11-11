@@ -1,0 +1,246 @@
+package org.apache.commons.cli;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Collection;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link OptionGroup} que complementan la suite existente.
+ * Cubren el método setRequired/isRequired (líneas 121-122) y las combinaciones
+ * de la condición de selección en setSelected (línea 98).
+ */
+public class OptionGroupLLMTest
+{
+    private static Option newOption(String opt, String longOpt, String description)
+    {
+        return new Option(opt, longOpt, false, description);
+    }
+
+    // ---------------------------------------------------------------
+    // setRequired / isRequired (líneas 121-122)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testNewGroupIsNotRequiredByDefault()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertFalse("Un grupo nuevo no debe ser obligatorio por defecto", group.isRequired());
+    }
+
+    @Test
+    public void testSetRequiredTrueIsReflectedByIsRequired()
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setRequired(true);
+
+        assertTrue("isRequired debe devolver true tras setRequired(true)", group.isRequired());
+    }
+
+    @Test
+    public void testSetRequiredFalseIsReflectedByIsRequired()
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setRequired(false);
+
+        assertFalse("isRequired debe devolver false tras setRequired(false)", group.isRequired());
+    }
+
+    @Test
+    public void testSetRequiredCanBeToggledBackToFalse()
+    {
+        OptionGroup group = new OptionGroup();
+
+        group.setRequired(true);
+        assertTrue("Debe ser obligatorio tras setRequired(true)", group.isRequired());
+
+        group.setRequired(false);
+        assertFalse("Debe dejar de ser obligatorio tras setRequired(false)", group.isRequired());
+    }
+
+    @Test
+    public void testSetRequiredDoesNotChangeSelection()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(newOption("f", "file", "file to process"));
+
+        group.setRequired(true);
+
+        assertNull("Marcar el grupo como obligatorio no debe seleccionar ninguna opción",
+                group.getSelected());
+    }
+
+    @Test
+    public void testSetRequiredDoesNotChangeNames()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(newOption("f", "file", "file to process"));
+        group.addOption(newOption("d", "directory", "directory to process"));
+
+        group.setRequired(true);
+
+        assertEquals("El número de nombres no debe cambiar", 2, group.getNames().size());
+        assertTrue(group.getNames().contains("f"));
+        assertTrue(group.getNames().contains("d"));
+    }
+
+    // ---------------------------------------------------------------
+    // setSelected: ramas de la condición de la línea 98
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testReselectingSameOptionIsAllowed() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = newOption("f", "file", "file to process");
+        group.addOption(file);
+
+        group.setSelected(file);
+        group.setSelected(file);
+
+        assertEquals("La opción seleccionada debe seguir siendo 'f'", "f", group.getSelected());
+    }
+
+    @Test
+    public void testSelectingDifferentOptionThrowsAndKeepsPreviousSelection() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = newOption("f", "file", "file to process");
+        Option dir = newOption("d", "directory", "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        try
+        {
+            group.setSelected(dir);
+            fail("Seleccionar una segunda opción distinta debe lanzar AlreadySelectedException");
+        }
+        catch (AlreadySelectedException e)
+        {
+            assertSame("El grupo de la excepción debe ser el grupo original", group, e.getOptionGroup());
+            assertEquals("La opción de la excepción debe ser 'd'", "d", e.getOption().getOpt());
+            assertEquals("La selección previa debe conservarse", "f", group.getSelected());
+        }
+    }
+
+    @Test
+    public void testFirstSelectionSetsSelectedName() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option dir = newOption("d", "directory", "directory to process");
+        group.addOption(dir);
+
+        assertNull("Antes de seleccionar no debe haber selección", group.getSelected());
+
+        group.setSelected(dir);
+
+        assertEquals("La primera selección debe fijar el nombre", "d", group.getSelected());
+    }
+
+    @Test
+    public void testSetSelectedNullResetsSelection() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = newOption("f", "file", "file to process");
+        Option dir = newOption("d", "directory", "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        group.setSelected(null);
+
+        assertNull("setSelected(null) debe limpiar la selección", group.getSelected());
+    }
+
+    @Test
+    public void testAfterResetAnotherOptionCanBeSelected() throws AlreadySelectedException
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = newOption("f", "file", "file to process");
+        Option dir = newOption("d", "directory", "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        group.setSelected(file);
+        group.setSelected(null);
+        group.setSelected(dir);
+
+        assertEquals("Tras el reinicio debe poder seleccionarse otra opción", "d", group.getSelected());
+    }
+
+    // ---------------------------------------------------------------
+    // addOption / getNames / getOptions / toString
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testAddOptionReturnsSameGroupInstance()
+    {
+        OptionGroup group = new OptionGroup();
+
+        OptionGroup returned = group.addOption(newOption("f", "file", "file to process"));
+
+        assertSame("addOption debe devolver el mismo grupo para encadenamiento", group, returned);
+    }
+
+    @Test
+    public void testAddOptionWithSameKeyReplacesPreviousOption()
+    {
+        OptionGroup group = new OptionGroup();
+        group.addOption(newOption("f", "file", "first description"));
+        group.addOption(newOption("f", "file", "second description"));
+
+        Collection<?> options = group.getOptions();
+
+        assertEquals("Una clave repetida no debe duplicar la opción", 1, options.size());
+        assertEquals("La opción almacenada debe ser la última añadida",
+                "second description", ((Option) options.iterator().next()).getDescription());
+    }
+
+    @Test
+    public void testGetOptionsContainsAddedOptions()
+    {
+        OptionGroup group = new OptionGroup();
+        Option file = newOption("f", "file", "file to process");
+        Option dir = newOption("d", "directory", "directory to process");
+        group.addOption(file);
+        group.addOption(dir);
+
+        Collection<?> options = group.getOptions();
+
+        assertNotNull("getOptions no debe devolver null", options);
+        assertEquals("Deben existir dos opciones", 2, options.size());
+        assertTrue("Debe contener la opción -f", options.contains(file));
+        assertTrue("Debe contener la opción -d", options.contains(dir));
+    }
+
+    @Test
+    public void testEmptyGroupHasNoNamesOptionsOrSelection()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertNotNull("getNames no debe devolver null", group.getNames());
+        assertNotNull("getOptions no debe devolver null", group.getOptions());
+        assertTrue("Un grupo vacío no tiene nombres", group.getNames().isEmpty());
+        assertTrue("Un grupo vacío no tiene opciones", group.getOptions().isEmpty());
+        assertNull("Un grupo vacío no tiene selección", group.getSelected());
+    }
+
+    @Test
+    public void testToStringOfEmptyGroupIsBrackets()
+    {
+        OptionGroup group = new OptionGroup();
+
+        assertEquals("El toString de un grupo vacío debe ser '[]'", "[]", group.toString());
+    }
+}
