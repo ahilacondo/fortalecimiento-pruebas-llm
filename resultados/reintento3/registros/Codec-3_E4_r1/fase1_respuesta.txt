@@ -1,0 +1,8 @@
+1. encode(Object) debe lanzar EncoderException cuando el parámetro no es de tipo String, algo que ninguna prueba verifica.
+2. Los prefijos silenciosos GN, KN, PN, WR y PS deben omitirse al inicio de la palabra, y ningún caso de prueba lo comprueba.
+3. La detección de origen eslavogermánico (W, K, CZ, WITZ) y su efecto en la codificación no tiene pruebas directas.
+4. Las vocales AEIOUY deben reconocerse, y solo la vocal inicial produce 'A'; no hay pruebas que verifiquen esta regla de forma explícita.
+5. charAt debe devolver Character.MIN_VALUE cuando el índice está fuera de rango, y este comportamiento no se prueba.
+6. contains(String[]) debe devolver false cuando el inicio es negativo o inicio más longitud supera la longitud del valor, y no hay pruebas para estos casos límite.
+7. maxCodeLen debe limitar también el código alternativo y funcionar con valores distintos de 4 (como 0, 1 o más de 4); las pruebas solo cubren el valor 3.
+8. El comportamiento de isDoubleMetaphoneEqual cuando algún argumento es null no está especificado en el Javadoc ni se prueba; actualmente provoca una NullPointerException.

@@ -1,0 +1,247 @@
+Eliminé el texto introductorio que estaba antes del código (causa del error `class, interface, or enum expected` en la línea 1). El fragmento original también terminaba a mitad de una línea (`dm.doubleMeta`), así que completé el último método y cerré la clase. Para ello supuse que el caso es `AZEW` con `maxCodeLen` 2, porque es el caso del requisito 3 que produce `ATSF` como alternativo. Conviene revisar esa suposición. No modifiqué las expectativas de las demás pruebas, así que no he verificado que sus valores coincidan con el comportamiento real de `DoubleMetaphone`.
+
+```java
+package org.apache.commons.codec.language;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link DoubleMetaphone} que cubren requisitos de
+ * la documentación no verificados por las pruebas existentes.
+ */
+public class DoubleMetaphoneLLMTest {
+
+    private static DoubleMetaphone newEncoder() {
+        return new DoubleMetaphone();
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: encode(Object) lanza EncoderException si no es String
+    // ------------------------------------------------------------------
+
+    @Test
+    public void encodeObjectThrowsEncoderExceptionForInteger() {
+        DoubleMetaphone dm = newEncoder();
+        try {
+            dm.encode(Integer.valueOf(42));
+            fail("Se esperaba EncoderException para un Integer");
+        } catch (EncoderException e) {
+            assertTrue("El mensaje debe mencionar String: " + e.getMessage(),
+                    e.getMessage().contains("String"));
+        }
+    }
+
+    @Test
+    public void encodeObjectThrowsEncoderExceptionForNull() {
+        DoubleMetaphone dm = newEncoder();
+        Object nullObject = null;
+        try {
+            dm.encode(nullObject);
+            fail("Se esperaba EncoderException para un null de tipo Object");
+        } catch (EncoderException e) {
+            assertTrue(e.getMessage() != null);
+        }
+    }
+
+    @Test
+    public void encodeObjectAcceptsStringAndMatchesStringEncode() throws EncoderException {
+        DoubleMetaphone dm = newEncoder();
+        Object result = dm.encode((Object) "Thompson");
+        assertEquals("El resultado debe ser de tipo String", String.class, result.getClass());
+        assertEquals(dm.doubleMetaphone("Thompson"), result);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: prefijos silenciosos GN, KN, PN, WR, PS se omiten
+    // ------------------------------------------------------------------
+
+    @Test
+    public void silentStartGNIsSkipped() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("NM", dm.doubleMetaphone("GNOME"));
+        assertEquals("NM", dm.doubleMetaphone("GNOME", true));
+        assertEquals(dm.doubleMetaphone("NOME"), dm.doubleMetaphone("GNOME"));
+    }
+
+    @Test
+    public void silentStartKNIsSkipped() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("N", dm.doubleMetaphone("KNOW"));
+        assertEquals(dm.doubleMetaphone("NOW"), dm.doubleMetaphone("KNOW"));
+        assertEquals(dm.doubleMetaphone("NOW", true), dm.doubleMetaphone("KNOW", true));
+    }
+
+    @Test
+    public void silentStartPNIsSkipped() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("NM", dm.doubleMetaphone("PNEUMA"));
+        assertEquals(dm.doubleMetaphone("NEUMA"), dm.doubleMetaphone("PNEUMA"));
+    }
+
+    @Test
+    public void silentStartWRIsSkipped() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("RT", dm.doubleMetaphone("WRITE"));
+        assertEquals(dm.doubleMetaphone("RITE"), dm.doubleMetaphone("WRITE"));
+    }
+
+    @Test
+    public void silentStartPSIsSkipped() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("SLM", dm.doubleMetaphone("PSALM"));
+        assertEquals(dm.doubleMetaphone("SALM"), dm.doubleMetaphone("PSALM"));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: detección de origen eslavogermánico (W, K, CZ, WITZ)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void slavoGermanicWChangesAlternateZEncoding() {
+        DoubleMetaphone dm = newEncoder();
+        // Sin W: la Z produce solo 'S' en ambas codificaciones.
+        assertEquals("AS", dm.doubleMetaphone("AZE", false));
+        assertEquals("AS", dm.doubleMetaphone("AZE", true));
+        // Con W (origen eslavogermánico): la Z produce "S"/"TS" y la W
+        // añade 'F' en el código alternativo.
+        assertEquals("AS", dm.doubleMetaphone("AZEW", false));
+        assertEquals("ATSF", dm.doubleMetaphone("AZEW", true));
+    }
+
+    @Test
+    public void slavoGermanicKChangesEncoding() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("ASK", dm.doubleMetaphone("AZEK", false));
+        assertEquals("ATSK", dm.doubleMetaphone("AZEK", true));
+        assertEquals("AS", dm.doubleMetaphone("AZE", true));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: vowels AEIOUY; solo la vocal inicial produce 'A'
+    // ------------------------------------------------------------------
+
+    @Test
+    public void initialVowelProducesA() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("A", dm.doubleMetaphone("A"));
+        assertEquals("AP", dm.doubleMetaphone("OBE"));
+        assertEquals("AP", dm.doubleMetaphone("obe"));
+        assertEquals("AP", dm.doubleMetaphone("YB"));
+        assertEquals("AN", dm.doubleMetaphone("UNA"));
+    }
+
+    @Test
+    public void nonInitialVowelsProduceNothing() {
+        DoubleMetaphone dm = newEncoder();
+        // La B inicial produce 'P'; las vocales posteriores no producen nada.
+        assertEquals("P", dm.doubleMetaphone("BEE"));
+        assertEquals("P", dm.doubleMetaphone("BEE", true));
+    }
+
+    @Test
+    public void allVowelsAreRecognizedAsVowelsAtStart() {
+        DoubleMetaphone dm = newEncoder();
+        String[] words = { "AB", "EB", "IB", "OB", "UB", "YB" };
+        for (String w : words) {
+            assertEquals("La vocal inicial de " + w + " debe producir 'A'",
+                    "AP", dm.doubleMetaphone(w));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: charAt devuelve Character.MIN_VALUE fuera de rango
+    // ------------------------------------------------------------------
+
+    @Test
+    public void charAtReturnsCharacterAtValidIndex() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals((int) 'A', (int) dm.charAt("ABC", 0));
+        assertEquals((int) 'B', (int) dm.charAt("ABC", 1));
+        assertEquals((int) 'C', (int) dm.charAt("ABC", 2));
+    }
+
+    @Test
+    public void charAtReturnsMinValueWhenIndexIsOutOfRange() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals("Índice igual a la longitud", (int) Character.MIN_VALUE,
+                (int) dm.charAt("ABC", 3));
+        assertEquals("Índice mayor a la longitud", (int) Character.MIN_VALUE,
+                (int) dm.charAt("ABC", 10));
+        assertEquals("Índice negativo", (int) Character.MIN_VALUE,
+                (int) dm.charAt("ABC", -1));
+        assertEquals("Cadena vacía", (int) Character.MIN_VALUE,
+                (int) dm.charAt("", 0));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: contains(String[]) con casos límite
+    // ------------------------------------------------------------------
+
+    @Test
+    public void containsReturnsFalseForNegativeStart() {
+        assertFalse(DoubleMetaphone.contains("ABC", -1, 1, new String[] { "A" }));
+    }
+
+    @Test
+    public void containsReturnsFalseWhenStartPlusLengthExceedsValue() {
+        assertFalse(DoubleMetaphone.contains("ABC", 2, 2, new String[] { "C" }));
+        assertFalse(DoubleMetaphone.contains("ABC", 2, 2, new String[] { "CX" }));
+        assertFalse(DoubleMetaphone.contains("ABC", 0, 4, new String[] { "ABC" }));
+    }
+
+    @Test
+    public void containsReturnsTrueForExactMatchAtBoundary() {
+        assertTrue(DoubleMetaphone.contains("ABC", 0, 3, new String[] { "ABC" }));
+        assertTrue(DoubleMetaphone.contains("ABC", 1, 2, new String[] { "XX", "BC" }));
+    }
+
+    @Test
+    public void containsReturnsFalseWhenNoCriteriaMatch() {
+        assertFalse(DoubleMetaphone.contains("ABC", 0, 2, new String[] { "AC", "CB" }));
+        assertFalse(DoubleMetaphone.contains("ABC", 0, 2, new String[] { }));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 7: maxCodeLen limita ambos códigos y admite otros valores
+    // ------------------------------------------------------------------
+
+    @Test
+    public void defaultMaxCodeLenIsFour() {
+        DoubleMetaphone dm = newEncoder();
+        assertEquals(4, dm.getMaxCodeLen());
+        assertEquals("TSTN", dm.doubleMetaphone("testing"));
+    }
+
+    @Test
+    public void maxCodeLenZeroProducesEmptyCodes() {
+        DoubleMetaphone dm = newEncoder();
+        dm.setMaxCodeLen(0);
+        assertEquals(0, dm.getMaxCodeLen());
+        assertEquals("", dm.doubleMetaphone("jumped"));
+        assertEquals("", dm.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void maxCodeLenOneLimitsPrimaryAndAlternate() {
+        DoubleMetaphone dm = newEncoder();
+        dm.setMaxCodeLen(1);
+        assertEquals("J", dm.doubleMetaphone("jumped", false));
+        assertEquals("A", dm.doubleMetaphone("jumped", true));
+    }
+
+    @Test
+    public void maxCodeLenTruncatesAlternateCode() {
+        DoubleMetaphone dm = newEncoder();
+        dm.setMaxCodeLen(2);
+        // Primario "AS"; alternativo "ATSF" truncado a "AT".
+        assertEquals("AS", dm.doubleMetaphone("AZEW", false));
+        assertEquals("AT", dm.doubleMetaphone("AZEW", true));
+    }
+}
+```
