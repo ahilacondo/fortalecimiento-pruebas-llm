@@ -1,0 +1,8 @@
+1. Con una longitud de línea que no es múltiplo de 4, la codificación redondea al múltiplo de 4 superior y corta las líneas en ese punto.
+2. Con un separador de línea distinto de CRLF, la codificación en bloques inserta ese separador tras cada línea y no lo mezcla con el contenido.
+3. La instancia en modo URL-safe (`new Base64(true)`) codifica con `-` y `_`, y `isUrlSafe()` devuelve el estado correcto; no se verifica la ruta de instancia, solo los métodos estáticos.
+4. La API de streaming (`encode`/`decode` por fragmentos, `avail`, `readResults`, `hasData`, `setInitialBuffer`) produce el mismo resultado que una llamada única, incluso con fragmentos de tamaño arbitrario.
+5. Las entradas nulas se devuelven sin excepción (`encodeBase64(null)` y `decodeBase64(null)` devuelven null), y la decodificación de entradas de solo caracteres ignorados devuelve un arreglo vacío.
+6. Al decodificar, todo lo que aparece después del primer `=` se ignora, aunque contenga caracteres Base64 válidos.
+7. `encodeInteger`/`decodeInteger` en casos límite no cubiertos: cero, valores cuyo bit de signo cae en un byte alineado y valores con bytes altos; `testCodeIntegerEdgeCases` está vacío (TODO).
+8. `encodeBase64` lanza `IllegalArgumentException` cuando la salida superaría `Integer.MAX_VALUE`, y `isBase64(byte)` y `discardNonBase64` no se prueban directamente con `-`, `_` ni bytes mayores que 127.

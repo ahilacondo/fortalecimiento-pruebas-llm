@@ -1,0 +1,8 @@
+1. El constructor `Base64(boolean urlSafe)` con `urlSafe=true` debe codificar en modo URL-safe, y `isUrlSafe()` debe devolver `true`; no se verifica por instancia.
+2. La instancia `Base64()` debe codificar con líneas de 76 caracteres separadas por CRLF; solo se prueba el comportamiento de los métodos estáticos.
+3. El constructor `Base64(int lineLength)` debe redondear las longitudes que no son múltiplo de 4 al múltiplo de 4 superior en la salida codificada.
+4. Con `lineLength <= 0` la salida no debe fragmentarse ni incluir el separador de línea; este caso no se verifica.
+5. El constructor `Base64(int, byte[], boolean)` debe aplicar a la vez un separador de línea personalizado y el modo URL-safe; esta combinación no se prueba.
+6. `isArrayByteBase64` debe tratar como válidos los espacios en blanco (' ', '\t', '\r', '\n'); las pruebas no lo comprueban de forma explícita.
+7. `isBase64(byte)` debe devolver `true` para el carácter de relleno '=' y `false` para espacios en blanco; no hay pruebas directas de este método público.
+8. `encodeBase64(byte[], isChunked, urlSafe)` debe combinar fragmentación de 76 caracteres con alfabeto URL-safe sin padding; esta combinación no se verifica.

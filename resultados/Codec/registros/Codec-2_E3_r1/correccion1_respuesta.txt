@@ -1,0 +1,123 @@
+El error se debe a que el archivo empezaba con una línea ```` ```java ```` que no forma parte del código. Además, el último método estaba truncado. He eliminado la línea sobrante y he cerrado ese método. Su cuerpo no aparecía en el original, así que lo he completado con una suposición (`'-'`, un carácter del alfabeto URL-safe) que debes verificar contra tu versión.
+
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64}, usando solo la API pública.
+ */
+public class Base64LLMTest {
+
+    // ------------------------------------------------------------ utilidades
+
+    private static String str(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] sample(int n) {
+        byte[] d = new byte[n];
+        for (int i = 0; i < n; i++) {
+            d[i] = (byte) (i * 37 + 11);
+        }
+        return d;
+    }
+
+    private static byte[] concat(byte[] a, byte[] b) {
+        byte[] r = new byte[a.length + b.length];
+        System.arraycopy(a, 0, r, 0, a.length);
+        System.arraycopy(b, 0, r, a.length, b.length);
+        return r;
+    }
+
+    private static boolean containsByte(byte[] data, byte value) {
+        for (byte d : data) {
+            if (d == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ----------------------------------------- 1. Longitud de línea no múltiplo de 4
+
+    /**
+     * La API pública no expone el troceado de una instancia: encode(byte[]) siempre
+     * devuelve la salida sin cortes, independientemente de la longitud de línea.
+     */
+    @Test
+    public void testNonMultipleOf4LineLengthDoesNotChunkInstanceEncode() {
+        byte[] data = sample(30);
+        byte[] expected = Base64.encodeBase64(data);
+        for (int lineLength : new int[] {1, 2, 3, 5, 6, 7, 9, -1}) {
+            Base64 b = new Base64(lineLength);
+            assertArrayEquals("lineLength=" + lineLength, expected, b.encode(data));
+        }
+        assertFalse(containsByte(expected, (byte) '\r'));
+        assertFalse(containsByte(expected, (byte) '\n'));
+    }
+
+    /**
+     * Referencia: el único troceado público es encodeBase64Chunked, con bloques de 76
+     * caracteres seguidos de CRLF.
+     */
+    @Test
+    public void testChunkedOutputBreaksAt76CharactersWithCrlf() {
+        byte[] data = sample(60); // 80 caracteres Base64
+        String s = str(Base64.encodeBase64Chunked(data));
+        assertEquals(76 + 2 + 4 + 2, s.length());
+        assertEquals("\r\n", s.substring(76, 78));
+        assertTrue(s.endsWith("\r\n"));
+        assertEquals(str(Base64.encodeBase64(data)), s.replace("\r\n", ""));
+    }
+
+    // ----------------------------------------- 2. Separador de línea personalizado
+
+    @Test
+    public void testCustomLineSeparatorIsNotMixedIntoContent() {
+        byte[] data = sample(40);
+        byte[] sep = {'$', '#'};
+        Base64 b = new Base64(16, sep);
+        byte[] out = b.encode(data);
+        assertArrayEquals(Base64.encodeBase64(data), out);
+        assertFalse(containsByte(out, (byte) '$'));
+        assertFalse(containsByte(out, (byte) '#'));
+    }
+
+    @Test
+    public void testCustomLineSeparatorWithNonBase64CharactersIsAccepted() {
+        byte[] sep = {' ', '$', '\n', '\r', '\t'};
+        Base64 b = new Base64(64, sep);
+        byte[] data = sample(12);
+        assertArrayEquals(Base64.encodeBase64(data), b.encode(data));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testLineSeparatorWithBase64LetterIsRejected() {
+        new Base64(16, new byte[] {'$', 'Q'});
+    }
+
+    // Suposición: el cuerpo original no estaba disponible. '-' pertenece al alfabeto URL-safe.
+    @Test(expected = IllegalArgumentException.class)
+    public void testLineSeparatorWithUrlSafeCharacterIsRejected() {
+        new Base64(16, new byte[] {'-'});
+    }
+}
+```
+
+Si el archivo original tenía más métodos después de `testLineSeparatorWithUrlSafeCharacterIsRejected`, pega el resto y lo integro en esta versión sin cambiar su comportamiento.

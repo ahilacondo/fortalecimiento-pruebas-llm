@@ -1,0 +1,289 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Codec/Codec_2_b/.test_suite/org/apache/commons/codec/binary/Base64LLMTest.java:1: error: illegal character: '`'
+
+Archivo anterior:
+```java
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.EncoderException;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64}, usando únicamente su API pública.
+ */
+public class Base64LLMTest {
+
+    private static byte[] bytes(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] sampleData100() {
+        byte[] d = new byte[100];
+        for (int i = 0; i < d.length; i++) {
+            d[i] = (byte) (i * 7 + 3);
+        }
+        return d;
+    }
+
+    // ---------------------------------------------------------------- Nulos y vacíos
+
+    @Test
+    public void nullInputReturnsNull() {
+        assertNull(Base64.encodeBase64(null));
+        assertNull(Base64.encodeBase64Chunked(null));
+        assertNull(Base64.encodeBase64URLSafe(null));
+        assertNull(Base64.decodeBase64(null));
+    }
+
+    @Test
+    public void emptyInputReturnsEmptyOutput() {
+        assertEquals(0, Base64.encodeBase64(new byte[0]).length);
+        assertEquals(0, Base64.encodeBase64Chunked(new byte[0]).length);
+        assertEquals(0, Base64.encodeBase64URLSafe(new byte[0]).length);
+        assertEquals(0, Base64.decodeBase64(new byte[0]).length);
+    }
+
+    // ---------------------------------------------------------------- Codificación estándar
+
+    @Test
+    public void encodeSingleByteUsesTwoPadChars() {
+        assertEquals("TQ==", str(Base64.encodeBase64(bytes("M"))));
+    }
+
+    @Test
+    public void encodeTwoBytesUsesOnePadChar() {
+        assertEquals("TWE=", str(Base64.encodeBase64(bytes("Ma"))));
+    }
+
+    @Test
+    public void encodeThreeBytesHasNoPadding() {
+        assertEquals("TWFu", str(Base64.encodeBase64(bytes("Man"))));
+    }
+
+    @Test
+    public void standardEncodingUsesPlusAndSlash() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFF};
+        assertEquals("+/8=", str(Base64.encodeBase64(data)));
+    }
+
+    @Test
+    public void nonChunkedEncodingHasNoLineBreaks() {
+        byte[] enc = Base64.encodeBase64(sampleData100());
+        assertEquals(136, enc.length);
+        assertEquals(-1, str(enc).indexOf('\r'));
+        assertEquals(-1, str(enc).indexOf('\n'));
+    }
+
+    // ---------------------------------------------------------------- URL-safe
+
+    @Test
+    public void urlSafeEncodingUsesDashUnderscoreAndOmitsPadding() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFF};
+        String result = str(Base64.encodeBase64URLSafe(data));
+        assertEquals("-_8", result);
+        assertEquals(-1, result.indexOf('+'));
+        assertEquals(-1, result.indexOf('/'));
+        assertEquals(-1, result.indexOf('='));
+    }
+
+    @Test
+    public void urlSafeFlagOnInstanceChangesEncodeAlphabet() {
+        byte[] data = {(byte) 0xFB, (byte) 0xFF};
+        assertEquals("-_8", str(new Base64(true).encode(data)));
+        assertEquals("+/8=", str(new Base64().encode(data)));
+    }
+
+    @Test
+    public void urlSafeStaticFlagMatchesDedicatedMethod() {
+        byte[] data = sampleData100();
+        assertArrayEquals(Base64.encodeBase64URLSafe(data), Base64.encodeBase64(data, false, true));
+    }
+
+    @Test
+    public void urlSafeNonChunkedTwoBytesOmitsPadding() {
+        assertEquals("TWE", str(Base64.encodeBase64(bytes("Ma"), false, true)));
+    }
+
+    @Test
+    public void urlSafeChunkedTwoBytesKeepsCrlfButNoPadding() {
+        assertEquals("TWE\r\n", str(Base64.encodeBase64(bytes("Ma"), true, true)));
+    }
+
+    @Test
+    public void urlSafeRoundTripOnRandomData() {
+        Random rnd = new Random(987654321L);
+        byte[] data = new byte[500];
+        rnd.nextBytes(data);
+        byte[] enc = Base64.encodeBase64URLSafe(data);
+        String s = str(enc);
+        assertEquals(-1, s.indexOf('+'));
+        assertEquals(-1, s.indexOf('/'));
+        assertEquals(-1, s.indexOf('='));
+        assertArrayEquals(data, Base64.decodeBase64(enc));
+    }
+
+    // ---------------------------------------------------------------- Chunked
+
+    @Test
+    public void chunkedSingleGroupEndsWithCrlf() {
+        assertEquals("TWFu\r\n", str(Base64.encodeBase64Chunked(bytes("Man"))));
+    }
+
+    @Test
+    public void chunkedOutputWrapsAt76Characters() {
+        byte[] data = sampleData100();
+        String chunked = str(Base64.encodeBase64Chunked(data));
+        assertEquals(76, chunked.indexOf("\r\n"));
+        assertTrue("La salida chunked debe terminar en CRLF", chunked.endsWith("\r\n"));
+        String stripped = chunked.replace("\r\n", "");
+        assertEquals(136, stripped.length());
+        assertEquals(str(Base64.encodeBase64(data)), stripped);
+    }
+
+    @Test
+    public void chunkedOutputDecodesToOriginal() {
+        byte[] data = sampleData100();
+        assertArrayEquals(data, Base64.decodeBase64(Base64.encodeBase64Chunked(data)));
+    }
+
+    @Test
+    public void helloWorldChunkedAndNonChunked() {
+        byte[] hello = bytes("Hello World");
+        assertEquals("SGVsbG8gV29ybGQ=", str(Base64.encodeBase64(hello)));
+        assertEquals("SGVsbG8gV29ybGQ=\r\n", str(Base64.encodeBase64Chunked(hello)));
+    }
+
+    // ---------------------------------------------------------------- Decodificación
+
+    @Test
+    public void decodeIgnoresWhitespaceAndLineBreaks() {
+        assertEquals("Hello World", str(Base64.decodeBase64(bytes("SGVsbG8g\r\nV29ybGQ="))));
+        assertEquals("Man", str(Base64.decodeBase64(bytes("T W F u"))));
+        assertEquals("Man", str(Base64.decodeBase64(bytes("TW\tFu\n"))));
+    }
+
+    @Test
+    public void decodeWithoutPaddingIsAccepted() {
+        assertEquals("Ma", str(Base64.decodeBase64(bytes("TWE"))));
+        assertEquals("M", str(Base64.decodeBase64(bytes("TQ"))));
+        assertEquals("Man", str(Base64.decodeBase64(bytes("TWFu"))));
+    }
+
+    @Test
+    public void decodeStopsAtFirstPadCharacter() {
+        assertEquals("Ma", str(Base64.decodeBase64(bytes("TWE=TWFu"))));
+    }
+
+    @Test
+    public void decodeAcceptsBothAlphabets() {
+        byte[] expected = {(byte) 0xFB, (byte) 0xFF};
+        assertArrayEquals(expected, Base64.decodeBase64(bytes("+/8=")));
+        assertArrayEquals(expected, Base64.decodeBase64(bytes("-_8=")));
+        assertArrayEquals(expected, Base64.decodeBase64(bytes("-_8")));
+    }
+
+    @Test
+    public void decodeOnlyInvalidCharactersYieldsEmpty() {
+        assertEquals(0, Base64.decodeBase64(bytes("!!!@@@")).length);
+    }
+
+    @Test
+    public void decodeOfPadOnlyYieldsEmpty() {
+        assertEquals(0, Base64.decodeBase64(bytes("====")).length);
+    }
+
+    @Test
+    public void roundTripAllSingleByteValues() {
+        for (int i = -128; i <= 127; i++) {
+            byte[] original = {(byte) i};
+            assertArrayEquals("valor " + i, original, Base64.decodeBase64(Base64.encodeBase64(original)));
+        }
+    }
+
+    @Test
+    public void roundTripRandomLargeInputHasExpectedLength() {
+        Random rnd = new Random(12345L);
+        byte[] data = new byte[1000];
+        rnd.nextBytes(data);
+        byte[] enc = Base64.encodeBase64(data);
+        assertEquals(1336, enc.length);
+        assertTrue(Base64.isArrayByteBase64(enc));
+        assertArrayEquals(data, Base64.decodeBase64(enc));
+    }
+
+    // ---------------------------------------------------------------- isBase64 / isArrayByteBase64
+
+    @Test
+    public void isBase64AcceptsAlphabetAndPadAndUrlCharacters() {
+        assertTrue(Base64.isBase64((byte) 'A'));
+        assertTrue(Base64.isBase64((byte) 'z'));
+        assertTrue(Base64.isBase64((byte) '0'));
+        assertTrue(Base64.isBase64((byte) '+'));
+        assertTrue(Base64.isBase64((byte) '/'));
+        assertTrue(Base64.isBase64((byte) '='));
+        assertTrue(Base64.isBase64((byte) '-'));
+        assertTrue(Base64.isBase64((byte) '_'));
+    }
+
+    @Test
+    public void isBase64RejectsNonAlphabetBytes() {
+        assertFalse(Base64.isBase64((byte) '%'));
+        assertFalse(Base64.isBase64((byte) ' '));
+        assertFalse(Base64.isBase64((byte) '\n'));
+        assertFalse(Base64.isBase64((byte) 0));
+        assertFalse(Base64.isBase64((byte) 0x80));
+        assertFalse(Base64.isBase64((byte) 0xFF));
+    }
+
+    @Test
+    public void isArrayByteBase64AcceptsEmptyAndWhitespace() {
+        assertTrue(Base64.isArrayByteBase64(new byte[0]));
+        assertTrue(Base64.isArrayByteBase64(bytes(" \r\n\t")));
+        assertTrue(Base64.isArrayByteBase64(bytes("TW Fu\r\n")));
+    }
+
+    @Test
+    public void isArrayByteBase64RejectsInvalidContent() {
+        assertFalse(Base64.isArrayByteBase64(bytes("TW%u")));
+        assertFalse(Base64.isArrayByteBase64(bytes("abc$")));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {(byte) 0x80}));
+    }
+
+    // ---------------------------------------------------------------- Constructores e instancias
+
+    @Test
+    public void isUrlSafeReflectsConstructorChoice() {
+        assertFalse(new Base64().isUrlSafe());
+        assertFalse(new Base64(false).isUrlSafe());
+        assertTrue(new Base64(true).isUrlSafe());
+        assertFalse(new Base64(64, new byte[] {'\r', '\n'}).isUrlSafe());
+        assertTrue(new Base64(64, new byte[] {'\r', '\n'}, true).isUrlSafe());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructorRejectsSeparatorWithLetter() {
+        new Base64(64, new byte[] {'Z'});
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructorRejectsS
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.codec.binary` y la clase pública `Base64LLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

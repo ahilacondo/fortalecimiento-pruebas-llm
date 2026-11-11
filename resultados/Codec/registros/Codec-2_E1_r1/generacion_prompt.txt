@@ -1,0 +1,1791 @@
+TAREA: Escribe pruebas JUnit nuevas para la clase org.apache.commons.codec.binary.Base64.
+  - No modifiques las pruebas existentes.
+  - Usa solo la API pública de la clase.
+  - Cada prueba verifica un comportamiento con aserciones explícitas.
+  - Devuelve un único archivo Java compilable, dentro de un bloque ```java.
+  - El archivo declara el paquete `org.apache.commons.codec.binary` y la clase pública `Base64LLMTest`.
+  - Usa JUnit 4 (org.junit.Test y org.junit.Assert) y solo clases del proyecto o de Java 11.
+
+CONTEXTO COMÚN
+Código de la clase `org.apache.commons.codec.binary.Base64`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.codec.binary;
+
+import org.apache.commons.codec.BinaryDecoder;
+import org.apache.commons.codec.BinaryEncoder;
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.EncoderException;
+
+import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
+
+/**
+ * Provides Base64 encoding and decoding as defined by RFC 2045.
+ * 
+ * <p>
+ * This class implements section <cite>6.8. Base64 Content-Transfer-Encoding</cite> from RFC 2045 <cite>Multipurpose
+ * Internet Mail Extensions (MIME) Part One: Format of Internet Message Bodies</cite> by Freed and Borenstein.
+ * </p>
+ * 
+ * @see <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC 2045</a>
+ * @author Apache Software Foundation
+ * @since 1.0-dev
+ * @version $Id$
+ */
+public class Base64 implements BinaryEncoder, BinaryDecoder {
+    /**
+     * Chunk size per RFC 2045 section 6.8.
+     * 
+     * <p>
+     * The {@value} character limit does not count the trailing CRLF, but counts all other characters, including any
+     * equal signs.
+     * </p>
+     * 
+     * @see <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC 2045 section 6.8</a>
+     */
+    static final int CHUNK_SIZE = 76;
+
+    /**
+     * Chunk separator per RFC 2045 section 2.1.
+     * 
+     * @see <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC 2045 section 2.1</a>
+     */
+    static final byte[] CHUNK_SEPARATOR = {'\r','\n'};
+
+    /**
+     * This array is a lookup table that translates 6-bit positive integer
+     * index values into their "Base64 Alphabet" equivalents as specified
+     * in Table 1 of RFC 2045.
+     *
+     * Thanks to "commons" project in ws.apache.org for this code. 
+     * http://svn.apache.org/repos/asf/webservices/commons/trunk/modules/util/
+     */
+    private static final byte[] STANDARD_ENCODE_TABLE = {
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'
+    };
+
+    /**
+     * This is a copy of the STANDARD_ENCODE_TABLE above, but with + and /
+     * changed to - and _ to make the encoded Base64 results more URL-SAFE.
+     * This table is only used when the Base64's mode is set to URL-SAFE.
+     */    
+    private static final byte[] URL_SAFE_ENCODE_TABLE = {
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'
+    };
+
+    /**
+     * Byte used to pad output.
+     */
+    private static final byte PAD = '=';
+
+    /**
+     * This array is a lookup table that translates Unicode characters
+     * drawn from the "Base64 Alphabet" (as specified in Table 1 of RFC 2045)
+     * into their 6-bit positive integer equivalents.  Characters that
+     * are not in the Base64 alphabet but fall within the bounds of the
+     * array are translated to -1.
+     *
+     * Note:  '+' and '-' both decode to 62.  '/' and '_' both decode to 63.
+     * This means decoder seamlessly handles both URL_SAFE and STANDARD base64.
+     * (The encoder, on the other hand, needs to know ahead of time what to emit).
+     *
+     * Thanks to "commons" project in ws.apache.org for this code.
+     * http://svn.apache.org/repos/asf/webservices/commons/trunk/modules/util/ 
+     */
+    private static final byte[] DECODE_TABLE = {
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, 62, -1, 63, 52, 53, 54,
+            55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4,
+            5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, -1, -1, -1, -1, 63, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+    };
+
+    /** Mask used to extract 6 bits, used when encoding */
+    private static final int MASK_6BITS = 0x3f;
+
+    /** Mask used to extract 8 bits, used in decoding base64 bytes */
+    private static final int MASK_8BITS = 0xff;
+
+    // The static final fields above are used for the original static byte[] methods on Base64.
+    // The private member fields below are used with the new streaming approach, which requires
+    // some state be preserved between calls of encode() and decode().
+
+    /**
+     * Encode table to use:  either STANDARD or URL_SAFE.  Note:  the DECODE_TABLE above remains static
+     * because it is able to decode both STANDARD and URL_SAFE streams, but the encodeTable must be a member
+     * variable so we can switch between the two modes.
+     */
+    private final byte[] encodeTable;
+
+    /**
+     * Line length for encoding.  Not used when decoding.  A value of zero or less implies
+     * no chunking of the base64 encoded data.
+     */
+    private final int lineLength;
+
+    /**
+     * Line separator for encoding.  Not used when decoding.  Only used if lineLength > 0.
+     */
+    private final byte[] lineSeparator;
+
+    /**
+     * Convenience variable to help us determine when our buffer is going to run out of
+     * room and needs resizing.  <code>decodeSize = 3 + lineSeparator.length;</code>
+     */
+    private final int decodeSize;
+
+    /**
+     * Convenience variable to help us determine when our buffer is going to run out of
+     * room and needs resizing.  <code>encodeSize = 4 + lineSeparator.length;</code>
+     */
+    private final int encodeSize;
+
+    /**
+     * Buffer for streaming. 
+     */
+    private byte[] buf;
+
+    /**
+     * Position where next character should be written in the buffer.
+     */
+    private int pos;
+
+    /**
+     * Position where next character should be read from the buffer.
+     */
+    private int readPos;
+
+    /**
+     * Variable tracks how many characters have been written to the current line.
+     * Only used when encoding.  We use it to make sure each encoded line never
+     * goes beyond lineLength (if lineLength > 0).
+     */
+    private int currentLinePos;
+
+    /**
+     * Writes to the buffer only occur after every 3 reads when encoding, an
+     * every 4 reads when decoding.  This variable helps track that.
+     */
+    private int modulus;
+
+    /**
+     * Boolean flag to indicate the EOF has been reached.  Once EOF has been
+     * reached, this Base64 object becomes useless, and must be thrown away.
+     */
+    private boolean eof;
+
+    /**
+     * Place holder for the 3 bytes we're dealing with for our base64 logic.
+     * Bitwise operations store and extract the base64 encoding or decoding from
+     * this variable.
+     */
+    private int x;
+
+    /**
+     * Sets state for decoding and encoding.
+     * <p>
+     * When encoding the line length is 76, the line separator is CRLF, and we use the STANDARD_ENCODE_TABLE.
+     * </p>
+     * 
+     * <p>
+     * When decoding all variants can be decoded.
+     * </p>
+     */
+    public Base64() {
+        this(false);
+    }
+
+    /**
+     * Same as default constructor (line length is 76, line separator is CRLF), but URL-SAFE mode for encoding is
+     * supplied.
+     * 
+     * When decoding: all variants can be decoded.
+     * 
+     * @param urlSafe
+     *            true if URL-SAFE encoding should be performed. In most situations this should be set to false.
+     */
+    public Base64(boolean urlSafe) {
+        this(CHUNK_SIZE, CHUNK_SEPARATOR, urlSafe);
+    }
+
+    /**
+     * <p>
+     * Sets the line length when encoding (line separator is still CRLF). All forms of data can be decoded.
+     * </p>
+     * <p>
+     * Note: line lengths that aren't multiples of 4 will still essentially end up being multiples of 4 in the encoded
+     * data.
+     * </p>
+     * 
+     * @param lineLength
+     *            each line of encoded data will be at most this long (rounded up to nearest multiple of 4). If
+     *            lineLength <= 0, then the output will not be divided into lines (chunks). Ignored when decoding.
+     */
+    public Base64(int lineLength) {
+        this(lineLength, CHUNK_SEPARATOR);
+    }
+
+    /**
+     * <p>
+     * Sets the line length and line separator when encoding. All forms of data can be decoded.
+     * </p>
+     * <p>
+     * Note: line lengths that aren't multiples of 4 will still essentially end up being multiples of 4 in the encoded
+     * data.
+     * </p>
+     * 
+     * @param lineLength
+     *            Each line of encoded data will be at most this long (rounded up to nearest multiple of 4). Ignored
+     *            when decoding. If <= 0, then output will not be divided into lines (chunks).
+     * @param lineSeparator
+     *            Each line of encoded data will end with this sequence of bytes.
+     * @throws IllegalArgumentException
+     *             The provided lineSeparator included some base64 characters. That's not going to work!
+     */
+    public Base64(int lineLength, byte[] lineSeparator) {
+        this(lineLength, lineSeparator, false);
+    }
+
+    /**
+     * <p>
+     * Consumer can use this constructor to choose a different lineLength,
+     * lineSeparator, and whether to use URL-SAFE mode when encoding.
+     * All forms of data can be decoded.
+     * </p><p>
+     * Note:  lineLengths that aren't multiples of 4 will still essentially
+     * end up being multiples of 4 in the encoded data.
+     * </p>
+     * @param lineLength    Each line of encoded data will be at most this long
+     *                      (rounded up to nearest multiple of 4).  Ignored when decoding.
+     *                      If <= 0, then output will not be divided into lines (chunks).
+     * @param lineSeparator Each line of encoded data will end with this
+     *                      sequence of bytes.
+     *                      If lineLength <= 0, then the lineSeparator is not used.
+     * @param urlSafe       Instead of emitting '+' and '/' we emit '-' and '_' respectively.
+     *                      urlSafe is only applied to "encode" operations.  Decoding seamlessly
+     *                      handles both modes.
+     *
+     * @throws IllegalArgumentException The provided lineSeparator included
+     *                                  some base64 characters.  That's not going to work!
+     */
+    public Base64(int lineLength, byte[] lineSeparator, boolean urlSafe) {
+        this.lineLength = lineLength;
+        this.lineSeparator = new byte[lineSeparator.length];
+        System.arraycopy(lineSeparator, 0, this.lineSeparator, 0, lineSeparator.length);
+        if (lineLength > 0) {
+            this.encodeSize = 4 + lineSeparator.length;
+        } else {
+            this.encodeSize = 4;
+        }
+        this.decodeSize = this.encodeSize - 1;
+        if (containsBase64Byte(lineSeparator)) {
+            String sep;
+            try {
+                sep = new String(lineSeparator, "UTF-8");
+            } catch (UnsupportedEncodingException uee) {
+                sep = new String(lineSeparator);
+            }
+            throw new IllegalArgumentException("lineSeperator must not contain base64 characters: [" + sep + "]");
+        }
+        this.encodeTable = urlSafe ? URL_SAFE_ENCODE_TABLE : STANDARD_ENCODE_TABLE;
+    }
+
+    /**
+     * Returns our current encode mode. True if we're URL-SAFE, false otherwise.
+     * 
+     * @return true if we're in URL-SAFE mode, false otherwise.
+     */
+    public boolean isUrlSafe() {
+        return this.encodeTable == URL_SAFE_ENCODE_TABLE;
+    }
+
+    /**
+     * Returns true if this Base64 object has buffered data for reading.
+     * 
+     * @return true if there is Base64 object still available for reading.
+     */
+    boolean hasData() {
+        return this.buf != null;
+    }
+
+    /**
+     * Returns the amount of buffered data available for reading.
+     * 
+     * @return The amount of buffered data available for reading.
+     */
+    int avail() {
+        return buf != null ? pos - readPos : 0;
+    }
+
+    /** Doubles our buffer. */
+    private void resizeBuf() {
+        if (buf == null) {
+            buf = new byte[8192];
+            pos = 0;
+            readPos = 0;
+        } else {
+            byte[] b = new byte[buf.length * 2];
+            System.arraycopy(buf, 0, b, 0, buf.length);
+            buf = b;
+        }
+    }
+
+    /**
+     * Extracts buffered data into the provided byte[] array, starting
+     * at position bPos, up to a maximum of bAvail bytes.  Returns how
+     * many bytes were actually extracted.
+     *
+     * @param b      byte[] array to extract the buffered data into.
+     * @param bPos   position in byte[] array to start extraction at.
+     * @param bAvail amount of bytes we're allowed to extract.  We may extract
+     *               fewer (if fewer are available).
+     * @return The number of bytes successfully extracted into the provided
+     *         byte[] array.
+     */
+    int readResults(byte[] b, int bPos, int bAvail) {
+        if (buf != null) {
+            int len = Math.min(avail(), bAvail);
+            if (buf != b) {
+                System.arraycopy(buf, readPos, b, bPos, len);
+                readPos += len;
+                if (readPos >= pos) {
+                    buf = null;
+                }
+            } else {
+                // Re-using the original consumer's output array is only
+                // allowed for one round.
+                buf = null;
+            }
+            return len;
+        }
+        return eof ? -1 : 0;
+    }
+
+    /**
+     * Sets the streaming buffer. This is a small optimization where we try to buffer directly to the consumer's output
+     * array for one round (if the consumer calls this method first) instead of starting our own buffer.
+     * 
+     * @param out byte[] array to buffer directly to.
+     * @param outPos Position to start buffering into.
+     * @param outAvail Amount of bytes available for direct buffering.
+     */
+    void setInitialBuffer(byte[] out, int outPos, int outAvail) {
+        // We can re-use consumer's original output array under
+        // special circumstances, saving on some System.arraycopy().
+        if (out != null && out.length == outAvail) {
+            buf = out;
+            pos = outPos;
+            readPos = outPos;
+        }
+    }
+
+    /**
+     * <p>
+     * Encodes all of the provided data, starting at inPos, for inAvail bytes.
+     * Must be called at least twice:  once with the data to encode, and once
+     * with inAvail set to "-1" to alert encoder that EOF has been reached,
+     * so flush last remaining bytes (if not multiple of 3).
+     * </p><p>
+     * Thanks to "commons" project in ws.apache.org for the bitwise operations,
+     * and general approach.
+     * http://svn.apache.org/repos/asf/webservices/commons/trunk/modules/util/
+     * </p>
+     *
+     * @param in byte[] array of binary data to base64 encode.
+     * @param inPos Position to start reading data from.
+     * @param inAvail Amount of bytes available from input for encoding.
+     */
+    void encode(byte[] in, int inPos, int inAvail) {
+        if (eof) {
+            return;
+        }
+        // inAvail < 0 is how we're informed of EOF in the underlying data we're
+        // encoding.
+        if (inAvail < 0) {
+            eof = true;
+            if (buf == null || buf.length - pos < encodeSize) {
+                resizeBuf();
+            }
+            switch (modulus) {
+                case 1:
+                    buf[pos++] = encodeTable[(x >> 2) & MASK_6BITS];
+                    buf[pos++] = encodeTable[(x << 4) & MASK_6BITS];
+                    // URL-SAFE skips the padding to further reduce size.
+                    if (encodeTable == STANDARD_ENCODE_TABLE) {
+                        buf[pos++] = PAD;
+                        buf[pos++] = PAD;
+                    }
+                    break;
+
+                case 2:
+                    buf[pos++] = encodeTable[(x >> 10) & MASK_6BITS];
+                    buf[pos++] = encodeTable[(x >> 4) & MASK_6BITS];
+                    buf[pos++] = encodeTable[(x << 2) & MASK_6BITS];
+                    // URL-SAFE skips the padding to further reduce size.
+                    if (encodeTable == STANDARD_ENCODE_TABLE) {
+                        buf[pos++] = PAD;
+                    }
+                    break;
+            }
+            if (lineLength > 0) {
+                System.arraycopy(lineSeparator, 0, buf, pos, lineSeparator.length);
+                pos += lineSeparator.length;
+            }
+        } else {
+            for (int i = 0; i < inAvail; i++) {
+                if (buf == null || buf.length - pos < encodeSize) {
+                    resizeBuf();
+                }
+                modulus = (++modulus) % 3;
+                int b = in[inPos++];
+                if (b < 0) { b += 256; }
+                x = (x << 8) + b;
+                if (0 == modulus) {
+                    buf[pos++] = encodeTable[(x >> 18) & MASK_6BITS];
+                    buf[pos++] = encodeTable[(x >> 12) & MASK_6BITS];
+                    buf[pos++] = encodeTable[(x >> 6) & MASK_6BITS];
+                    buf[pos++] = encodeTable[x & MASK_6BITS];
+                    currentLinePos += 4;
+                    if (lineLength > 0 && lineLength <= currentLinePos) {
+                        System.arraycopy(lineSeparator, 0, buf, pos, lineSeparator.length);
+                        pos += lineSeparator.length;
+                        currentLinePos = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * <p>
+     * Decodes all of the provided data, starting at inPos, for inAvail bytes.
+     * Should be called at least twice:  once with the data to decode, and once
+     * with inAvail set to "-1" to alert decoder that EOF has been reached.
+     * The "-1" call is not necessary when decoding, but it doesn't hurt, either.
+     * </p><p>
+     * Ignores all non-base64 characters.  This is how chunked (e.g. 76 character)
+     * data is handled, since CR and LF are silently ignored, but has implications
+     * for other bytes, too.  This method subscribes to the garbage-in, garbage-out
+     * philosophy:  it will not check the provided data for validity.
+     * </p><p>
+     * Thanks to "commons" project in ws.apache.org for the bitwise operations,
+     * and general approach.
+     * http://svn.apache.org/repos/asf/webservices/commons/trunk/modules/util/
+     * </p>
+
+     * @param in byte[] array of ascii data to base64 decode.
+     * @param inPos Position to start reading data from.
+     * @param inAvail Amount of bytes available from input for encoding.
+     */    
+    void decode(byte[] in, int inPos, int inAvail) {
+        if (eof) {
+            return;
+        }
+        if (inAvail < 0) {
+            eof = true;
+        }
+        for (int i = 0; i < inAvail; i++) {
+            if (buf == null || buf.length - pos < decodeSize) {
+                resizeBuf();
+            }
+            byte b = in[inPos++];
+            if (b == PAD) {
+                // WE'RE DONE!!!!
+                eof = true;
+                break;
+            } else {
+                if (b >= 0 && b < DECODE_TABLE.length) {
+                    int result = DECODE_TABLE[b];
+                    if (result >= 0) {
+                        modulus = (++modulus) % 4;
+                        x = (x << 6) + result;
+                        if (modulus == 0) {
+                            buf[pos++] = (byte) ((x >> 16) & MASK_8BITS);
+                            buf[pos++] = (byte) ((x >> 8) & MASK_8BITS);
+                            buf[pos++] = (byte) (x & MASK_8BITS);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Two forms of EOF as far as base64 decoder is concerned:  actual
+        // EOF (-1) and first time '=' character is encountered in stream.
+        // This approach makes the '=' padding characters completely optional.
+        if (eof && modulus != 0) {
+            x = x << 6;
+            switch (modulus) {
+                case 2:
+                    x = x << 6;
+                    buf[pos++] = (byte) ((x >> 16) & MASK_8BITS);
+                    break;
+                case 3:
+                    buf[pos++] = (byte) ((x >> 16) & MASK_8BITS);
+                    buf[pos++] = (byte) ((x >> 8) & MASK_8BITS);
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Returns whether or not the <code>octet</code> is in the base 64 alphabet.
+     * 
+     * @param octet
+     *            The value to test
+     * @return <code>true</code> if the value is defined in the the base 64 alphabet, <code>false</code> otherwise.
+     */
+    public static boolean isBase64(byte octet) {
+        return octet == PAD || (octet >= 0 && octet < DECODE_TABLE.length && DECODE_TABLE[octet] != -1);
+    }
+
+    /**
+     * Tests a given byte array to see if it contains only valid characters within the Base64 alphabet.
+     * Currently the method treats whitespace as valid.
+     * 
+     * @param arrayOctet
+     *            byte array to test
+     * @return <code>true</code> if all bytes are valid characters in the Base64 alphabet or if the byte array is
+     *         empty; false, otherwise
+     */
+    public static boolean isArrayByteBase64(byte[] arrayOctet) {
+        for (int i = 0; i < arrayOctet.length; i++) {
+            if (!isBase64(arrayOctet[i]) && !isWhiteSpace(arrayOctet[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Tests a given byte array to see if it contains only valid characters within the Base64 alphabet.
+     * 
+     * @param arrayOctet
+     *            byte array to test
+     * @return <code>true</code> if any byte is a valid character in the Base64 alphabet; false herwise
+     */
+    private static boolean containsBase64Byte(byte[] arrayOctet) {
+        for (int i = 0; i < arrayOctet.length; i++) {
+            if (isBase64(arrayOctet[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Encodes binary data using the base64 algorithm but does not chunk the output.
+     * 
+     * @param binaryData
+     *            binary data to encode
+     * @return Base64 characters
+     */
+    public static byte[] encodeBase64(byte[] binaryData) {
+        return encodeBase64(binaryData, false);
+    }
+
+    /**
+     * Encodes binary data using a url-safe variation of the base64 algorithm but does not chunk the output.
+     * The url-safe variation emits - and _ instead of + and / characters.
+     *
+     * @param binaryData
+     *            binary data to encode
+     * @return Base64 characters
+     */
+    public static byte[] encodeBase64URLSafe(byte[] binaryData) {
+        return encodeBase64(binaryData, false, true);
+    }
+    
+
+    /**
+     * Encodes binary data using the base64 algorithm and chunks the encoded output into 76 character blocks
+     * 
+     * @param binaryData
+     *            binary data to encode
+     * @return Base64 characters chunked in 76 character blocks
+     */
+    public static byte[] encodeBase64Chunked(byte[] binaryData) {
+        return encodeBase64(binaryData, true);
+    }
+
+    /**
+     * Decodes an Object using the base64 algorithm. This method is provided in order to satisfy the requirements of the
+     * Decoder interface, and will throw a DecoderException if the supplied object is not of type byte[].
+     * 
+     * @param pObject
+     *            Object to decode
+     * @return An object (of type byte[]) containing the binary data which corresponds to the byte[] supplied.
+     * @throws DecoderException
+     *             if the parameter supplied is not of type byte[]
+     */
+    public Object decode(Object pObject) throws DecoderException {
+        if (!(pObject instanceof byte[])) {
+            throw new DecoderException("Parameter supplied to Base64 decode is not a byte[]");
+        }
+        return decode((byte[]) pObject);
+    }
+
+    /**
+     * Decodes a byte[] containing containing characters in the Base64 alphabet.
+     * 
+     * @param pArray
+     *            A byte array containing Base64 character data
+     * @return a byte array containing binary data
+     */
+    public byte[] decode(byte[] pArray) {
+        return decodeBase64(pArray);
+    }
+
+    /**
+     * Encodes binary data using the base64 algorithm, optionally chunking the output into 76 character blocks.
+     * 
+     * @param binaryData
+     *            Array containing binary data to encode.
+     * @param isChunked
+     *            if <code>true</code> this encoder will chunk the base64 output into 76 character blocks
+     * @return Base64-encoded data.
+     * @throws IllegalArgumentException
+     *             Thrown when the input array needs an output array bigger than {@link Integer#MAX_VALUE}
+     */
+    public static byte[] encodeBase64(byte[] binaryData, boolean isChunked) {
+        return encodeBase64(binaryData, isChunked, false);
+    }
+
+    /**
+     * Encodes binary data using the base64 algorithm, optionally chunking the output into 76 character blocks.
+     *
+     * @param binaryData
+     *            Array containing binary data to encode.
+     * @param isChunked
+     *            if <code>true</code> this encoder will chunk the base64 output into 76 character blocks
+     * @param urlSafe
+     *            if <code>true</code> this encoder will emit - and _ instead of the usual + and / characters.
+     * @return Base64-encoded data.
+     * @throws IllegalArgumentException
+     *             Thrown when the input array needs an output array bigger than {@link Integer#MAX_VALUE}
+     */
+    public static byte[] encodeBase64(byte[] binaryData, boolean isChunked, boolean urlSafe) {
+        if (binaryData == null || binaryData.length == 0) {
+            return binaryData;
+        }
+        Base64 b64 = isChunked ? new Base64(urlSafe) : new Base64(0, CHUNK_SEPARATOR, urlSafe);
+        long len = (binaryData.length * 4) / 3;
+        long mod = len % 4;
+        if (mod != 0) {
+            len += 4 - mod;
+        }
+        if (isChunked) {
+            len += (1 + (len / CHUNK_SIZE)) * CHUNK_SEPARATOR.length;
+        }
+        if (len > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Input array too big, output array would be bigger than Integer.MAX_VALUE=" + Integer.MAX_VALUE);
+        }
+        byte[] buf = new byte[(int) len];
+        b64.setInitialBuffer(buf, 0, buf.length);
+        b64.encode(binaryData, 0, binaryData.length);
+        b64.encode(binaryData, 0, -1); // Notify encoder of EOF.
+        // Encoder might have resized, even though it was unnecessary.
+        if (b64.buf != buf) {
+            b64.readResults(buf, 0, buf.length);
+        }
+        // In URL-SAFE mode we skip the padding characters, so sometimes our
+        // final length is a bit smaller.
+        if (urlSafe && b64.pos < buf.length) {
+            byte[] smallerBuf = new byte[b64.pos];
+            System.arraycopy(buf, 0, smallerBuf, 0, b64.pos);
+            buf = smallerBuf;
+        }
+        return buf;
+    }
+
+    /**
+     * Decodes Base64 data into octets
+     *
+     * @param base64Data Byte array containing Base64 data
+     * @return Array containing decoded data.
+     */
+    public static byte[] decodeBase64(byte[] base64Data) {
+        if (base64Data == null || base64Data.length == 0) {
+            return base64Data;
+        }
+        Base64 b64 = new Base64();
+        long len = (base64Data.length * 3) / 4;
+        byte[] buf = new byte[(int) len];
+        b64.setInitialBuffer(buf, 0, buf.length);
+        b64.decode(base64Data, 0, base64Data.length);
+        b64.decode(base64Data, 0, -1); // Notify decoder of EOF.
+        // We have no idea what the line-length was, so we
+        // cannot know how much of our array wasn't used.
+        byte[] result = new byte[b64.pos];
+        b64.readResults(result, 0, result.length);
+        return result;
+    }
+
+    /**
+     * Discards any whitespace from a base-64 encoded block.
+     * 
+     * @param data
+     *            The base-64 encoded data to discard the whitespace from.
+     * @return The data, less whitespace (see RFC 2045).
+     * @deprecated This method is no longer needed
+     */
+    static byte[] discardWhitespace(byte[] data) {
+        byte groomedData[] = new byte[data.length];
+        int bytesCopied = 0;
+        for (int i = 0; i < data.length; i++) {
+            switch (data[i]) {
+                case ' ' :
+                case '\n' :
+                case '\r' :
+                case '\t' :
+                    break;
+                default :
+                    groomedData[bytesCopied++] = data[i];
+            }
+        }
+        byte packedData[] = new byte[bytesCopied];
+        System.arraycopy(groomedData, 0, packedData, 0, bytesCopied);
+        return packedData;
+    }
+
+
+    /**
+     * Checks if a byte value is whitespace or not.
+     * 
+     * @param byteToCheck
+     *            the byte to check
+     * @return true if byte is whitespace, false otherwise
+     */
+    private static boolean isWhiteSpace(byte byteToCheck) {
+        switch (byteToCheck) {
+            case ' ' :
+            case '\n' :
+            case '\r' :
+            case '\t' :
+                return true;
+            default :
+                return false;
+        }
+    }
+
+    /**
+     * Discards any characters outside of the base64 alphabet, per the requirements on page 25 of RFC 2045 - "Any
+     * characters outside of the base64 alphabet are to be ignored in base64 encoded data."
+     * 
+     * @param data
+     *            The base-64 encoded data to groom
+     * @return The data, less non-base64 characters (see RFC 2045).
+     */
+    static byte[] discardNonBase64(byte[] data) {
+        byte groomedData[] = new byte[data.length];
+        int bytesCopied = 0;
+        for (int i = 0; i < data.length; i++) {
+            if (isBase64(data[i])) {
+                groomedData[bytesCopied++] = data[i];
+            }
+        }
+        byte packedData[] = new byte[bytesCopied];
+        System.arraycopy(groomedData, 0, packedData, 0, bytesCopied);
+        return packedData;
+    }
+
+    // Implementation of the Encoder Interface
+
+    /**
+     * Encodes an Object using the base64 algorithm. This method is provided in order to satisfy the requirements of the
+     * Encoder interface, and will throw an EncoderException if the supplied object is not of type byte[].
+     * 
+     * @param pObject
+     *            Object to encode
+     * @return An object (of type byte[]) containing the base64 encoded data which corresponds to the byte[] supplied.
+     * @throws EncoderException
+     *             if the parameter supplied is not of type byte[]
+     */
+    public Object encode(Object pObject) throws EncoderException {
+        if (!(pObject instanceof byte[])) {
+            throw new EncoderException("Parameter supplied to Base64 encode is not a byte[]");
+        }
+        return encode((byte[]) pObject);
+    }
+
+    /**
+     * Encodes a byte[] containing binary data, into a byte[] containing characters in the Base64 alphabet.
+     * 
+     * @param pArray
+     *            a byte array containing binary data
+     * @return A byte array containing only Base64 character data
+     */
+    public byte[] encode(byte[] pArray) {
+        return encodeBase64(pArray, false, isUrlSafe());
+    }
+
+    // Implementation of integer encoding used for crypto
+    /**
+     * Decodes a byte64-encoded integer according to crypto
+     * standards such as W3C's XML-Signature
+     * 
+     * @param pArray a byte array containing base64 character data
+     * @return A BigInteger
+     */
+    public static BigInteger decodeInteger(byte[] pArray) {
+        return new BigInteger(1, decodeBase64(pArray));
+    }
+
+    /**
+     * Encodes to a byte64-encoded integer according to crypto
+     * standards such as W3C's XML-Signature
+     * 
+     * @param bigInt a BigInteger
+     * @return A byte array containing base64 character data
+     * @throws NullPointerException if null is passed in
+     */
+    public static byte[] encodeInteger(BigInteger bigInt) {
+        if(bigInt == null)  {
+            throw new NullPointerException("encodeInteger called with null parameter");
+        }
+        return encodeBase64(toIntegerBytes(bigInt), false);
+    }
+
+    /**
+     * Returns a byte-array representation of a <code>BigInteger</code>
+     * without sign bit.
+     *
+     * @param bigInt <code>BigInteger</code> to be converted
+     * @return a byte array representation of the BigInteger parameter
+     */
+     static byte[] toIntegerBytes(BigInteger bigInt) {
+        int bitlen = bigInt.bitLength();
+        // round bitlen
+        bitlen = ((bitlen + 7) >> 3) << 3;
+        byte[] bigBytes = bigInt.toByteArray();
+
+        if(((bigInt.bitLength() % 8) != 0) &&
+            (((bigInt.bitLength() / 8) + 1) == (bitlen / 8))) {
+            return bigBytes;
+        }
+        // set up params for copying everything but sign bit
+        int startSrc = 0;
+        int len = bigBytes.length;
+
+        // if bigInt is exactly byte-aligned, just skip signbit in copy
+        if((bigInt.bitLength() % 8) == 0) {
+            startSrc = 1;
+            len--;
+        }
+        int startDst = bitlen / 8 - len; // to pad w/ nulls as per spec
+        byte[] resizedBytes = new byte[bitlen / 8];
+        System.arraycopy(bigBytes, startSrc, resizedBytes, startDst, len);
+        return resizedBytes;
+    }
+}
+```
+
+Clase de prueba existente `org.apache.commons.codec.binary.Base64Test`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.codec.binary;
+
+
+import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
+import java.util.Random;
+import java.math.BigInteger;
+
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.EncoderException;
+
+import junit.framework.TestCase;
+
+/**
+ * Test cases for Base64 class.
+ * 
+ * @author Apache Software Foundation
+ * @version $Id$
+ */
+public class Base64Test extends TestCase {
+
+    /**
+     * Construct a new instance of this test case.
+     *
+     * @param name Name of the test case
+     */
+    public Base64Test(String name) {
+        super(name);
+    }
+
+
+    /**
+     *  Test the Base64 implementation
+     */
+    public void testBase64() {
+        String content = "Hello World";
+        String encodedContent;
+        encodedContent = new String(Base64.encodeBase64(content.getBytes()));
+        assertTrue("encoding hello world", encodedContent.equals("SGVsbG8gV29ybGQ="));
+    }
+
+    /**
+     * Tests conditional true branch for "marker0" test.
+     */
+    public void testDecodePadMarkerIndex2() {
+        assertEquals("A", new String(Base64.decodeBase64("QQ==".getBytes())));
+    }
+    
+    /**
+     * Tests conditional branches for "marker1" test.
+     */
+    public void testDecodePadMarkerIndex3() {
+        assertEquals("AA", new String(Base64.decodeBase64("QUE=".getBytes())));
+        assertEquals("AAA", new String(Base64.decodeBase64("QUFB".getBytes())));
+    }
+    
+    public void testDecodePadOnly() {
+        assertTrue(Base64.decodeBase64("====".getBytes()).length == 0);
+        assertEquals("", new String(Base64.decodeBase64("====".getBytes())));
+        // Test truncated padding
+        assertTrue(Base64.decodeBase64("===".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("==".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("=".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("".getBytes()).length == 0);
+    }
+    
+    public void testDecodePadOnlyChunked() {
+        assertTrue(Base64.decodeBase64("====\n".getBytes()).length == 0);
+        assertEquals("", new String(Base64.decodeBase64("====\n".getBytes())));
+        // Test truncated padding
+        assertTrue(Base64.decodeBase64("===\n".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("==\n".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("=\n".getBytes()).length == 0);
+        assertTrue(Base64.decodeBase64("\n".getBytes()).length == 0);
+    }
+    
+    // encode/decode random arrays from size 0 to size 11
+    public void testEncodeDecodeSmall() {
+        for(int i=0;i<12;i++) {
+            byte[] data = new byte[i];
+            this.getRandom().nextBytes(data);
+            byte[] enc =  Base64.encodeBase64(data);
+            assertTrue("\"" + (new String(enc)) + "\" is Base64 data.",Base64.isArrayByteBase64(enc) );
+            byte[] data2 = Base64.decodeBase64(enc);
+            assertTrue(toString(data) + " equals " + toString(data2), Arrays.equals(data,data2));
+        }
+    }
+
+    // encode/decode a large random array
+    public void testEncodeDecodeRandom() {
+        for(int i=1;i<5;i++) {
+            byte[] data = new byte[this.getRandom().nextInt(10000)+1];
+            this.getRandom().nextBytes(data);
+            byte[] enc =  Base64.encodeBase64(data);
+            assertTrue(Base64.isArrayByteBase64(enc));
+            byte[] data2 = Base64.decodeBase64(enc);
+            assertTrue(Arrays.equals(data,data2));
+        }
+    }
+
+    /**
+     * Tests RFC 2045 section 2.1 CRLF definition.
+     */
+    public void testRfc2045Section2Dot1CrLfDefinition() {
+        assertTrue(Arrays.equals(new byte[] {13, 10}, Base64.CHUNK_SEPARATOR));
+    }
+
+    /**
+     * Tests RFC 2045 section 6.8 chuck size definition.
+     */
+    public void testRfc2045Section6Dot8ChunkSizeDefinition() {
+        assertEquals(76, Base64.CHUNK_SIZE);
+    }
+
+    public void testSingletons() {
+        assertEquals("AA==",new String(Base64.encodeBase64(new byte[] { (byte)0 })));
+        assertEquals("AQ==",new String(Base64.encodeBase64(new byte[] { (byte)1 })));
+        assertEquals("Ag==",new String(Base64.encodeBase64(new byte[] { (byte)2 })));
+        assertEquals("Aw==",new String(Base64.encodeBase64(new byte[] { (byte)3 })));
+        assertEquals("BA==",new String(Base64.encodeBase64(new byte[] { (byte)4 })));
+        assertEquals("BQ==",new String(Base64.encodeBase64(new byte[] { (byte)5 })));
+        assertEquals("Bg==",new String(Base64.encodeBase64(new byte[] { (byte)6 })));
+        assertEquals("Bw==",new String(Base64.encodeBase64(new byte[] { (byte)7 })));
+        assertEquals("CA==",new String(Base64.encodeBase64(new byte[] { (byte)8 })));
+        assertEquals("CQ==",new String(Base64.encodeBase64(new byte[] { (byte)9 })));
+        assertEquals("Cg==",new String(Base64.encodeBase64(new byte[] { (byte)10 })));
+        assertEquals("Cw==",new String(Base64.encodeBase64(new byte[] { (byte)11 })));
+        assertEquals("DA==",new String(Base64.encodeBase64(new byte[] { (byte)12 })));
+        assertEquals("DQ==",new String(Base64.encodeBase64(new byte[] { (byte)13 })));
+        assertEquals("Dg==",new String(Base64.encodeBase64(new byte[] { (byte)14 })));
+        assertEquals("Dw==",new String(Base64.encodeBase64(new byte[] { (byte)15 })));
+        assertEquals("EA==",new String(Base64.encodeBase64(new byte[] { (byte)16 })));
+        assertEquals("EQ==",new String(Base64.encodeBase64(new byte[] { (byte)17 })));
+        assertEquals("Eg==",new String(Base64.encodeBase64(new byte[] { (byte)18 })));
+        assertEquals("Ew==",new String(Base64.encodeBase64(new byte[] { (byte)19 })));
+        assertEquals("FA==",new String(Base64.encodeBase64(new byte[] { (byte)20 })));
+        assertEquals("FQ==",new String(Base64.encodeBase64(new byte[] { (byte)21 })));
+        assertEquals("Fg==",new String(Base64.encodeBase64(new byte[] { (byte)22 })));
+        assertEquals("Fw==",new String(Base64.encodeBase64(new byte[] { (byte)23 })));
+        assertEquals("GA==",new String(Base64.encodeBase64(new byte[] { (byte)24 })));
+        assertEquals("GQ==",new String(Base64.encodeBase64(new byte[] { (byte)25 })));
+        assertEquals("Gg==",new String(Base64.encodeBase64(new byte[] { (byte)26 })));
+        assertEquals("Gw==",new String(Base64.encodeBase64(new byte[] { (byte)27 })));
+        assertEquals("HA==",new String(Base64.encodeBase64(new byte[] { (byte)28 })));
+        assertEquals("HQ==",new String(Base64.encodeBase64(new byte[] { (byte)29 })));
+        assertEquals("Hg==",new String(Base64.encodeBase64(new byte[] { (byte)30 })));
+        assertEquals("Hw==",new String(Base64.encodeBase64(new byte[] { (byte)31 })));
+        assertEquals("IA==",new String(Base64.encodeBase64(new byte[] { (byte)32 })));
+        assertEquals("IQ==",new String(Base64.encodeBase64(new byte[] { (byte)33 })));
+        assertEquals("Ig==",new String(Base64.encodeBase64(new byte[] { (byte)34 })));
+        assertEquals("Iw==",new String(Base64.encodeBase64(new byte[] { (byte)35 })));
+        assertEquals("JA==",new String(Base64.encodeBase64(new byte[] { (byte)36 })));
+        assertEquals("JQ==",new String(Base64.encodeBase64(new byte[] { (byte)37 })));
+        assertEquals("Jg==",new String(Base64.encodeBase64(new byte[] { (byte)38 })));
+        assertEquals("Jw==",new String(Base64.encodeBase64(new byte[] { (byte)39 })));
+        assertEquals("KA==",new String(Base64.encodeBase64(new byte[] { (byte)40 })));
+        assertEquals("KQ==",new String(Base64.encodeBase64(new byte[] { (byte)41 })));
+        assertEquals("Kg==",new String(Base64.encodeBase64(new byte[] { (byte)42 })));
+        assertEquals("Kw==",new String(Base64.encodeBase64(new byte[] { (byte)43 })));
+        assertEquals("LA==",new String(Base64.encodeBase64(new byte[] { (byte)44 })));
+        assertEquals("LQ==",new String(Base64.encodeBase64(new byte[] { (byte)45 })));
+        assertEquals("Lg==",new String(Base64.encodeBase64(new byte[] { (byte)46 })));
+        assertEquals("Lw==",new String(Base64.encodeBase64(new byte[] { (byte)47 })));
+        assertEquals("MA==",new String(Base64.encodeBase64(new byte[] { (byte)48 })));
+        assertEquals("MQ==",new String(Base64.encodeBase64(new byte[] { (byte)49 })));
+        assertEquals("Mg==",new String(Base64.encodeBase64(new byte[] { (byte)50 })));
+        assertEquals("Mw==",new String(Base64.encodeBase64(new byte[] { (byte)51 })));
+        assertEquals("NA==",new String(Base64.encodeBase64(new byte[] { (byte)52 })));
+        assertEquals("NQ==",new String(Base64.encodeBase64(new byte[] { (byte)53 })));
+        assertEquals("Ng==",new String(Base64.encodeBase64(new byte[] { (byte)54 })));
+        assertEquals("Nw==",new String(Base64.encodeBase64(new byte[] { (byte)55 })));
+        assertEquals("OA==",new String(Base64.encodeBase64(new byte[] { (byte)56 })));
+        assertEquals("OQ==",new String(Base64.encodeBase64(new byte[] { (byte)57 })));
+        assertEquals("Og==",new String(Base64.encodeBase64(new byte[] { (byte)58 })));
+        assertEquals("Ow==",new String(Base64.encodeBase64(new byte[] { (byte)59 })));
+        assertEquals("PA==",new String(Base64.encodeBase64(new byte[] { (byte)60 })));
+        assertEquals("PQ==",new String(Base64.encodeBase64(new byte[] { (byte)61 })));
+        assertEquals("Pg==",new String(Base64.encodeBase64(new byte[] { (byte)62 })));
+        assertEquals("Pw==",new String(Base64.encodeBase64(new byte[] { (byte)63 })));
+        assertEquals("QA==",new String(Base64.encodeBase64(new byte[] { (byte)64 })));
+        assertEquals("QQ==",new String(Base64.encodeBase64(new byte[] { (byte)65 })));
+        assertEquals("Qg==",new String(Base64.encodeBase64(new byte[] { (byte)66 })));
+        assertEquals("Qw==",new String(Base64.encodeBase64(new byte[] { (byte)67 })));
+        assertEquals("RA==",new String(Base64.encodeBase64(new byte[] { (byte)68 })));
+        assertEquals("RQ==",new String(Base64.encodeBase64(new byte[] { (byte)69 })));
+        assertEquals("Rg==",new String(Base64.encodeBase64(new byte[] { (byte)70 })));
+        assertEquals("Rw==",new String(Base64.encodeBase64(new byte[] { (byte)71 })));
+        assertEquals("SA==",new String(Base64.encodeBase64(new byte[] { (byte)72 })));
+        assertEquals("SQ==",new String(Base64.encodeBase64(new byte[] { (byte)73 })));
+        assertEquals("Sg==",new String(Base64.encodeBase64(new byte[] { (byte)74 })));
+        assertEquals("Sw==",new String(Base64.encodeBase64(new byte[] { (byte)75 })));
+        assertEquals("TA==",new String(Base64.encodeBase64(new byte[] { (byte)76 })));
+        assertEquals("TQ==",new String(Base64.encodeBase64(new byte[] { (byte)77 })));
+        assertEquals("Tg==",new String(Base64.encodeBase64(new byte[] { (byte)78 })));
+        assertEquals("Tw==",new String(Base64.encodeBase64(new byte[] { (byte)79 })));
+        assertEquals("UA==",new String(Base64.encodeBase64(new byte[] { (byte)80 })));
+        assertEquals("UQ==",new String(Base64.encodeBase64(new byte[] { (byte)81 })));
+        assertEquals("Ug==",new String(Base64.encodeBase64(new byte[] { (byte)82 })));
+        assertEquals("Uw==",new String(Base64.encodeBase64(new byte[] { (byte)83 })));
+        assertEquals("VA==",new String(Base64.encodeBase64(new byte[] { (byte)84 })));
+        assertEquals("VQ==",new String(Base64.encodeBase64(new byte[] { (byte)85 })));
+        assertEquals("Vg==",new String(Base64.encodeBase64(new byte[] { (byte)86 })));
+        assertEquals("Vw==",new String(Base64.encodeBase64(new byte[] { (byte)87 })));
+        assertEquals("WA==",new String(Base64.encodeBase64(new byte[] { (byte)88 })));
+        assertEquals("WQ==",new String(Base64.encodeBase64(new byte[] { (byte)89 })));
+        assertEquals("Wg==",new String(Base64.encodeBase64(new byte[] { (byte)90 })));
+        assertEquals("Ww==",new String(Base64.encodeBase64(new byte[] { (byte)91 })));
+        assertEquals("XA==",new String(Base64.encodeBase64(new byte[] { (byte)92 })));
+        assertEquals("XQ==",new String(Base64.encodeBase64(new byte[] { (byte)93 })));
+        assertEquals("Xg==",new String(Base64.encodeBase64(new byte[] { (byte)94 })));
+        assertEquals("Xw==",new String(Base64.encodeBase64(new byte[] { (byte)95 })));
+        assertEquals("YA==",new String(Base64.encodeBase64(new byte[] { (byte)96 })));
+        assertEquals("YQ==",new String(Base64.encodeBase64(new byte[] { (byte)97 })));
+        assertEquals("Yg==",new String(Base64.encodeBase64(new byte[] { (byte)98 })));
+        assertEquals("Yw==",new String(Base64.encodeBase64(new byte[] { (byte)99 })));
+        assertEquals("ZA==",new String(Base64.encodeBase64(new byte[] { (byte)100 })));
+        assertEquals("ZQ==",new String(Base64.encodeBase64(new byte[] { (byte)101 })));
+        assertEquals("Zg==",new String(Base64.encodeBase64(new byte[] { (byte)102 })));
+        assertEquals("Zw==",new String(Base64.encodeBase64(new byte[] { (byte)103 })));
+        assertEquals("aA==",new String(Base64.encodeBase64(new byte[] { (byte)104 })));
+        for (int i = -128; i<=127; i++){
+            byte test[]= {(byte)i};
+            assertTrue(Arrays.equals(test,Base64.decodeBase64(Base64.encodeBase64(test))));
+        }
+    }
+
+    public void testSingletonsChunked() {
+        assertEquals("AA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0 })));
+        assertEquals("AQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)1 })));
+        assertEquals("Ag==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)2 })));
+        assertEquals("Aw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)3 })));
+        assertEquals("BA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)4 })));
+        assertEquals("BQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)5 })));
+        assertEquals("Bg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)6 })));
+        assertEquals("Bw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)7 })));
+        assertEquals("CA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)8 })));
+        assertEquals("CQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)9 })));
+        assertEquals("Cg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)10 })));
+        assertEquals("Cw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)11 })));
+        assertEquals("DA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)12 })));
+        assertEquals("DQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)13 })));
+        assertEquals("Dg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)14 })));
+        assertEquals("Dw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)15 })));
+        assertEquals("EA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)16 })));
+        assertEquals("EQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)17 })));
+        assertEquals("Eg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)18 })));
+        assertEquals("Ew==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)19 })));
+        assertEquals("FA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)20 })));
+        assertEquals("FQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)21 })));
+        assertEquals("Fg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)22 })));
+        assertEquals("Fw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)23 })));
+        assertEquals("GA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)24 })));
+        assertEquals("GQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)25 })));
+        assertEquals("Gg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)26 })));
+        assertEquals("Gw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)27 })));
+        assertEquals("HA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)28 })));
+        assertEquals("HQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)29 })));
+        assertEquals("Hg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)30 })));
+        assertEquals("Hw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)31 })));
+        assertEquals("IA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)32 })));
+        assertEquals("IQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)33 })));
+        assertEquals("Ig==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)34 })));
+        assertEquals("Iw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)35 })));
+        assertEquals("JA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)36 })));
+        assertEquals("JQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)37 })));
+        assertEquals("Jg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)38 })));
+        assertEquals("Jw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)39 })));
+        assertEquals("KA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)40 })));
+        assertEquals("KQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)41 })));
+        assertEquals("Kg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)42 })));
+        assertEquals("Kw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)43 })));
+        assertEquals("LA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)44 })));
+        assertEquals("LQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)45 })));
+        assertEquals("Lg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)46 })));
+        assertEquals("Lw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)47 })));
+        assertEquals("MA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)48 })));
+        assertEquals("MQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)49 })));
+        assertEquals("Mg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)50 })));
+        assertEquals("Mw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)51 })));
+        assertEquals("NA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)52 })));
+        assertEquals("NQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)53 })));
+        assertEquals("Ng==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)54 })));
+        assertEquals("Nw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)55 })));
+        assertEquals("OA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)56 })));
+        assertEquals("OQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)57 })));
+        assertEquals("Og==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)58 })));
+        assertEquals("Ow==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)59 })));
+        assertEquals("PA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)60 })));
+        assertEquals("PQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)61 })));
+        assertEquals("Pg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)62 })));
+        assertEquals("Pw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)63 })));
+        assertEquals("QA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)64 })));
+        assertEquals("QQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)65 })));
+        assertEquals("Qg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)66 })));
+        assertEquals("Qw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)67 })));
+        assertEquals("RA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)68 })));
+        assertEquals("RQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)69 })));
+        assertEquals("Rg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)70 })));
+        assertEquals("Rw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)71 })));
+        assertEquals("SA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)72 })));
+        assertEquals("SQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)73 })));
+        assertEquals("Sg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)74 })));
+        assertEquals("Sw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)75 })));
+        assertEquals("TA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)76 })));
+        assertEquals("TQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)77 })));
+        assertEquals("Tg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)78 })));
+        assertEquals("Tw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)79 })));
+        assertEquals("UA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)80 })));
+        assertEquals("UQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)81 })));
+        assertEquals("Ug==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)82 })));
+        assertEquals("Uw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)83 })));
+        assertEquals("VA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)84 })));
+        assertEquals("VQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)85 })));
+        assertEquals("Vg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)86 })));
+        assertEquals("Vw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)87 })));
+        assertEquals("WA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)88 })));
+        assertEquals("WQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)89 })));
+        assertEquals("Wg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)90 })));
+        assertEquals("Ww==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)91 })));
+        assertEquals("XA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)92 })));
+        assertEquals("XQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)93 })));
+        assertEquals("Xg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)94 })));
+        assertEquals("Xw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)95 })));
+        assertEquals("YA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)96 })));
+        assertEquals("YQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)97 })));
+        assertEquals("Yg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)98 })));
+        assertEquals("Yw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)99 })));
+        assertEquals("ZA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)100 })));
+        assertEquals("ZQ==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)101 })));
+        assertEquals("Zg==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)102 })));
+        assertEquals("Zw==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)103 })));
+        assertEquals("aA==\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)104 })));
+    }
+
+    public void testPairs(){
+        assertEquals("AAA=",new String(Base64.encodeBase64(new byte[] { 0, 0 })));
+        for (int i = -128; i<=127; i++){
+            byte test[]= {(byte)i, (byte)i};
+            assertTrue(Arrays.equals(test,Base64.decodeBase64(Base64.encodeBase64(test))));
+        }
+    }
+
+    public void testTriplets() {
+        assertEquals("AAAA",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)0 })));
+        assertEquals("AAAB",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)1 })));
+        assertEquals("AAAC",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)2 })));
+        assertEquals("AAAD",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)3 })));
+        assertEquals("AAAE",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)4 })));
+        assertEquals("AAAF",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)5 })));
+        assertEquals("AAAG",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)6 })));
+        assertEquals("AAAH",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)7 })));
+        assertEquals("AAAI",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)8 })));
+        assertEquals("AAAJ",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)9 })));
+        assertEquals("AAAK",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)10 })));
+        assertEquals("AAAL",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)11 })));
+        assertEquals("AAAM",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)12 })));
+        assertEquals("AAAN",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)13 })));
+        assertEquals("AAAO",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)14 })));
+        assertEquals("AAAP",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)15 })));
+        assertEquals("AAAQ",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)16 })));
+        assertEquals("AAAR",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)17 })));
+        assertEquals("AAAS",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)18 })));
+        assertEquals("AAAT",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)19 })));
+        assertEquals("AAAU",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)20 })));
+        assertEquals("AAAV",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)21 })));
+        assertEquals("AAAW",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)22 })));
+        assertEquals("AAAX",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)23 })));
+        assertEquals("AAAY",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)24 })));
+        assertEquals("AAAZ",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)25 })));
+        assertEquals("AAAa",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)26 })));
+        assertEquals("AAAb",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)27 })));
+        assertEquals("AAAc",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)28 })));
+        assertEquals("AAAd",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)29 })));
+        assertEquals("AAAe",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)30 })));
+        assertEquals("AAAf",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)31 })));
+        assertEquals("AAAg",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)32 })));
+        assertEquals("AAAh",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)33 })));
+        assertEquals("AAAi",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)34 })));
+        assertEquals("AAAj",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)35 })));
+        assertEquals("AAAk",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)36 })));
+        assertEquals("AAAl",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)37 })));
+        assertEquals("AAAm",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)38 })));
+        assertEquals("AAAn",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)39 })));
+        assertEquals("AAAo",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)40 })));
+        assertEquals("AAAp",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)41 })));
+        assertEquals("AAAq",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)42 })));
+        assertEquals("AAAr",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)43 })));
+        assertEquals("AAAs",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)44 })));
+        assertEquals("AAAt",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)45 })));
+        assertEquals("AAAu",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)46 })));
+        assertEquals("AAAv",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)47 })));
+        assertEquals("AAAw",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)48 })));
+        assertEquals("AAAx",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)49 })));
+        assertEquals("AAAy",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)50 })));
+        assertEquals("AAAz",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)51 })));
+        assertEquals("AAA0",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)52 })));
+        assertEquals("AAA1",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)53 })));
+        assertEquals("AAA2",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)54 })));
+        assertEquals("AAA3",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)55 })));
+        assertEquals("AAA4",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)56 })));
+        assertEquals("AAA5",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)57 })));
+        assertEquals("AAA6",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)58 })));
+        assertEquals("AAA7",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)59 })));
+        assertEquals("AAA8",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)60 })));
+        assertEquals("AAA9",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)61 })));
+        assertEquals("AAA+",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)62 })));
+        assertEquals("AAA/",new String(Base64.encodeBase64(new byte[] { (byte)0, (byte)0, (byte)63 })));
+    }
+
+    public void testTripletsChunked() {
+        assertEquals("AAAA\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)0 })));
+        assertEquals("AAAB\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)1 })));
+        assertEquals("AAAC\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)2 })));
+        assertEquals("AAAD\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)3 })));
+        assertEquals("AAAE\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)4 })));
+        assertEquals("AAAF\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)5 })));
+        assertEquals("AAAG\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)6 })));
+        assertEquals("AAAH\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)7 })));
+        assertEquals("AAAI\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)8 })));
+        assertEquals("AAAJ\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)9 })));
+        assertEquals("AAAK\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)10 })));
+        assertEquals("AAAL\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)11 })));
+        assertEquals("AAAM\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)12 })));
+        assertEquals("AAAN\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)13 })));
+        assertEquals("AAAO\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)14 })));
+        assertEquals("AAAP\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)15 })));
+        assertEquals("AAAQ\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)16 })));
+        assertEquals("AAAR\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)17 })));
+        assertEquals("AAAS\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)18 })));
+        assertEquals("AAAT\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)19 })));
+        assertEquals("AAAU\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)20 })));
+        assertEquals("AAAV\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)21 })));
+        assertEquals("AAAW\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)22 })));
+        assertEquals("AAAX\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)23 })));
+        assertEquals("AAAY\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)24 })));
+        assertEquals("AAAZ\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)25 })));
+        assertEquals("AAAa\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)26 })));
+        assertEquals("AAAb\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)27 })));
+        assertEquals("AAAc\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)28 })));
+        assertEquals("AAAd\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)29 })));
+        assertEquals("AAAe\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)30 })));
+        assertEquals("AAAf\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)31 })));
+        assertEquals("AAAg\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)32 })));
+        assertEquals("AAAh\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)33 })));
+        assertEquals("AAAi\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)34 })));
+        assertEquals("AAAj\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)35 })));
+        assertEquals("AAAk\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)36 })));
+        assertEquals("AAAl\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)37 })));
+        assertEquals("AAAm\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)38 })));
+        assertEquals("AAAn\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)39 })));
+        assertEquals("AAAo\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)40 })));
+        assertEquals("AAAp\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)41 })));
+        assertEquals("AAAq\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)42 })));
+        assertEquals("AAAr\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)43 })));
+        assertEquals("AAAs\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)44 })));
+        assertEquals("AAAt\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)45 })));
+        assertEquals("AAAu\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)46 })));
+        assertEquals("AAAv\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)47 })));
+        assertEquals("AAAw\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)48 })));
+        assertEquals("AAAx\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)49 })));
+        assertEquals("AAAy\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)50 })));
+        assertEquals("AAAz\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)51 })));
+        assertEquals("AAA0\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)52 })));
+        assertEquals("AAA1\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)53 })));
+        assertEquals("AAA2\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)54 })));
+        assertEquals("AAA3\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)55 })));
+        assertEquals("AAA4\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)56 })));
+        assertEquals("AAA5\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)57 })));
+        assertEquals("AAA6\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)58 })));
+        assertEquals("AAA7\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)59 })));
+        assertEquals("AAA8\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)60 })));
+        assertEquals("AAA9\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)61 })));
+        assertEquals("AAA+\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)62 })));
+        assertEquals("AAA/\r\n",new String(Base64.encodeBase64Chunked(new byte[] { (byte)0, (byte)0, (byte)63 })));
+    }
+
+    public void testKnownEncodings() {
+        assertEquals("VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciB0aGUgbGF6eSBkb2dzLg==",new String(Base64.encodeBase64("The quick brown fox jumped over the lazy dogs.".getBytes())));
+        assertEquals("YmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJs\r\nYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFo\r\nIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBibGFoIGJsYWggYmxhaCBi\r\nbGFoIGJsYWg=\r\n",new String(Base64.encodeBase64Chunked("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".getBytes())));
+        assertEquals("SXQgd2FzIHRoZSBiZXN0IG9mIHRpbWVzLCBpdCB3YXMgdGhlIHdvcnN0IG9mIHRpbWVzLg==",new String(Base64.encodeBase64("It was the best of times, it was the worst of times.".getBytes())));
+        assertEquals("aHR0cDovL2pha2FydGEuYXBhY2hlLm9yZy9jb21tbW9ucw==",new String(Base64.encodeBase64("http://jakarta.apache.org/commmons".getBytes())));
+        assertEquals("QWFCYkNjRGRFZUZmR2dIaElpSmpLa0xsTW1Obk9vUHBRcVJyU3NUdFV1VnZXd1h4WXlaeg==",new String(Base64.encodeBase64("AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz".getBytes())));
+        assertEquals("eyAwLCAxLCAyLCAzLCA0LCA1LCA2LCA3LCA4LCA5IH0=",new String(Base64.encodeBase64("{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }".getBytes())));
+        assertEquals("eHl6enkh",new String(Base64.encodeBase64("xyzzy!".getBytes())));
+    }
+
+    public void testKnownDecodings() {
+        assertEquals("The quick brown fox jumped over the lazy dogs.",new String(Base64.decodeBase64("VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciB0aGUgbGF6eSBkb2dzLg==".getBytes())));
+        assertEquals("It was the best of times, it was the worst of times.",new String(Base64.decodeBase64("SXQgd2FzIHRoZSBiZXN0IG9mIHRpbWVzLCBpdCB3YXMgdGhlIHdvcnN0IG9mIHRpbWVzLg==".getBytes())));
+        assertEquals("http://jakarta.apache.org/commmons",new String(Base64.decodeBase64("aHR0cDovL2pha2FydGEuYXBhY2hlLm9yZy9jb21tbW9ucw==".getBytes())));
+        assertEquals("AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz",new String(Base64.decodeBase64("QWFCYkNjRGRFZUZmR2dIaElpSmpLa0xsTW1Obk9vUHBRcVJyU3NUdFV1VnZXd1h4WXlaeg==".getBytes())));
+        assertEquals("{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }",new String(Base64.decodeBase64("eyAwLCAxLCAyLCAzLCA0LCA1LCA2LCA3LCA4LCA5IH0=".getBytes())));
+        assertEquals("xyzzy!",new String(Base64.decodeBase64("eHl6enkh".getBytes())));
+        } 
+
+    public void testNonBase64Test() throws Exception {
+
+        byte[] bArray = { '%' };
+
+        assertFalse( "Invalid Base64 array was incorrectly validated as " +
+                     "an array of Base64 encoded data", 
+                     Base64.isArrayByteBase64( bArray ) );
+        
+        try {
+            Base64 b64 = new Base64();
+            byte[] result = b64.decode( bArray );
+            
+            assertTrue( "The result should be empty as the test encoded content did " +
+                "not contain any valid base 64 characters", result.length == 0);
+        } 
+        catch( Exception e ) {
+            fail( "Exception was thrown when trying to decode " +
+                    "invalid base64 encoded data - RFC 2045 requires that all " +
+                    "non base64 character be discarded, an exception should not" +
+                    " have been thrown");
+        }
+    }
+    
+    public void testIgnoringNonBase64InDecode() throws Exception {
+        assertEquals("The quick brown fox jumped over the lazy dogs.",new String(Base64.decodeBase64("VGhlIH@$#$@%F1aWN@#@#@@rIGJyb3duIGZve\n\r\t%#%#%#%CBqd##$#$W1wZWQgb3ZlciB0aGUgbGF6eSBkb2dzLg==".getBytes())));
+    }
+
+    public void testIsArrayByteBase64() {        
+        assertFalse(Base64.isArrayByteBase64(new byte[] {Byte.MIN_VALUE}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {-125}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {-10}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {0}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {64, Byte.MAX_VALUE}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {Byte.MAX_VALUE}));
+        assertTrue(Base64.isArrayByteBase64(new byte[] {'A'}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {'A', Byte.MIN_VALUE}));
+        assertTrue(Base64.isArrayByteBase64(new byte[] {'A', 'Z', 'a'}));
+        assertTrue(Base64.isArrayByteBase64(new byte[] {'/','=','+'}));
+        assertFalse(Base64.isArrayByteBase64(new byte[] {'$'}));
+    }
+
+    public void testObjectDecodeWithInvalidParameter() throws Exception {
+        Base64 b64 = new Base64();
+
+        try {
+            b64.decode( "Yadayadayada");
+            fail( "decode(Object) didn't throw an exception when passed a String object");
+        } catch( DecoderException e ) {
+            // ignored
+        }
+
+    }
+
+    public void testObjectDecodeWithValidParameter() throws Exception {
+
+        String original = "Hello World!";
+        byte[] bArray = 
+            Base64.encodeBase64(original.getBytes() );
+        Object o = bArray;
+        
+        Base64 b64 = new Base64();
+        Object oDecoded = b64.decode( o );
+        byte[] baDecoded = (byte[]) oDecoded;
+        String dest = new String( baDecoded );
+
+        assertTrue( "dest string does not equal original",
+                    dest.equals( original ) );
+    }
+
+    public void testObjectEncodeWithInvalidParameter() throws Exception {
+        Base64 b64 = new Base64();
+
+        try {
+            b64.encode( "Yadayadayada" );
+            fail( "encode(Object) didn't throw an exception when passed a String object");
+        } catch( EncoderException e ) {
+        }
+    }
+
+    public void testObjectEncodeWithValidParameter() throws Exception {
+
+        String original = "Hello World!";
+        byte[] origBytes = original.getBytes();
+        Object origObj = origBytes;
+
+        Base64 b64 = new Base64();
+        Object oEncoded = b64.encode( origObj );
+        byte[] bArray = 
+            Base64.decodeBase64( (byte[]) oEncoded );
+        String dest = new String( bArray );
+
+        assertTrue( "dest string does not equal original",
+                    dest.equals( original ) );
+    }
+
+    public void testDecodeWithWhitespace() throws Exception {
+
+        String orig = "I am a late night coder.";
+
+        byte[] encodedArray = Base64.encodeBase64( orig.getBytes() );
+        StringBuffer intermediate = 
+            new StringBuffer( new String(encodedArray) );
+
+        intermediate.insert( 2, ' ' );
+        intermediate.insert( 5, '\t' );
+        intermediate.insert( 10, '\r' );
+        intermediate.insert( 15, '\n' );
+
+        byte[] encodedWithWS = intermediate.toString().getBytes();
+        byte[] decodedWithWS = Base64.decodeBase64( encodedWithWS );
+
+        String dest = new String( decodedWithWS );
+
+        assertTrue( "Dest string doesn't equal the original", 
+                    dest.equals( orig ) );
+    }
+
+    public void testDiscardWhitespace() throws Exception {
+
+        String orig = "I am a late night coder.";
+
+        byte[] encodedArray = Base64.encodeBase64( orig.getBytes() );
+        StringBuffer intermediate = 
+            new StringBuffer( new String(encodedArray) );
+
+        intermediate.insert( 2, ' ' );
+        intermediate.insert( 5, '\t' );
+        intermediate.insert( 10, '\r' );
+        intermediate.insert( 15, '\n' );
+
+        byte[] encodedWithWS = intermediate.toString().getBytes();
+        byte[] encodedNoWS = Base64.discardWhitespace( encodedWithWS );
+        byte[] decodedWithWS = Base64.decodeBase64( encodedWithWS );
+        byte[] decodedNoWS = Base64.decodeBase64( encodedNoWS );
+
+        String destFromWS = new String( decodedWithWS );
+        String destFromNoWS = new String( decodedNoWS );
+
+        assertTrue( "Dest string doesn't equal original", 
+                destFromWS.equals( orig ) );
+        assertTrue( "Dest string doesn't equal original", 
+                destFromNoWS.equals( orig ) );
+    }
+
+    public void testCodeInteger1() {
+        String encodedInt1 = "li7dzDacuo67Jg7mtqEm2TRuOMU=";
+        BigInteger bigInt1 = new BigInteger("85739377120809420210425962799" +
+            "0318636601332086981");
+
+        assertEquals(encodedInt1, new String(Base64.encodeInteger(bigInt1)));
+        assertEquals(bigInt1, Base64.decodeInteger(encodedInt1.getBytes()));
+    }
+
+    public void testCodeInteger2() {
+        String encodedInt2 = "9B5ypLY9pMOmtxCeTDHgwdNFeGs=";
+        BigInteger bigInt2 = new BigInteger("13936727572861167254666467268" +
+            "91466679477132949611");
+
+        assertEquals(encodedInt2, new String(Base64.encodeInteger(bigInt2)));
+        assertEquals(bigInt2, Base64.decodeInteger(encodedInt2.getBytes()));
+    }
+
+    public void testCodeInteger3() {
+        String encodedInt3 = "FKIhdgaG5LGKiEtF1vHy4f3y700zaD6QwDS3IrNVGzNp2" +
+            "rY+1LFWTK6D44AyiC1n8uWz1itkYMZF0/aKDK0Yjg==";
+        BigInteger bigInt3 = new BigInteger("10806548154093873461951748545" +
+            "1196989136416448805819079363524309897749044958112417136240557" +
+            "4495062430572478766856090958495998158114332651671116876320938126");
+
+        assertEquals(encodedInt3, new String(Base64.encodeInteger(bigInt3)));
+        assertEquals(bigInt3, Base64.decodeInteger(encodedInt3.getBytes()));
+    }
+
+    public void testCodeInteger4() {
+        String encodedInt4 = "ctA8YGxrtngg/zKVvqEOefnwmViFztcnPBYPlJsvh6yKI" +
+            "4iDm68fnp4Mi3RrJ6bZAygFrUIQLxLjV+OJtgJAEto0xAs+Mehuq1DkSFEpP3o" +
+            "DzCTOsrOiS1DwQe4oIb7zVk/9l7aPtJMHW0LVlMdwZNFNNJoqMcT2ZfCPrfvYv" +
+            "Q0=";
+        BigInteger bigInt4 = new BigInteger("80624726256040348115552042320" +
+            "6968135001872753709424419772586693950232350200555646471175944" +
+             "519297087885987040810778908507262272892702303774422853675597" +
+             "748008534040890923814202286633163248086055216976551456088015" +
+             "338880713818192088877057717530169381044092839402438015097654" +
+             "53542091716518238707344493641683483917");
+
+        assertEquals(encodedInt4, new String(Base64.encodeInteger(bigInt4)));
+        assertEquals(bigInt4, Base64.decodeInteger(encodedInt4.getBytes()));
+    }
+
+    public void testCodeIntegerNull() {
+        try {
+            Base64.encodeInteger(null);
+            fail("Exception not thrown when passing in null to encodeInteger(BigInteger)");
+        } catch(NullPointerException npe) {
+            // expected
+        } catch(Exception e) {
+            fail("Incorrect Exception caught when passing in null to encodeInteger(BigInteger)");
+        }
+    }
+
+    public void testCodeIntegerEdgeCases() {
+        // TODO
+    }
+
+    public void testConstructors(){
+        Base64 base64;
+        base64 = new Base64();
+        base64 = new Base64(-1);
+        base64 = new Base64(-1,new byte[]{});
+        base64 = new Base64(64,new byte[]{});
+        try {
+            base64 = new Base64(-1,new byte[]{'A'});
+            fail("Should have rejected attempt to use 'A' as a line separator");
+        } catch (IllegalArgumentException ignored){
+            
+        }
+        try {
+            base64 = new Base64(64,new byte[]{'A'});
+            fail("Should have rejected attempt to use 'A' as a line separator");
+        } catch (IllegalArgumentException ignored){
+            
+        }
+        try {
+            base64 = new Base64(64,new byte[]{'='});
+            fail("Should have rejected attempt to use '=' as a line separator");
+        } catch (IllegalArgumentException ignored){
+            
+        }
+        base64 = new Base64(64,new byte[]{'$'}); // OK
+        try {
+            base64 = new Base64(64,new byte[]{'A','$'});
+            fail("Should have rejected attempt to use 'A$' as a line separator");
+        } catch (IllegalArgumentException ignored){
+            
+        }
+        base64 = new Base64(64,new byte[]{' ','$','\n','\r','\t'}); // OK
+    }
+
+    /**
+     * Base64 encoding of UUID's is a common use-case, especially in URL-SAFE
+     * mode.  This test case ends up being the "URL-SAFE" JUnit's.
+     *
+     * @throws DecoderException if Hex.decode() fails - a serious problem since
+     * Hex comes from our own commons-codec!
+     *
+     * @throws UnsupportedEncodingException if "UTF-8" character set is not
+     * available.  Unlikely.
+     */
+    public void testUUID() throws DecoderException, UnsupportedEncodingException {
+        // The 4 UUID's below contains mixtures of + and / to help us test the
+        // URL-SAFE encoding mode.
+        byte[][] ids = new byte[4][];
+
+        // ids[0] was chosen so that it encodes with at least one +.
+        ids[0] = Hex.decodeHex("94ed8d0319e4493399560fb67404d370".toCharArray());
+
+        // ids[1] was chosen so that it encodes with both / and +.
+        ids[1] = Hex.decodeHex("2bf7cc2701fe4397b49ebeed5acc7090".toCharArray());
+
+        // ids[2] was chosen so that it encodes with at least one /.
+        ids[2] = Hex.decodeHex("64be154b6ffa40258d1a01288e7c31ca".toCharArray());
+
+        // ids[3] was chosen so that it encodes with both / and +, with /
+        // right at the beginning.
+        ids[3] = Hex.decodeHex("ff7f8fc01cdb471a8c8b5a9306183fe8".toCharArray());
+
+        byte[][] standard = new byte[4][];
+        standard[0] = "lO2NAxnkSTOZVg+2dATTcA==".getBytes("UTF-8");
+        standard[1] = "K/fMJwH+Q5e0nr7tWsxwkA==".getBytes("UTF-8");
+        standard[2] = "ZL4VS2/6QCWNGgEojnwxyg==".getBytes("UTF-8");
+        standard[3] = "/3+PwBzbRxqMi1qTBhg/6A==".getBytes("UTF-8");
+
+        byte[][] urlSafe1 = new byte[4][];
+        // regular padding (two '==' signs).
+        urlSafe1[0] = "lO2NAxnkSTOZVg-2dATTcA==".getBytes("UTF-8");
+        urlSafe1[1] = "K_fMJwH-Q5e0nr7tWsxwkA==".getBytes("UTF-8");
+        urlSafe1[2] = "ZL4VS2_6QCWNGgEojnwxyg==".getBytes("UTF-8");
+        urlSafe1[3] = "_3-PwBzbRxqMi1qTBhg_6A==".getBytes("UTF-8");
+
+        byte[][] urlSafe2 = new byte[4][];
+        // single padding (only one '=' sign).
+        urlSafe2[0] = "lO2NAxnkSTOZVg-2dATTcA=".getBytes("UTF-8");
+        urlSafe2[1] = "K_fMJwH-Q5e0nr7tWsxwkA=".getBytes("UTF-8");
+        urlSafe2[2] = "ZL4VS2_6QCWNGgEojnwxyg=".getBytes("UTF-8");
+        urlSafe2[3] = "_3-PwBzbRxqMi1qTBhg_6A=".getBytes("UTF-8");
+
+        byte[][] urlSafe3 = new byte[4][];
+        // no padding (no '=' signs).        
+        urlSafe3[0] = "lO2NAxnkSTOZVg-2dATTcA".getBytes("UTF-8");
+        urlSafe3[1] = "K_fMJwH-Q5e0nr7tWsxwkA".getBytes("UTF-8");
+        urlSafe3[2] = "ZL4VS2_6QCWNGgEojnwxyg".getBytes("UTF-8");
+        urlSafe3[3] = "_3-PwBzbRxqMi1qTBhg_6A".getBytes("UTF-8");
+
+        for (int i = 0; i < 4; i++) {
+            byte[] encodedStandard = Base64.encodeBase64(ids[i]);
+            byte[] encodedUrlSafe = Base64.encodeBase64URLSafe(ids[i]);
+            byte[] decodedStandard = Base64.decodeBase64(standard[i]);
+            byte[] decodedUrlSafe1 = Base64.decodeBase64(urlSafe1[i]);
+            byte[] decodedUrlSafe2 =Base64.decodeBase64(urlSafe2[i]);
+            byte[] decodedUrlSafe3 =Base64.decodeBase64(urlSafe3[i]);             
+
+            // Very important debugging output should anyone
+            // ever need to delve closely into this stuff.
+            if (false) {
+                System.out.println("reference: [" + new String(Hex.encodeHex(ids[i])) + "]");
+                System.out.println("standard:  [" + new String(Hex.encodeHex(decodedStandard)) + "] From: [" + new String(standard[i], "UTF-8") + "]");
+                System.out.println("safe1:     [" + new String(Hex.encodeHex(decodedUrlSafe1)) + "] From: [" + new String(urlSafe1[i], "UTF-8") + "]");
+                System.out.println("safe2:     [" + new String(Hex.encodeHex(decodedUrlSafe2)) + "] From: [" + new String(urlSafe2[i], "UTF-8") + "]");
+                System.out.println("safe3:     [" + new String(Hex.encodeHex(decodedUrlSafe3)) + "] From: [" + new String(urlSafe3[i], "UTF-8") + "]");
+            }
+
+            assertTrue("standard encode uuid", Arrays.equals(encodedStandard, standard[i]));
+            assertTrue("url-safe encode uuid", Arrays.equals(encodedUrlSafe, urlSafe3[i]));
+            assertTrue("standard decode uuid", Arrays.equals(decodedStandard, ids[i]));
+            assertTrue("url-safe1 decode uuid", Arrays.equals(decodedUrlSafe1, ids[i]));
+            assertTrue("url-safe2 decode uuid", Arrays.equals(decodedUrlSafe2, ids[i]));
+            assertTrue("url-safe3 decode uuid", Arrays.equals(decodedUrlSafe3, ids[i]));
+        }
+    }
+
+    /**
+     * Test encode and decode of empty byte array.
+     */
+    public void testEmptyBase64() {
+        byte[] empty = new byte[0];
+        byte[] result = Base64.encodeBase64(empty);
+        assertEquals("empty base64 encode", 0, result.length);
+
+        empty = new byte[0];
+        result = Base64.decodeBase64(empty);        
+        assertEquals("empty base64 decode", 0, result.length);        
+    }
+
+    // -------------------------------------------------------- Private Methods
+
+    private String toString(byte[] data) {
+        StringBuffer buf = new StringBuffer();
+        for(int i=0;i<data.length;i++) {
+            buf.append(data[i]);
+            if(i != data.length-1) {
+                buf.append(",");
+            }
+        }
+        return buf.toString();
+    }
+
+    // ------------------------------------------------------------------------
+
+    private Random _random = new Random();
+
+    /**
+     * @return Returns the _random.
+     */
+    public Random getRandom() {
+        return this._random;
+    }
+
+    /**
+     * CODEC-68: isBase64 throws ArrayIndexOutOfBoundsException on some non-BASE64 bytes
+     */
+    public void testCodec68() {
+        byte[] x = new byte[] { 'n', 'A', '=', '=', (byte) 0x9c };
+        Base64.decodeBase64(x);
+    }
+
+}
+```
+
