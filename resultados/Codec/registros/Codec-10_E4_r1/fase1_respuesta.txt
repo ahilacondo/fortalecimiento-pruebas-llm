@@ -1,0 +1,8 @@
+1. El método encode(Object) debe lanzar EncoderException cuando el parámetro no es de tipo java.lang.String, y ninguna prueba lo verifica.
+2. El método encode(Object) debe devolver un objeto que sea java.lang.String con el código caverphone para una entrada String, y las pruebas no comprueban el tipo devuelto.
+3. El comportamiento de encode(Object) ante un valor null debe ser coherente con el @throws de la documentación, y no hay ninguna prueba que lo cubra.
+4. El método caverphone(String) debe devolver el código caverphone de la cadena recibida, pero las pruebas solo lo ejercitan indirectamente a través de encode, no como método público independiente.
+5. El método encode(String) debe devolver el mismo código que caverphone(String) para la misma entrada, y no hay ninguna prueba que compare ambos.
+6. El constructor público debe crear una instancia válida del codificador, y las pruebas solo lo usan implícitamente sin verificar la instancia creada.
+7. La clase debe implementar la interfaz StringEncoder, y ninguna prueba verifica esta relación de tipos.
+8. isCaverphoneEqual debe ser simétrico (el resultado no debe depender del orden de los argumentos), y la prueba solo comprueba un caso positivo y uno negativo en un único sentido.

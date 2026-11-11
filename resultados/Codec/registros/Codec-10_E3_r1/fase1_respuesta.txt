@@ -1,0 +1,8 @@
+1. Una entrada nula devuelve el código de relleno "1111111111", y no hay una prueba que lo verifique de forma explícita.
+2. Una cadena vacía devuelve el mismo código de relleno "1111111111".
+3. Una cadena compuesta solo por caracteres que se eliminan (dígitos, espacios, signos o acentos) produce el código de relleno, porque el resultado queda vacío antes del paso 6.
+4. La normalización de mayúsculas y minúsculas y la eliminación de caracteres no A-Z no tienen pruebas dirigidas que aíslen esos pasos.
+5. Las reglas de inicio de palabra (cough, rough, tough, enough, trough, gn, mb) no se verifican de forma individual con entradas que las activen.
+6. Las reglas de final de palabra (eliminación de la e final, w$, r$, l$ y 3$) no se verifican de forma aislada.
+7. El método encode(Object) lanza EncoderException si recibe un tipo distinto de String, y ningún test comprueba esa excepción.
+8. La comparación isCaverphoneEqual con entradas nulas o vacías, y su simetría, no está cubierta por las pruebas existentes.

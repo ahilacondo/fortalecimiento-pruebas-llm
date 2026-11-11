@@ -1,0 +1,161 @@
+/*
+ * Pruebas adicionales para org.apache.commons.codec.language.Caverphone.
+ * Usan solo la API pública de la clase y JUnit 4.
+ */
+
+package org.apache.commons.codec.language;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Test;
+
+public class CaverphoneLLMTest {
+
+    private final Caverphone caverphone = new Caverphone();
+
+    @Test
+    public void nullInputReturnsPaddingOnly() {
+        assertEquals("1111111111", caverphone.caverphone(null));
+    }
+
+    @Test
+    public void emptyInputReturnsPaddingOnly() {
+        assertEquals("1111111111", caverphone.caverphone(""));
+    }
+
+    @Test
+    public void inputWithoutLettersReturnsPaddingOnly() {
+        // Tras eliminar todo lo que no es A-Z no queda nada que codificar.
+        assertEquals("1111111111", caverphone.caverphone("123 !@#"));
+    }
+
+    @Test
+    public void resultAlwaysHasExactlyTenCharacters() {
+        String[] samples = {"a", "x", "Peter", "cough", "abcdefghijklmnopqrstuvwxyz", "Schwarzenegger"};
+        for (String sample : samples) {
+            assertEquals("Longitud incorrecta para: " + sample, 10, caverphone.caverphone(sample).length());
+        }
+    }
+
+    @Test
+    public void resultContainsOnlyUppercaseLettersAndDigitOne() {
+        String[] samples = {"Peter", "Stevenson", "cough", "mba", "gnat", "Schwarzenegger", "Thompson"};
+        for (String sample : samples) {
+            String code = caverphone.caverphone(sample);
+            assertTrue("Código con caracteres inesperados: " + code, code.matches("[A-Z1]{10}"));
+        }
+    }
+
+    @Test
+    public void encodingIsCaseInsensitive() {
+        String lower = caverphone.caverphone("peter");
+        assertEquals(lower, caverphone.caverphone("PETER"));
+        assertEquals(lower, caverphone.caverphone("Peter"));
+        assertEquals("PTA1111111", lower);
+    }
+
+    @Test
+    public void nonLetterCharactersAreIgnored() {
+        assertEquals("PTA1111111", caverphone.caverphone("Pe ter"));
+        assertEquals("PTA1111111", caverphone.caverphone("P-e.t!e-r"));
+    }
+
+    @Test
+    public void finalSilentEIsRemoved() {
+        // "rate" pierde la e final y queda como "rat".
+        assertEquals("RT11111111", caverphone.caverphone("rat"));
+        assertEquals("RT11111111", caverphone.caverphone("rate"));
+    }
+
+    @Test
+    public void initialCoughIsEncodedAsKf() {
+        // ^cough -> cou2f, luego se convierte en KF.
+        assertEquals("KF11111111", caverphone.caverphone("cough"));
+    }
+
+    @Test
+    public void initialSilentGnDropsG() {
+        // ^gn -> 2n: la g inicial no aporta al código.
+        assertEquals("NT11111111", caverphone.caverphone("gnat"));
+        assertEquals(caverphone.caverphone("nat"), caverphone.caverphone("gnat"));
+    }
+
+    @Test
+    public void initialMbIsEncodedAsM() {
+        // ^mb -> m2: la b final de la pareja mb no se reproduce como P.
+        assertEquals("MA11111111", caverphone.caverphone("mba"));
+    }
+
+    @Test
+    public void leadingVowelsBecomeUppercaseAAndTrailingVowelBecomesA() {
+        // ^[aeiou] -> A; las demás vocales se eliminan; 3$ -> A.
+        assertEquals("AA11111111", caverphone.caverphone("aeiou"));
+    }
+
+    @Test
+    public void singleCharacterXBecomesK() {
+        assertEquals("K111111111", caverphone.caverphone("x"));
+    }
+
+    @Test
+    public void differentSpellingsWithSameSoundAreEqual() {
+        assertTrue(caverphone.isCaverphoneEqual("cough", "coff"));
+        assertTrue(caverphone.isCaverphoneEqual("Rate", "rat"));
+    }
+
+    @Test
+    public void isCaverphoneEqualIsSymmetric() {
+        assertTrue(caverphone.isCaverphoneEqual("Rate", "rat"));
+        assertTrue(caverphone.isCaverphoneEqual("rat", "Rate"));
+        assertFalse(caverphone.isCaverphoneEqual("Rate", "Peter"));
+        assertFalse(caverphone.isCaverphoneEqual("Peter", "Rate"));
+    }
+
+    @Test
+    public void isCaverphoneEqualTreatsNullAndEmptyAsSameCode() {
+        // Ambos producen "1111111111".
+        assertTrue(caverphone.isCaverphoneEqual(null, ""));
+        assertTrue(caverphone.isCaverphoneEqual(null, null));
+    }
+
+    @Test
+    public void isCaverphoneEqualDetectsDifferentCodes() {
+        // "x" produce K111111111 y "" produce 1111111111.
+        assertFalse(caverphone.isCaverphoneEqual("x", ""));
+    }
+
+    @Test
+    public void encodeStringDelegatesToCaverphone() {
+        String[] samples = {"Peter", "cough", "gnat", "rate", null, ""};
+        for (String sample : samples) {
+            assertEquals(caverphone.caverphone(sample), caverphone.encode(sample));
+        }
+    }
+
+    @Test
+    public void encodeObjectWithStringReturnsSameCodeAsCaverphone() throws EncoderException {
+        Object result = caverphone.encode((Object) "rate");
+        assertEquals("RT11111111", result);
+        assertEquals(caverphone.caverphone("rate"), result);
+    }
+
+    @Test(expected = EncoderException.class)
+    public void encodeObjectWithNonStringThrowsEncoderException() throws EncoderException {
+        caverphone.encode((Object) Integer.valueOf(42));
+    }
+
+    @Test(expected = EncoderException.class)
+    public void encodeObjectWithNullThrowsEncoderException() throws EncoderException {
+        caverphone.encode((Object) null);
+    }
+
+    @Test
+    public void encodingIsDeterministic() {
+        String first = caverphone.caverphone("Schwarzenegger");
+        String second = caverphone.caverphone("Schwarzenegger");
+        assertEquals(first, second);
+    }
+}

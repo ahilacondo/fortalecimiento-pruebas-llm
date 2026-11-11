@@ -1,0 +1,224 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.codec.language;
+
+import java.util.regex.Pattern;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+import org.apache.commons.codec.EncoderException;
+
+/**
+ * Pruebas adicionales para {@link Caverphone} usando solo su API pública.
+ */
+public class CaverphoneLLMTest {
+
+    private static final String DEFAULT_CODE = "1111111111";
+
+    private static final Pattern CODE_PATTERN = Pattern.compile("[A-Z0-9]{10}");
+
+    @Test
+    public void testNullReturnsDefaultCode() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("Un valor null debe producir el código por defecto",
+                DEFAULT_CODE, caverphone.caverphone(null));
+    }
+
+    @Test
+    public void testEmptyStringReturnsDefaultCode() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("Una cadena vacía debe producir el código por defecto",
+                DEFAULT_CODE, caverphone.caverphone(""));
+    }
+
+    @Test
+    public void testStringWithoutLettersReturnsDefaultCode() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("Una cadena sin letras A-Z debe producir el código por defecto",
+                DEFAULT_CODE, caverphone.caverphone("123 !?"));
+    }
+
+    @Test
+    public void testResultAlwaysHasLengthTen() {
+        Caverphone caverphone = new Caverphone();
+        String[] inputs = {"a", "Peter", "Stevenson", "Supercalifragilisticexpialidocious", "x", "ready"};
+        for (String input : inputs) {
+            Assert.assertEquals("El código de '" + input + "' debe tener longitud 10",
+                    10, caverphone.caverphone(input).length());
+        }
+    }
+
+    @Test
+    public void testResultContainsOnlyUppercaseLettersAndDigits() {
+        Caverphone caverphone = new Caverphone();
+        String[] inputs = {"Peter", "Stevenson", "social", "Karleen", "Dyun", "cough"};
+        for (String input : inputs) {
+            String code = caverphone.caverphone(input);
+            Assert.assertTrue("El código de '" + input + "' debe usar solo A-Z y 0-9: " + code,
+                    CODE_PATTERN.matcher(code).matches());
+        }
+    }
+
+    @Test
+    public void testEncodingIsCaseInsensitive() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("PETER debe codificar igual que peter",
+                caverphone.caverphone("peter"), caverphone.caverphone("PETER"));
+        Assert.assertEquals("PeTeR debe codificar igual que peter",
+                caverphone.caverphone("peter"), caverphone.caverphone("PeTeR"));
+        Assert.assertEquals("El código de 'PETER' debe ser PTA1111111",
+                "PTA1111111", caverphone.caverphone("PETER"));
+    }
+
+    @Test
+    public void testNonLetterCharactersAreIgnored() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("Guiones, espacios y signos deben eliminarse",
+                "PTA1111111", caverphone.caverphone("Pe-ter 2!"));
+        Assert.assertEquals("Los dígitos deben eliminarse",
+                "PTA1111111", caverphone.caverphone("P3eter"));
+    }
+
+    @Test
+    public void testTrailingEIsRemoved() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("La 'e' final de 'Pete' debe eliminarse, dando el mismo código que 'Pet'",
+                caverphone.caverphone("Pet"), caverphone.caverphone("Pete"));
+        Assert.assertEquals("El código de 'Pet' debe ser PT11111111",
+                "PT11111111", caverphone.caverphone("Pet"));
+    }
+
+    @Test
+    public void testStevensonExample() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("El código de 'Stevenson' debe ser STFNSN1111",
+                "STFNSN1111", caverphone.caverphone("Stevenson"));
+    }
+
+    @Test
+    public void testCoughStartOption() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("El prefijo 'cough' debe codificarse como KF seguido de 1s",
+                "KF11111111", caverphone.caverphone("cough"));
+    }
+
+    @Test
+    public void testWordsSharingAT11111111Code() {
+        Caverphone caverphone = new Caverphone();
+        String[] words = {"at", "eat", "it", "out", "old", "art", "add", "aid"};
+        for (String word : words) {
+            Assert.assertEquals("La palabra '" + word + "' debe codificarse como AT11111111",
+                    "AT11111111", caverphone.caverphone(word));
+        }
+    }
+
+    @Test
+    public void testSpecificationExamples() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertEquals("PTA1111111", caverphone.caverphone("Peter"));
+        Assert.assertEquals("RTA1111111", caverphone.caverphone("ready"));
+        Assert.assertEquals("SSA1111111", caverphone.caverphone("social"));
+        Assert.assertEquals("APA1111111", caverphone.caverphone("able"));
+        Assert.assertEquals("TTA1111111", caverphone.caverphone("Tedder"));
+        Assert.assertEquals("KLN1111111", caverphone.caverphone("Karleen"));
+        Assert.assertEquals("TN11111111", caverphone.caverphone("Dyun"));
+    }
+
+    @Test
+    public void testIsCaverphoneEqualForSameCode() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertTrue("'add' y 'old' comparten código AT11111111",
+                caverphone.isCaverphoneEqual("add", "old"));
+        Assert.assertTrue("'able' y 'appear' comparten código APA1111111",
+                caverphone.isCaverphoneEqual("able", "appear"));
+    }
+
+    @Test
+    public void testIsCaverphoneEqualForDifferentCodes() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertFalse("'Peter' y 'ready' no deben ser iguales",
+                caverphone.isCaverphoneEqual("Peter", "ready"));
+    }
+
+    @Test
+    public void testIsCaverphoneEqualIsCaseInsensitive() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertTrue("La comparación debe ser insensible a mayúsculas",
+                caverphone.isCaverphoneEqual("PETER", "peter"));
+    }
+
+    @Test
+    public void testIsCaverphoneEqualWithNullAndEmpty() {
+        Caverphone caverphone = new Caverphone();
+        Assert.assertTrue("null y cadena vacía producen el mismo código por defecto",
+                caverphone.isCaverphoneEqual(null, ""));
+        Assert.assertTrue("dos valores null son iguales",
+                caverphone.isCaverphoneEqual(null, null));
+    }
+
+    @Test
+    public void testEncodeStringMatchesCaverphone() {
+        Caverphone caverphone = new Caverphone();
+        String[] inputs = {"Peter", "social", "Dyun", "cough", "at"};
+        for (String input : inputs) {
+            Assert.assertEquals("encode(String) debe coincidir con caverphone(String) para '" + input + "'",
+                    caverphone.caverphone(input), caverphone.encode(input));
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithStringReturnsCode() throws EncoderException {
+        Caverphone caverphone = new Caverphone();
+        Object result = caverphone.encode((Object) "Peter");
+        Assert.assertTrue("encode(Object) con String debe devolver un String",
+                result instanceof String);
+        Assert.assertEquals("El código devuelto debe ser PTA1111111",
+                "PTA1111111", result);
+    }
+
+    @Test(expected = EncoderException.class)
+    public void testEncodeObjectWithIntegerThrows() throws EncoderException {
+        Caverphone caverphone = new Caverphone();
+        caverphone.encode((Object) Integer.valueOf(42));
+    }
+
+    @Test(expected = EncoderException.class)
+    public void testEncodeObjectWithNullThrows() throws EncoderException {
+        Caverphone caverphone = new Caverphone();
+        caverphone.encode((Object) null);
+    }
+
+    @Test
+    public void testEncodingIsDeterministic() {
+        Caverphone caverphone = new Caverphone();
+        String first = caverphone.caverphone("Stevenson");
+        String second = caverphone.caverphone("Stevenson");
+        Assert.assertEquals("Codificar la misma cadena dos veces debe dar el mismo resultado",
+                first, second);
+    }
+
+    @Test
+    public void testSeparateInstancesProduceSameResult() {
+        Assert.assertEquals("Instancias distintas deben dar el mismo resultado",
+                new Caverphone().caverphone("Karleen"),
+                new Caverphone().caverphone("Karleen"));
+    }
+}
+```

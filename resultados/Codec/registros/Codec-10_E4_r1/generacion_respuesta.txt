@@ -1,0 +1,235 @@
+```java
+package org.apache.commons.codec.language;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import org.apache.commons.codec.EncoderException;
+import org.apache.commons.codec.StringEncoder;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Caverphone}, que cubren los requisitos de la
+ * documentación no verificados por las pruebas existentes.
+ */
+public class CaverphoneLLMTest {
+
+    private static final String PETER_CODE = "PTA1111111";
+    private static final String STEVENSON_CODE = "STFNSN1111";
+    private static final String SOCIAL_CODE = "SSA1111111";
+    private static final String EMPTY_CODE = "1111111111";
+
+    // Requisito 1: encode(Object) lanza EncoderException si el parámetro no es String.
+
+    @Test
+    public void encodeObjectWithIntegerThrowsEncoderException() {
+        Caverphone caverphone = new Caverphone();
+        try {
+            caverphone.encode((Object) Integer.valueOf(42));
+            fail("Se esperaba EncoderException para un Integer");
+        } catch (EncoderException e) {
+            assertNotNull("El mensaje de la excepción no debe ser nulo", e.getMessage());
+            assertTrue("El mensaje debe mencionar java.lang.String",
+                    e.getMessage().contains("java.lang.String"));
+        }
+    }
+
+    @Test
+    public void encodeObjectWithArbitraryObjectThrowsEncoderException() {
+        Caverphone caverphone = new Caverphone();
+        try {
+            caverphone.encode((Object) new StringBuilder("Peter"));
+            fail("Se esperaba EncoderException para un StringBuilder");
+        } catch (EncoderException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    // Requisito 2: encode(Object) devuelve un java.lang.String con el código para una entrada String.
+
+    @Test
+    public void encodeObjectWithStringReturnsStringInstance() throws EncoderException {
+        Caverphone caverphone = new Caverphone();
+        Object result = caverphone.encode((Object) "Peter");
+        assertTrue("El resultado debe ser una instancia de java.lang.String", result instanceof String);
+        assertEquals(PETER_CODE, result);
+    }
+
+    @Test
+    public void encodeObjectWithStringReturnsExpectedCodeForSeveralWords() throws EncoderException {
+        Caverphone caverphone = new Caverphone();
+        Object stevenson = caverphone.encode((Object) "Stevenson");
+        Object social = caverphone.encode((Object) "social");
+        assertTrue(stevenson instanceof String);
+        assertTrue(social instanceof String);
+        assertEquals(STEVENSON_CODE, stevenson);
+        assertEquals(SOCIAL_CODE, social);
+    }
+
+    // Requisito 3: encode(Object) con null es coherente con el @throws (null no es String).
+
+    @Test
+    public void encodeObjectWithNullThrowsEncoderException() {
+        Caverphone caverphone = new Caverphone();
+        try {
+            caverphone.encode((Object) null);
+            fail("Se esperaba EncoderException para null, ya que null no es de tipo java.lang.String");
+        } catch (EncoderException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    // Requisito 4: caverphone(String) devuelve el código de la cadena recibida, como método público.
+
+    @Test
+    public void caverphoneMethodReturnsCodeForPeter() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(PETER_CODE, caverphone.caverphone("Peter"));
+    }
+
+    @Test
+    public void caverphoneMethodReturnsCodeForStevenson() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(STEVENSON_CODE, caverphone.caverphone("Stevenson"));
+    }
+
+    @Test
+    public void caverphoneMethodReturnsCodeWithLengthTen() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(10, caverphone.caverphone("Peter").length());
+        assertEquals(10, caverphone.caverphone("Stevenson").length());
+    }
+
+    @Test
+    public void caverphoneMethodReturnsDefaultCodeForNull() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(EMPTY_CODE, caverphone.caverphone(null));
+    }
+
+    @Test
+    public void caverphoneMethodReturnsDefaultCodeForEmptyString() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(EMPTY_CODE, caverphone.caverphone(""));
+    }
+
+    // Requisito 5: encode(String) devuelve lo mismo que caverphone(String).
+
+    @Test
+    public void encodeStringMatchesCaverphoneMethodForPeter() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(caverphone.caverphone("Peter"), caverphone.encode("Peter"));
+    }
+
+    @Test
+    public void encodeStringMatchesCaverphoneMethodForVariousInputs() {
+        Caverphone caverphone = new Caverphone();
+        String[] inputs = {"Peter", "Stevenson", "social", "able", "Karleen", "Dyun", "hold", "RANDOM words 123"};
+        for (String input : inputs) {
+            assertEquals("Diferencia para la entrada: " + input,
+                    caverphone.caverphone(input), caverphone.encode(input));
+        }
+    }
+
+    @Test
+    public void encodeStringMatchesCaverphoneMethodForNullAndEmpty() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(caverphone.caverphone(null), caverphone.encode((String) null));
+        assertEquals(caverphone.caverphone(""), caverphone.encode(""));
+    }
+
+    // Requisito 6: el constructor público crea una instancia válida y funcional.
+
+    @Test
+    public void constructorCreatesNonNullInstance() {
+        Caverphone caverphone = new Caverphone();
+        assertNotNull("El constructor debe crear una instancia", caverphone);
+    }
+
+    @Test
+    public void constructorCreatesFunctionalInstance() {
+        Caverphone caverphone = new Caverphone();
+        assertEquals(PETER_CODE, caverphone.encode("Peter"));
+        assertEquals(SOCIAL_CODE, caverphone.caverphone("social"));
+    }
+
+    @Test
+    public void multipleInstancesProduceSameResults() {
+        Caverphone first = new Caverphone();
+        Caverphone second = new Caverphone();
+        assertNotNull(first);
+        assertNotNull(second);
+        assertEquals(first.caverphone("Stevenson"), second.caverphone("Stevenson"));
+        assertEquals(first.encode("Peter"), second.encode("Peter"));
+    }
+
+    // Requisito 7: la clase implementa StringEncoder.
+
+    @Test
+    public void caverphoneImplementsStringEncoderInterface() {
+        assertTrue("Caverphone debe implementar StringEncoder",
+                StringEncoder.class.isAssignableFrom(Caverphone.class));
+    }
+
+    @Test
+    public void caverphoneInstanceIsStringEncoder() {
+        Object instance = new Caverphone();
+        assertTrue(instance instanceof StringEncoder);
+    }
+
+    @Test
+    public void caverphoneIsPublicClass() {
+        assertTrue("La clase debe ser pública",
+                java.lang.reflect.Modifier.isPublic(Caverphone.class.getModifiers()));
+    }
+
+    // Requisito 8: isCaverphoneEqual es simétrico.
+
+    @Test
+    public void isCaverphoneEqualIsSymmetricForEqualCodes() {
+        Caverphone caverphone = new Caverphone();
+        assertTrue(caverphone.isCaverphoneEqual("Peter", "Peady"));
+        assertTrue("La operación debe ser simétrica", caverphone.isCaverphoneEqual("Peady", "Peter"));
+    }
+
+    @Test
+    public void isCaverphoneEqualIsSymmetricForDifferentCodes() {
+        Caverphone caverphone = new Caverphone();
+        assertFalse(caverphone.isCaverphoneEqual("Peter", "Stevenson"));
+        assertFalse("La operación debe ser simétrica", caverphone.isCaverphoneEqual("Stevenson", "Peter"));
+    }
+
+    @Test
+    public void isCaverphoneEqualIsSymmetricForNullAndEmpty() {
+        Caverphone caverphone = new Caverphone();
+        assertTrue(caverphone.isCaverphoneEqual(null, ""));
+        assertTrue(caverphone.isCaverphoneEqual("", null));
+    }
+
+    @Test
+    public void isCaverphoneEqualIsSymmetricAcrossManyPairs() {
+        Caverphone caverphone = new Caverphone();
+        String[][] pairs = {
+            {"Peter", "Peady"},
+            {"Peter", "Stevenson"},
+            {"social", "able"},
+            {"Karleen", "Cailean"},
+            {"Dyun", "Dan"}
+        };
+        for (String[] pair : pairs) {
+            boolean forward = caverphone.isCaverphoneEqual(pair[0], pair[1]);
+            boolean backward = caverphone.isCaverphoneEqual(pair[1], pair[0]);
+            assertEquals("Asimetría para " + pair[0] + " / " + pair[1], forward, backward);
+        }
+    }
+
+    @Test
+    public void isCaverphoneEqualIsReflexive() {
+        Caverphone caverphone = new Caverphone();
+        assertTrue(caverphone.isCaverphoneEqual("Stevenson", "Stevenson"));
+        assertTrue(caverphone.isCaverphoneEqual("Peter", "Peter"));
+    }
+}
+```

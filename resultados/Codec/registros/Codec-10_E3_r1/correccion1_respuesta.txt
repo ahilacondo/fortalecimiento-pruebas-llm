@@ -1,0 +1,222 @@
+Corregí el error de compilación. El archivo original tenía una cerca de código duplicada (```` ```java ```` seguido de otro ```` ```java ````), que `javac` interpretó como el carácter ilegal '`'. Además, el archivo estaba truncado dentro de `encodeObjectWithStringReturnsCode`, así que completé esa prueba y cerré la clase. No modifiqué las expectativas de las demás pruebas.
+
+```java
+/*
+ * Pruebas adicionales para org.apache.commons.codec.language.Caverphone.
+ * Cubren los comportamientos que la suite existente no verifica directamente.
+ */
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+public class CaverphoneLLMTest {
+
+    private static final String PADDING = "1111111111";
+
+    private final Caverphone caverphone = new Caverphone();
+
+    // ---------------------------------------------------------------
+    // 1. Entrada nula
+    // ---------------------------------------------------------------
+
+    @Test
+    public void nullInputReturnsPaddingCode() {
+        Assert.assertEquals("Una entrada nula debe devolver el código de relleno",
+                PADDING, caverphone.caverphone(null));
+    }
+
+    @Test
+    public void encodeStringNullReturnsPaddingCode() {
+        Assert.assertEquals("encode(String) con null debe devolver el código de relleno",
+                PADDING, caverphone.encode((String) null));
+    }
+
+    // ---------------------------------------------------------------
+    // 2. Cadena vacía
+    // ---------------------------------------------------------------
+
+    @Test
+    public void emptyInputReturnsPaddingCode() {
+        Assert.assertEquals("Una cadena vacía debe devolver el código de relleno",
+                PADDING, caverphone.caverphone(""));
+    }
+
+    // ---------------------------------------------------------------
+    // 3. Cadenas que quedan vacías tras eliminar caracteres
+    // ---------------------------------------------------------------
+
+    @Test
+    public void onlyDigitsReturnsPaddingCode() {
+        Assert.assertEquals("Solo dígitos debe devolver relleno",
+                PADDING, caverphone.caverphone("123"));
+        Assert.assertEquals("Dígitos con espacios debe devolver relleno",
+                PADDING, caverphone.caverphone("1 2 3"));
+    }
+
+    @Test
+    public void onlySpacesReturnsPaddingCode() {
+        Assert.assertEquals("Solo espacios debe devolver relleno",
+                PADDING, caverphone.caverphone("   "));
+    }
+
+    @Test
+    public void onlySymbolsReturnsPaddingCode() {
+        Assert.assertEquals("Solo símbolos debe devolver relleno",
+                PADDING, caverphone.caverphone("!@#$%^&*()"));
+        Assert.assertEquals("Solo puntuación debe devolver relleno",
+                PADDING, caverphone.caverphone("-_.,;:"));
+    }
+
+    @Test
+    public void onlyAccentedLettersReturnsPaddingCode() {
+        // \u00e9 = é, \u00e0 = à, \u00f1 = ñ, \u00c0 = À, \u00c9 = É, \u00ce = Î
+        Assert.assertEquals("Solo letras acentuadas minúsculas debe devolver relleno",
+                PADDING, caverphone.caverphone("\u00e9\u00e0\u00f1"));
+        Assert.assertEquals("Solo letras acentuadas mayúsculas debe devolver relleno",
+                PADDING, caverphone.caverphone("\u00c0\u00c9\u00ce"));
+    }
+
+    // ---------------------------------------------------------------
+    // 4. Normalización de mayúsculas y eliminación de caracteres no A-Z
+    // ---------------------------------------------------------------
+
+    @Test
+    public void uppercaseLowercaseAndMixedCaseProduceSameCode() {
+        Assert.assertEquals("Mayúsculas deben normalizarse",
+                "PTA1111111", caverphone.caverphone("PETER"));
+        Assert.assertEquals("Minúsculas deben producir el mismo código",
+                "PTA1111111", caverphone.caverphone("peter"));
+        Assert.assertEquals("Mayúsculas mixtas deben producir el mismo código",
+                "PTA1111111", caverphone.caverphone("PeTeR"));
+    }
+
+    @Test
+    public void spacesAreRemovedBeforeEncoding() {
+        Assert.assertEquals("Los espacios internos se eliminan",
+                "PTA1111111", caverphone.caverphone("Pe ter"));
+    }
+
+    @Test
+    public void digitsAreRemovedBeforeEncoding() {
+        Assert.assertEquals("Los dígitos al final se eliminan",
+                "PTA1111111", caverphone.caverphone("Peter123"));
+        Assert.assertEquals("Los dígitos internos se eliminan",
+                "PTA1111111", caverphone.caverphone("Pe3ter"));
+    }
+
+    @Test
+    public void punctuationIsRemovedBeforeEncoding() {
+        Assert.assertEquals("La puntuación interna se elimina",
+                "PTA1111111", caverphone.caverphone("P-e.t!e@r"));
+    }
+
+    @Test
+    public void accentedLetterIsRemovedBeforeEncoding() {
+        // "Péter" -> "pter" tras eliminar la é (no A-Z)
+        Assert.assertEquals("La letra acentuada se elimina antes de codificar",
+                "PTA1111111", caverphone.caverphone("P\u00e9ter"));
+    }
+
+    // ---------------------------------------------------------------
+    // 5. Reglas de inicio de palabra
+    // ---------------------------------------------------------------
+
+    @Test
+    public void startRuleCoughProducesKF() {
+        Assert.assertEquals("cough -> regla ^cough",
+                "KF11111111", caverphone.caverphone("cough"));
+    }
+
+    @Test
+    public void startRuleRoughProducesRF() {
+        Assert.assertEquals("rough -> regla ^rough",
+                "RF11111111", caverphone.caverphone("rough"));
+    }
+
+    @Test
+    public void startRuleToughProducesTF() {
+        Assert.assertEquals("tough -> regla ^tough",
+                "TF11111111", caverphone.caverphone("tough"));
+    }
+
+    @Test
+    public void startRuleEnoughProducesANF() {
+        Assert.assertEquals("enough -> regla ^enough",
+                "ANF1111111", caverphone.caverphone("enough"));
+    }
+
+    @Test
+    public void startRuleTroughProducesTRF() {
+        Assert.assertEquals("trough -> regla ^trough",
+                "TRF1111111", caverphone.caverphone("trough"));
+    }
+
+    @Test
+    public void startRuleGnProducesN() {
+        Assert.assertEquals("gnat -> regla ^gn",
+                "NT11111111", caverphone.caverphone("gnat"));
+    }
+
+    @Test
+    public void startRuleMbProducesM() {
+        Assert.assertEquals("mb -> regla ^mb",
+                "M111111111", caverphone.caverphone("mb"));
+    }
+
+    // ---------------------------------------------------------------
+    // 6. Reglas de final de palabra
+    // ---------------------------------------------------------------
+
+    @Test
+    public void finalEIsRemoved() {
+        // "tree" -> "tre" tras eliminar la e final; ambos dan el mismo código
+        Assert.assertEquals("tree debe codificarse como TRA1111111",
+                "TRA1111111", caverphone.caverphone("tree"));
+        Assert.assertEquals("tre debe dar el mismo código que tree",
+                "TRA1111111", caverphone.caverphone("tre"));
+    }
+
+    @Test
+    public void finalRRuleProducesA() {
+        // "far" -> regla r$ y posterior 3$ -> A
+        Assert.assertEquals("far debe codificarse como FA11111111",
+                "FA11111111", caverphone.caverphone("far"));
+    }
+
+    @Test
+    public void finalLRuleProducesA() {
+        // "pal" -> regla l$ y posterior 3$ -> A
+        Assert.assertEquals("pal debe codificarse como PA11111111",
+                "PA11111111", caverphone.caverphone("pal"));
+    }
+
+    @Test
+    public void finalWRuleProducesA() {
+        // "law" -> regla w$ y posterior 3$ -> A
+        Assert.assertEquals("law debe codificarse como LA11111111",
+                "LA11111111", caverphone.caverphone("law"));
+    }
+
+    @Test
+    public void finalVowelSequenceEndingInThreeBecomesA() {
+        // "tree" termina en 3 tras la sustitución de vocales; la regla 3$ lo convierte en A
+        Assert.assertTrue("El código de tree debe contener A tras la regla 3$",
+                caverphone.caverphone("tree").startsWith("TRA"));
+    }
+
+    // ---------------------------------------------------------------
+    // 7. encode(Object)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void encodeObjectWithStringReturnsCode() throws EncoderException {
+        Object result = caverphone.encode((Object) "Peter");
+        Assert.assertEquals("El resultado de encode(Object) con String debe coincidir con caverphone(String)",
+                "PTA1111111", result);
+    }
+}
+```
+
+Nota: no puedo ejecutar la suite, así que las expectativas concretas (por ejemplo `KF11111111`, `TRA1111111`, `M111111111`) deben confirmarse ejecutando las pruebas. Si alguna falla por el valor esperado y no por compilación, conviene revisarla contra la especificación de Caverphone 2 que usa la implementación del proyecto.
