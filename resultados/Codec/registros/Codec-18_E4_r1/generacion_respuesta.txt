@@ -1,0 +1,329 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.codec.binary;
+
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link StringUtils} que cubren los requisitos de documentación
+ * no verificados por {@link StringUtilsTest}. Solo usa la API pública de la clase.
+ *
+ * Nota: la implementación actual de {@code newIllegalStateException} construye la
+ * {@link IllegalStateException} con el mensaje {@code charsetName + ": " + e} sin establecer
+ * la causa. Por ello, las pruebas de encapsulación verifican que el mensaje contiene la
+ * {@link UnsupportedEncodingException} original, sin afirmar nada sobre {@code getCause()}.
+ *
+ * @version $Id$
+ */
+public class StringUtilsLLMTest {
+
+    private static final String UNKNOWN_CHARSET = "UNKNOWN";
+
+    /**
+     * Construye un array de bytes a partir de valores enteros (0-255 o valores con signo),
+     * convirtiendo cada uno a {@code byte}.
+     */
+    private static byte[] b(final int... values) {
+        final byte[] result = new byte[values.length];
+        for (int i = 0; i < values.length; i++) {
+            result[i] = (byte) values[i];
+        }
+        return result;
+    }
+
+    /**
+     * Lee todos los bytes restantes de un {@link ByteBuffer} en un array nuevo.
+     */
+    private static byte[] remainingBytes(final ByteBuffer buffer) {
+        final byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: getByteBufferUtf8(null) devuelve null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetByteBufferUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getByteBufferUtf8(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: getByteBufferUtf8 devuelve un ByteBuffer con los bytes UTF-8
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetByteBufferUtf8ReturnsBufferWithAsciiUtf8Bytes() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("ABC");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals("La posición inicial debe ser 0", 0, buffer.position());
+        Assert.assertEquals("Deben quedar 3 bytes disponibles", 3, buffer.remaining());
+        Assert.assertArrayEquals(b(0x41, 0x42, 0x43), remainingBytes(buffer));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8ReturnsBufferWithMultibyteUtf8Bytes() {
+        // 'é' = C3 A9, '€' = E2 82 AC
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("\u00e9\u20ac");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals(5, buffer.remaining());
+        Assert.assertArrayEquals(b(0xC3, 0xA9, 0xE2, 0x82, 0xAC), remainingBytes(buffer));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8EmptyStringReturnsEmptyBuffer() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals(0, buffer.remaining());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: métodos getBytes* devuelven null para entrada null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesMethodsNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesIso8859_1(null));
+        Assert.assertNull(StringUtils.getBytesUsAscii(null));
+        Assert.assertNull(StringUtils.getBytesUtf16(null));
+        Assert.assertNull(StringUtils.getBytesUtf16Be(null));
+        Assert.assertNull(StringUtils.getBytesUtf16Le(null));
+        Assert.assertNull(StringUtils.getBytesUtf8(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: métodos newString* devuelven null para entrada null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testNewStringMethodsNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUtf16Be(null));
+        Assert.assertNull(StringUtils.newStringUtf16Le(null));
+        Assert.assertNull(StringUtils.newStringUtf8(null));
+        Assert.assertNull(StringUtils.newStringIso8859_1(null));
+        Assert.assertNull(StringUtils.newStringUsAscii(null));
+        Assert.assertNull(StringUtils.newStringUtf16(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: codificación y decodificación de caracteres no ASCII
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testIso8859_1EncodesLatin1CharacterAsSingleByte() {
+        // 'é' = U+00E9 = E9 en ISO-8859-1
+        Assert.assertArrayEquals(b(0xE9), StringUtils.getBytesIso8859_1("\u00e9"));
+        Assert.assertEquals("\u00e9", StringUtils.newStringIso8859_1(b(0xE9)));
+    }
+
+    @Test
+    public void testUtf8EncodesMultibyteCharactersExplicitly() {
+        // 'é' = C3 A9
+        Assert.assertArrayEquals(b(0xC3, 0xA9), StringUtils.getBytesUtf8("\u00e9"));
+        // '€' = E2 82 AC
+        Assert.assertArrayEquals(b(0xE2, 0x82, 0xAC), StringUtils.getBytesUtf8("\u20ac"));
+        // U+1F600 (emoji, par sustituto) = F0 9F 98 80
+        Assert.assertArrayEquals(b(0xF0, 0x9F, 0x98, 0x80),
+                StringUtils.getBytesUtf8("\uD83D\uDE00"));
+    }
+
+    @Test
+    public void testUtf8DecodesMultibyteCharactersExplicitly() {
+        Assert.assertEquals("\u00e9", StringUtils.newStringUtf8(b(0xC3, 0xA9)));
+        Assert.assertEquals("\u20ac", StringUtils.newStringUtf8(b(0xE2, 0x82, 0xAC)));
+        Assert.assertEquals("\uD83D\uDE00", StringUtils.newStringUtf8(b(0xF0, 0x9F, 0x98, 0x80)));
+    }
+
+    @Test
+    public void testUtf8RoundTripMultibyteString() {
+        final String original = "a\u00e9\u20ac\uD83D\uDE00z";
+        final byte[] encoded = StringUtils.getBytesUtf8(original);
+        Assert.assertEquals(original, StringUtils.newStringUtf8(encoded));
+    }
+
+    @Test
+    public void testUtf16BeEncodesMultibyteCharactersExplicitly() {
+        // 'é' = 00 E9
+        Assert.assertArrayEquals(b(0x00, 0xE9), StringUtils.getBytesUtf16Be("\u00e9"));
+        // U+1F600 = D83D DE00 en UTF-16BE
+        Assert.assertArrayEquals(b(0xD8, 0x3D, 0xDE, 0x00),
+                StringUtils.getBytesUtf16Be("\uD83D\uDE00"));
+    }
+
+    @Test
+    public void testUtf16LeEncodesMultibyteCharactersExplicitly() {
+        // 'é' = E9 00
+        Assert.assertArrayEquals(b(0xE9, 0x00), StringUtils.getBytesUtf16Le("\u00e9"));
+        // U+1F600 = 3DD8 00DE en UTF-16LE
+        Assert.assertArrayEquals(b(0x3D, 0xD8, 0x00, 0xDE),
+                StringUtils.getBytesUtf16Le("\uD83D\uDE00"));
+    }
+
+    @Test
+    public void testUtf16BeDecodesMultibyteCharactersExplicitly() {
+        Assert.assertEquals("\u00e9", StringUtils.newStringUtf16Be(b(0x00, 0xE9)));
+        Assert.assertEquals("\uD83D\uDE00",
+                StringUtils.newStringUtf16Be(b(0xD8, 0x3D, 0xDE, 0x00)));
+    }
+
+    @Test
+    public void testUtf16LeDecodesMultibyteCharactersExplicitly() {
+        Assert.assertEquals("\u00e9", StringUtils.newStringUtf16Le(b(0xE9, 0x00)));
+        Assert.assertEquals("\uD83D\uDE00",
+                StringUtils.newStringUtf16Le(b(0x3D, 0xD8, 0x00, 0xDE)));
+    }
+
+    @Test
+    public void testUtf16RoundTripMultibyteStringWithBom() {
+        // getBytesUtf16 antepone BOM big-endian FE FF; 'é' = 00 E9
+        final byte[] encoded = StringUtils.getBytesUtf16("\u00e9");
+        Assert.assertArrayEquals(b(0xFE, 0xFF, 0x00, 0xE9), encoded);
+        Assert.assertEquals("\u00e9", StringUtils.newStringUtf16(encoded));
+    }
+
+    @Test
+    public void testUtf16RoundTripMultibyteStringBeAndLe() {
+        final String original = "\u00e9\u20ac\uD83D\uDE00";
+        Assert.assertEquals(original,
+                StringUtils.newStringUtf16Be(StringUtils.getBytesUtf16Be(original)));
+        Assert.assertEquals(original,
+                StringUtils.newStringUtf16Le(StringUtils.getBytesUtf16Le(original)));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisitos 6 y 7: equals con CharSequence que no son String
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEqualsStringBuilderAndStringWithSameContentIsTrue() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), "abc"));
+        Assert.assertTrue(StringUtils.equals("abc", new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsTwoNonStringCharSequencesWithSameContentIsTrue() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), new StringBuilder("abc")));
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), new StringBuffer("abc")));
+    }
+
+    @Test
+    public void testEqualsNonStringCharSequencesWithDifferentContentIsFalse() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), new StringBuilder("abd")));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), "abd"));
+        Assert.assertFalse(StringUtils.equals("abd", new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsNonStringCharSequencesWithDifferentLengthIsFalse() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), new StringBuilder("ab")));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("ab"), "abc"));
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("ab")));
+    }
+
+    @Test
+    public void testEqualsNonStringCharSequenceCaseSensitive() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), new StringBuilder("ABC")));
+    }
+
+    @Test
+    public void testEqualsNullAndNonStringCharSequenceIsFalse() {
+        Assert.assertFalse(StringUtils.equals(null, new StringBuilder("abc")));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), null));
+    }
+
+    @Test
+    public void testEqualsNullAndEmptyNonStringCharSequenceIsFalse() {
+        Assert.assertFalse(StringUtils.equals(null, new StringBuilder()));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder(), null));
+    }
+
+    @Test
+    public void testEqualsSameNonStringInstanceIsTrue() {
+        final StringBuilder sb = new StringBuilder("abc");
+        Assert.assertTrue(StringUtils.equals(sb, sb));
+    }
+
+    @Test
+    public void testEqualsTwoEmptyNonStringCharSequencesIsTrue() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder(), new StringBuilder()));
+        Assert.assertTrue(StringUtils.equals(new StringBuilder(), ""));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 8: IllegalStateException encapsula la UnsupportedEncodingException
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesUncheckedExceptionMessageContainsCharsetAndOriginalException() {
+        try {
+            StringUtils.getBytesUnchecked("ABC", UNKNOWN_CHARSET);
+            Assert.fail("Se esperaba " + IllegalStateException.class.getName());
+        } catch (final IllegalStateException e) {
+            final String message = e.getMessage();
+            Assert.assertNotNull("El mensaje no debe ser null", message);
+            Assert.assertTrue("El mensaje debe empezar por el nombre del charset: " + message,
+                    message.startsWith(UNKNOWN_CHARSET + ": "));
+            Assert.assertTrue("El mensaje debe incluir la UnsupportedEncodingException original: " + message,
+                    message.contains(UnsupportedEncodingException.class.getName()));
+        }
+    }
+
+    @Test
+    public void testNewStringExceptionMessageContainsCharsetAndOriginalException() {
+        try {
+            StringUtils.newString(b(0x41, 0x42, 0x43), UNKNOWN_CHARSET);
+            Assert.fail("Se esperaba " + IllegalStateException.class.getName());
+        } catch (final IllegalStateException e) {
+            final String message = e.getMessage();
+            Assert.assertNotNull("El mensaje no debe ser null", message);
+            Assert.assertTrue("El mensaje debe empezar por el nombre del charset: " + message,
+                    message.startsWith(UNKNOWN_CHARSET + ": "));
+            Assert.assertTrue("El mensaje debe incluir la UnsupportedEncodingException original: " + message,
+                    message.contains(UnsupportedEncodingException.class.getName()));
+        }
+    }
+
+    @Test
+    public void testGetBytesUncheckedExceptionMessageReflectsRequestedCharsetName() {
+        final String otherUnknown = "NO-SUCH-CHARSET-XYZ";
+        try {
+            StringUtils.getBytesUnchecked("ABC", otherUnknown);
+            Assert.fail("Se esperaba " + IllegalStateException.class.getName());
+        } catch (final IllegalStateException e) {
+            Assert.assertTrue(e.getMessage().startsWith(otherUnknown + ": "));
+        }
+    }
+
+    @Test
+    public void testNewStringExceptionMessageReflectsRequestedCharsetName() {
+        final String otherUnknown = "NO-SUCH-CHARSET-XYZ";
+        try {
+            StringUtils.newString(b(0x41), otherUnknown);
+            Assert.fail("Se esperaba " + IllegalStateException.class.getName());
+        } catch (final IllegalStateException e) {
+            Assert.assertTrue(e.getMessage().startsWith(otherUnknown + ": "));
+        }
+    }
+}
+```

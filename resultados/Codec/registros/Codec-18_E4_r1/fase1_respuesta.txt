@@ -1,0 +1,8 @@
+1. `getByteBufferUtf8` devuelve `null` cuando la entrada es `null`; no hay ninguna prueba para este método.
+2. `getByteBufferUtf8` devuelve un `ByteBuffer` con los bytes en UTF-8 del String de entrada; este método no se prueba.
+3. `getBytesIso8859_1`, `getBytesUsAscii`, `getBytesUtf16`, `getBytesUtf16Be`, `getBytesUtf16Le` y `getBytesUtf8` devuelven `null` para entrada `null`; las pruebas solo cubren este caso en `getBytesUnchecked` y `newString`.
+4. Los métodos `newStringUtf16Be`, `newStringUtf16Le` y `newStringUtf8` devuelven `null` para entrada `null` con su charset específico; solo se prueba `newStringUtf8` con `null` en el caso CODEC229 y los demás no se verifican directamente.
+5. La codificación y decodificación de caracteres no ASCII (multibyte en UTF-8 y UTF-16) no se verifica, ya que el único fixture es "ABC".
+6. `equals` debe comparar contenido de `CharSequence` que no son `String` (por ejemplo, `StringBuilder`) y devolver `true` si los caracteres coinciden; no se prueba.
+7. `equals` debe devolver `false` cuando uno de los argumentos es `null` y el otro es un `CharSequence` distinto de `String`; no se prueba.
+8. `getBytesUnchecked` y `newString` deben lanzar `IllegalStateException` que encapsule la `UnsupportedEncodingException` original; las pruebas solo comprueban el tipo de excepción, no su causa ni su mensaje.

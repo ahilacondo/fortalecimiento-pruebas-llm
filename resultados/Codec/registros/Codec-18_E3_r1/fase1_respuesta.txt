@@ -1,0 +1,8 @@
+1. `getByteBufferUtf8` no tiene ninguna prueba: no se verifica que codifique en UTF-8 ni que devuelva un `ByteBuffer` con el contenido esperado.
+2. `getByteBufferUtf8(null)` no se verifica que devuelva `null`, ni la posición y el límite del buffer devuelto.
+3. Los métodos `getBytesIso8859_1`, `getBytesUsAscii`, `getBytesUtf16`, `getBytesUtf16Be`, `getBytesUtf16Le` y `getBytesUtf8` no se verifican con entrada `null`; solo se prueba `getBytesUnchecked`.
+4. Los métodos `newString*` y `getBytes*` no se verifican con un array de bytes vacío ni con una cadena vacía (resultado `""` o array de longitud cero).
+5. No se verifica la codificación ni la decodificación de caracteres no ASCII (por ejemplo, `ñ`, `€` o pares sustitutos en UTF-16); todos los datos de prueba son ASCII.
+6. No se verifica el comportamiento ante caracteres no representables (sustitución por `?` en ISO-8859-1 y US-ASCII) ni ante bytes UTF-8 inválidos (sustitución por U+FFFD).
+7. `equals` no se verifica con `CharSequence` que no son `String` (por ejemplo, `StringBuilder`, o combinaciones `String`/`StringBuilder`), por lo que la rama que usa `CharSequenceUtils.regionMatches` queda sin cubrir.
+8. `equals` no se verifica con la misma referencia no nula en la rama de identidad, ni con `null` frente a un `CharSequence` que no es `String`.
