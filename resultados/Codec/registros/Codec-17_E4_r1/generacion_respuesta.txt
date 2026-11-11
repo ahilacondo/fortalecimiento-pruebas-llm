@@ -1,0 +1,307 @@
+Esta clase de prueba cubre los ocho requisitos de la fase 1. La prueba `testNewStringIso8859_1NullInputReturnsNull` falla con el código actual: `newStringIso8859_1` llama directamente a `new String(bytes, ...)` y lanza `NullPointerException` cuando recibe `null`, aunque el Javadoc promete devolver `null`. Es el comportamiento que el requisito 6 pide detectar. Las pruebas existentes no se han modificado.
+
+```java
+package org.apache.commons.codec.binary;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link StringUtils} que cubren los requisitos de documentación
+ * no verificados por {@link StringUtilsTest}.
+ *
+ * Los caracteres no ASCII se escriben como secuencias de escape Unicode para que el archivo
+ * sea independiente de la codificación del código fuente.
+ */
+public class StringUtilsLLMTest {
+
+    /** Texto con caracteres no ASCII: "é", "€" y un emoji (par sustituto). */
+    private static final String NON_ASCII = "h\u00e9llo \u20ac \uD83D\uDE00";
+
+    private static byte[] remainingBytes(final ByteBuffer buffer) {
+        final ByteBuffer copy = buffer.duplicate();
+        final byte[] out = new byte[copy.remaining()];
+        copy.get(out);
+        return out;
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 1: equals con null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEqualsBothNullReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals(null, null));
+    }
+
+    @Test
+    public void testEqualsFirstNullSecondNonNullReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals(null, "abc"));
+        Assert.assertFalse(StringUtils.equals(null, new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsFirstNonNullSecondNullReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals("abc", null));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), null));
+    }
+
+    @Test
+    public void testEqualsEmptyStringIsNotNull() {
+        Assert.assertFalse(StringUtils.equals(null, ""));
+        Assert.assertFalse(StringUtils.equals("", null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: equals distingue mayúsculas de minúsculas
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEqualsIsCaseSensitive() {
+        Assert.assertFalse(StringUtils.equals("abc", "ABC"));
+        Assert.assertFalse(StringUtils.equals("ABC", "abc"));
+        Assert.assertTrue(StringUtils.equals("abc", "abc"));
+    }
+
+    @Test
+    public void testEqualsCaseSensitiveWithCharSequences() {
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("ABC")));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("aBc"), "abc"));
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("aBc"), "aBc"));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: equals compara CharSequence por contenido
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testEqualsStringBuilderAndStringWithSameContent() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), "abc"));
+        Assert.assertTrue(StringUtils.equals("abc", new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsTwoStringBuildersWithSameContent() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsStringBuilderWithDifferentContentReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("abc"), "abd"));
+        Assert.assertFalse(StringUtils.equals("abd", new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsStringBuilderWithDifferentLengthReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("ab"), "abc"));
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("ab")));
+    }
+
+    @Test
+    public void testEqualsSameStringBuilderInstanceReturnsTrue() {
+        final StringBuilder sb = new StringBuilder("abc");
+        Assert.assertTrue(StringUtils.equals(sb, sb));
+    }
+
+    @Test
+    public void testEqualsEmptyStringBuilderAndEmptyString() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder(), ""));
+        Assert.assertTrue(StringUtils.equals("", new StringBuilder()));
+    }
+
+    @Test
+    public void testEqualsNonAsciiCharSequenceContent() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder(NON_ASCII), NON_ASCII));
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("h\u00e8llo"), NON_ASCII));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: getByteBufferUtf8
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetByteBufferUtf8AsciiContent() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("ABC");
+        Assert.assertNotNull(buffer);
+        Assert.assertArrayEquals(new byte[] {'A', 'B', 'C'}, remainingBytes(buffer));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8NonAsciiContent() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8(NON_ASCII);
+        Assert.assertNotNull(buffer);
+        Assert.assertArrayEquals(NON_ASCII.getBytes(StandardCharsets.UTF_8), remainingBytes(buffer));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8EuroSignBytes() {
+        // "€" (U+20AC) en UTF-8 es E2 82 AC
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("\u20ac");
+        Assert.assertArrayEquals(new byte[] {(byte) 0xE2, (byte) 0x82, (byte) 0xAC}, remainingBytes(buffer));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8PositionAndRemaining() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("ABC");
+        Assert.assertEquals(0, buffer.position());
+        Assert.assertEquals(3, buffer.remaining());
+    }
+
+    @Test
+    public void testGetByteBufferUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getByteBufferUtf8(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: métodos getBytes* devuelven null para entrada null
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesIso8859_1NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesIso8859_1(null));
+    }
+
+    @Test
+    public void testGetBytesUsAsciiNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUsAscii(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16BeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16Be(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16LeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16Le(null));
+    }
+
+    @Test
+    public void testGetBytesUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf8(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: newStringIso8859_1 debe devolver null para bytes null
+    // (esta prueba detecta la discrepancia con el Javadoc: el código actual lanza NPE)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testNewStringIso8859_1NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringIso8859_1(null));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 7: codificaciones reversibles con caracteres no ASCII
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testUtf8RoundTripNonAscii() {
+        final byte[] encoded = StringUtils.getBytesUtf8(NON_ASCII);
+        Assert.assertArrayEquals(NON_ASCII.getBytes(StandardCharsets.UTF_8), encoded);
+        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf8(encoded));
+    }
+
+    @Test
+    public void testUtf8EncodingOfEuroSign() {
+        Assert.assertArrayEquals(
+                new byte[] {(byte) 0xE2, (byte) 0x82, (byte) 0xAC},
+                StringUtils.getBytesUtf8("\u20ac"));
+    }
+
+    @Test
+    public void testUtf16RoundTripNonAscii() {
+        final byte[] encoded = StringUtils.getBytesUtf16(NON_ASCII);
+        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf16(encoded));
+    }
+
+    @Test
+    public void testUtf16BeRoundTripNonAscii() {
+        final byte[] encoded = StringUtils.getBytesUtf16Be(NON_ASCII);
+        Assert.assertArrayEquals(NON_ASCII.getBytes(StandardCharsets.UTF_16BE), encoded);
+        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf16Be(encoded));
+    }
+
+    @Test
+    public void testUtf16LeRoundTripNonAscii() {
+        final byte[] encoded = StringUtils.getBytesUtf16Le(NON_ASCII);
+        Assert.assertArrayEquals(NON_ASCII.getBytes(StandardCharsets.UTF_16LE), encoded);
+        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf16Le(encoded));
+    }
+
+    @Test
+    public void testUtf16BeEncodingOfEAcute() {
+        // "é" (U+00E9) en UTF-16BE es 00 E9
+        Assert.assertArrayEquals(new byte[] {0x00, (byte) 0xE9}, StringUtils.getBytesUtf16Be("\u00e9"));
+    }
+
+    @Test
+    public void testUtf16LeEncodingOfEAcute() {
+        // "é" (U+00E9) en UTF-16LE es E9 00
+        Assert.assertArrayEquals(new byte[] {(byte) 0xE9, 0x00}, StringUtils.getBytesUtf16Le("\u00e9"));
+    }
+
+    @Test
+    public void testUtf16EmojiSurrogatePairRoundTrip() {
+        final String emoji = "\uD83D\uDE00";
+        Assert.assertEquals(emoji, StringUtils.newStringUtf16Be(StringUtils.getBytesUtf16Be(emoji)));
+        Assert.assertEquals(emoji, StringUtils.newStringUtf16Le(StringUtils.getBytesUtf16Le(emoji)));
+        Assert.assertEquals(emoji, StringUtils.newStringUtf8(StringUtils.getBytesUtf8(emoji)));
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 8: uso concurrente de los métodos estáticos
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testConcurrentStaticCallsReturnConsistentResults() throws Exception {
+        final int threadCount = 8;
+        final int iterations = 500;
+        final byte[] expectedUtf8 = NON_ASCII.getBytes(StandardCharsets.UTF_8);
+        final byte[] expectedUtf16Le = NON_ASCII.getBytes(StandardCharsets.UTF_16LE);
+
+        final ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        try {
+            final List<Future<Boolean>> futures = new ArrayList<>();
+            for (int t = 0; t < threadCount; t++) {
+                futures.add(pool.submit(() -> {
+                    for (int i = 0; i < iterations; i++) {
+                        Assert.assertTrue(StringUtils.equals("abc", "abc"));
+                        Assert.assertFalse(StringUtils.equals("abc", "ABC"));
+                        Assert.assertTrue(StringUtils.equals(null, null));
+                        Assert.assertTrue(StringUtils.equals(new StringBuilder(NON_ASCII), NON_ASCII));
+                        Assert.assertArrayEquals(expectedUtf8, StringUtils.getBytesUtf8(NON_ASCII));
+                        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf8(expectedUtf8));
+                        Assert.assertArrayEquals(expectedUtf16Le, StringUtils.getBytesUtf16Le(NON_ASCII));
+                        Assert.assertEquals(NON_ASCII, StringUtils.newStringUtf16Le(expectedUtf16Le));
+                        Assert.assertArrayEquals(expectedUtf8,
+                                remainingBytes(StringUtils.getByteBufferUtf8(NON_ASCII)));
+                    }
+                    return Boolean.TRUE;
+                }));
+            }
+            for (final Future<Boolean> future : futures) {
+                // Si un hilo falla, get() lanza ExecutionException con la AssertionError como causa.
+                Assert.assertTrue(future.get(60, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+}
+```

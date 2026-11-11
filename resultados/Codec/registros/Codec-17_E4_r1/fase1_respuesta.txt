@@ -1,0 +1,8 @@
+1. `equals` debe devolver `true` cuando ambos argumentos son `null` y `false` cuando solo uno lo es; ninguna prueba cubre estos casos.
+2. `equals` debe distinguir mayúsculas de minúsculas (`"abc"` frente a `"ABC"` debe dar `false`); no hay ninguna prueba para `equals`.
+3. `equals` debe comparar cualquier `CharSequence` por contenido, por ejemplo un `StringBuilder` frente a un `String` con los mismos caracteres; solo se usan `String` en las pruebas.
+4. `getByteBufferUtf8` debe devolver un `ByteBuffer` con los bytes UTF-8 de la entrada y `null` si la entrada es `null`; este método no tiene ninguna prueba.
+5. Los métodos `getBytesIso8859_1`, `getBytesUsAscii`, `getBytesUtf16`, `getBytesUtf16Be`, `getBytesUtf16Le` y `getBytesUtf8` deben devolver `null` para entrada `null`; solo se prueba este caso con `getBytesUnchecked`.
+6. `newStringIso8859_1` debe devolver `null` para un array de bytes `null`, según el Javadoc; el código actual llama directamente a `new String(bytes, ...)` y lanzaría `NullPointerException`, así que la prueba debería detectar esta discrepancia.
+7. Las codificaciones UTF-8, UTF-16, UTF-16BE y UTF-16LE deben ser reversibles con caracteres no ASCII (por ejemplo "é", "€" o un emoji), es decir, codificar y decodificar debe devolver el texto original; las pruebas solo usan texto ASCII.
+8. La clase se documenta como inmutable y thread-safe, pero no hay ninguna prueba de uso concurrente de sus métodos estáticos.

@@ -1,0 +1,8 @@
+1. El método `equals(CharSequence, CharSequence)` no tiene ninguna prueba; no se verifica que dos referencias `null` sean iguales ni que un `null` frente a un valor no nulo devuelva `false`.
+2. No se verifica que `equals` compare sin distinguir mayúsculas de minúsculas en `String` (por ejemplo, "abc" frente a "ABC" debe devolver `false`).
+3. No se verifica que `equals` compare por contenido entre distintas implementaciones de `CharSequence` (por ejemplo, `String` frente a `StringBuilder`) y que devuelva `false` si las longitudes difieren.
+4. `getByteBufferUtf8` no tiene ninguna prueba; no se verifica que codifique en UTF-8 dentro de un `ByteBuffer` ni que devuelva `null` para entrada `null`.
+5. Los métodos `getBytes*` tipados (ISO-8859-1, US-ASCII, UTF-16, UTF-16BE, UTF-16LE, UTF-8) no se comprueban con entrada `null`, aunque la documentación indica que deben devolver `null`.
+6. Los métodos `newString*` tipados no se comprueban con entrada `null` (salvo a través de un nombre de charset inválido); además, `newStringIso8859_1`, `newStringUsAscii`, `newStringUtf16`, `newStringUtf16Be`, `newStringUtf16Le` y `newStringUtf8` delegan en distintas rutas, así que conviene verificar si lanzan `NullPointerException` o devuelven `null`, ya que la Javadoc dice lo segundo y el código de `newStringIso8859_1` no comprueba `null`.
+7. No se verifica la codificación y decodificación de caracteres no ASCII (por ejemplo, "é", caracteres fuera del BMP o pares sustitutos) ni el comportamiento de la marca de orden de bytes (BOM) en UTF-16, porque todos los datos de prueba son ASCII.
+8. No se verifica el comportamiento ante bytes malformados al decodificar en UTF-8 o UTF-16 (sustitución por el carácter U+FFFD en lugar de lanzar excepción).

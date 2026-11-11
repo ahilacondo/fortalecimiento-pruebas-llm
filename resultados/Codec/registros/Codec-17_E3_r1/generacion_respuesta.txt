@@ -1,0 +1,320 @@
+```java
+package org.apache.commons.codec.binary;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link StringUtils}, centradas en los comportamientos
+ * que no cubre {@link StringUtilsTest}.
+ */
+public class StringUtilsLLMTest {
+
+    // ---------------------------------------------------------------------
+    // equals(CharSequence, CharSequence)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEqualsBothNullReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals(null, null));
+    }
+
+    @Test
+    public void testEqualsFirstNullSecondNonNullReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals(null, "abc"));
+    }
+
+    @Test
+    public void testEqualsFirstNonNullSecondNullReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals("abc", null));
+    }
+
+    @Test
+    public void testEqualsIdenticalStringsReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals("abc", "abc"));
+    }
+
+    @Test
+    public void testEqualsEqualContentDifferentInstancesReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals(new String("abc"), new String("abc")));
+    }
+
+    @Test
+    public void testEqualsIsCaseSensitiveForStrings() {
+        Assert.assertFalse(StringUtils.equals("abc", "ABC"));
+    }
+
+    @Test
+    public void testEqualsIsCaseSensitiveForStringAndStringBuilder() {
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("ABC")));
+    }
+
+    @Test
+    public void testEqualsStringAndStringBuilderWithSameContentReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals("abc", new StringBuilder("abc")));
+    }
+
+    @Test
+    public void testEqualsStringAndStringBuilderWithSameContentReversedReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("abc"), "abc"));
+    }
+
+    @Test
+    public void testEqualsStringAndStringBuilderWithLongerSecondReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("abcd")));
+    }
+
+    @Test
+    public void testEqualsStringAndStringBuilderWithShorterSecondReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals("abc", new StringBuilder("ab")));
+    }
+
+    @Test
+    public void testEqualsTwoStringBuildersWithSameContentReturnsTrue() {
+        Assert.assertTrue(StringUtils.equals(new StringBuilder("xyz"), new StringBuilder("xyz")));
+    }
+
+    @Test
+    public void testEqualsTwoStringBuildersWithDifferentLengthReturnsFalse() {
+        Assert.assertFalse(StringUtils.equals(new StringBuilder("xyz"), new StringBuilder("xy")));
+    }
+
+    // ---------------------------------------------------------------------
+    // getByteBufferUtf8(String)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testGetByteBufferUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getByteBufferUtf8(null));
+    }
+
+    @Test
+    public void testGetByteBufferUtf8AsciiContent() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("abc");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals(0, buffer.position());
+        Assert.assertEquals(3, buffer.remaining());
+        final byte[] actual = new byte[buffer.remaining()];
+        buffer.get(actual);
+        Assert.assertArrayEquals(new byte[] {'a', 'b', 'c'}, actual);
+    }
+
+    @Test
+    public void testGetByteBufferUtf8NonAsciiContentIsUtf8Encoded() {
+        // "é" (U+00E9) en UTF-8 es C3 A9
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("\u00E9");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals(2, buffer.remaining());
+        final byte[] actual = new byte[buffer.remaining()];
+        buffer.get(actual);
+        Assert.assertArrayEquals(new byte[] {(byte) 0xC3, (byte) 0xA9}, actual);
+    }
+
+    @Test
+    public void testGetByteBufferUtf8EmptyStringProducesEmptyBuffer() {
+        final ByteBuffer buffer = StringUtils.getByteBufferUtf8("");
+        Assert.assertNotNull(buffer);
+        Assert.assertEquals(0, buffer.remaining());
+    }
+
+    // ---------------------------------------------------------------------
+    // getBytes* tipados con entrada null -> null
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesIso8859_1NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesIso8859_1(null));
+    }
+
+    @Test
+    public void testGetBytesUsAsciiNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUsAscii(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16BeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16Be(null));
+    }
+
+    @Test
+    public void testGetBytesUtf16LeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf16Le(null));
+    }
+
+    @Test
+    public void testGetBytesUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.getBytesUtf8(null));
+    }
+
+    // ---------------------------------------------------------------------
+    // newString* tipados con entrada null
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testNewStringUsAsciiNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUsAscii(null));
+    }
+
+    @Test
+    public void testNewStringUtf16NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUtf16(null));
+    }
+
+    @Test
+    public void testNewStringUtf16BeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUtf16Be(null));
+    }
+
+    @Test
+    public void testNewStringUtf16LeNullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUtf16Le(null));
+    }
+
+    @Test
+    public void testNewStringUtf8NullInputReturnsNull() {
+        Assert.assertNull(StringUtils.newStringUtf8(null));
+    }
+
+    /**
+     * La Javadoc de newStringIso8859_1 indica que devuelve null para entrada null, pero la
+     * implementación actual delega directamente en new String(bytes, Charsets.ISO_8859_1) sin
+     * comprobar null, por lo que lanza NullPointerException. Esta prueba documenta el
+     * comportamiento real observado.
+     */
+    @Test(expected = NullPointerException.class)
+    public void testNewStringIso8859_1NullInputThrowsNullPointerException() {
+        StringUtils.newStringIso8859_1(null);
+    }
+
+    // ---------------------------------------------------------------------
+    // Caracteres no ASCII y pares sustitutos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesUtf8NonAsciiMatchesJdkEncoding() {
+        final String value = "\u00E9";
+        Assert.assertArrayEquals(value.getBytes(StandardCharsets.UTF_8), StringUtils.getBytesUtf8(value));
+        Assert.assertArrayEquals(new byte[] {(byte) 0xC3, (byte) 0xA9}, StringUtils.getBytesUtf8(value));
+    }
+
+    @Test
+    public void testNewStringUtf8NonAsciiRoundTrip() {
+        final String value = "\u00E9t\u00E9";
+        Assert.assertEquals(value, StringUtils.newStringUtf8(StringUtils.getBytesUtf8(value)));
+    }
+
+    @Test
+    public void testGetBytesUtf8SupplementaryCharacterUsesFourBytes() {
+        // U+1F600 (emoji) es un par sustituto en UTF-16 y se codifica con 4 bytes en UTF-8
+        final String value = "\uD83D\uDE00";
+        final byte[] actual = StringUtils.getBytesUtf8(value);
+        Assert.assertArrayEquals(
+                new byte[] {(byte) 0xF0, (byte) 0x9F, (byte) 0x98, (byte) 0x80}, actual);
+        Assert.assertEquals(value, StringUtils.newStringUtf8(actual));
+    }
+
+    @Test
+    public void testGetBytesUtf16BeSupplementaryCharacterUsesSurrogatePair() {
+        final String value = "\uD83D\uDE00";
+        final byte[] actual = StringUtils.getBytesUtf16Be(value);
+        Assert.assertArrayEquals(new byte[] {(byte) 0xD8, 0x3D, (byte) 0xDE, 0x00}, actual);
+        Assert.assertEquals(value, StringUtils.newStringUtf16Be(actual));
+    }
+
+    @Test
+    public void testGetBytesUtf16LeNonAsciiCharacter() {
+        // U+00E9 en UTF-16LE es E9 00
+        final byte[] actual = StringUtils.getBytesUtf16Le("\u00E9");
+        Assert.assertArrayEquals(new byte[] {(byte) 0xE9, 0x00}, actual);
+    }
+
+    @Test
+    public void testGetBytesUtf16BeNonAsciiCharacter() {
+        // U+00E9 en UTF-16BE es 00 E9
+        final byte[] actual = StringUtils.getBytesUtf16Be("\u00E9");
+        Assert.assertArrayEquals(new byte[] {0x00, (byte) 0xE9}, actual);
+    }
+
+    @Test
+    public void testGetBytesIso8859_1NonAsciiCharacterUsesSingleByte() {
+        final byte[] actual = StringUtils.getBytesIso8859_1("\u00E9");
+        Assert.assertArrayEquals(new byte[] {(byte) 0xE9}, actual);
+    }
+
+    // ---------------------------------------------------------------------
+    // Marca de orden de bytes (BOM) en UTF-16
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testGetBytesUtf16WritesBigEndianBomThenContent() {
+        // El codificador "UTF-16" de Java escribe BOM FE FF y luego big-endian
+        final byte[] actual = StringUtils.getBytesUtf16("A");
+        Assert.assertArrayEquals(new byte[] {(byte) 0xFE, (byte) 0xFF, 0x00, 0x41}, actual);
+    }
+
+    @Test
+    public void testNewStringUtf16ConsumesBigEndianBom() {
+        final String actual = StringUtils.newStringUtf16(
+                new byte[] {(byte) 0xFE, (byte) 0xFF, 0x00, 0x41});
+        Assert.assertEquals("A", actual);
+    }
+
+    @Test
+    public void testNewStringUtf16ConsumesLittleEndianBom() {
+        final String actual = StringUtils.newStringUtf16(
+                new byte[] {(byte) 0xFF, (byte) 0xFE, 0x41, 0x00});
+        Assert.assertEquals("A", actual);
+    }
+
+    @Test
+    public void testNewStringUtf16WithoutBomDefaultsToBigEndian() {
+        final String actual = StringUtils.newStringUtf16(new byte[] {0x00, 0x41});
+        Assert.assertEquals("A", actual);
+    }
+
+    // ---------------------------------------------------------------------
+    // Bytes malformados: sustitución por U+FFFD en lugar de excepción
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testNewStringUtf8InvalidByteIsReplacedByReplacementCharacter() {
+        final String actual = StringUtils.newStringUtf8(new byte[] {(byte) 0xFF});
+        Assert.assertEquals("\uFFFD", actual);
+    }
+
+    @Test
+    public void testNewStringUtf8TruncatedSequenceIsReplacedByReplacementCharacter() {
+        // 'a' seguido de un primer byte de secuencia de 2 bytes sin completar
+        final String actual = StringUtils.newStringUtf8(new byte[] {'a', (byte) 0xC3});
+        Assert.assertEquals("a\uFFFD", actual);
+    }
+
+    @Test
+    public void testNewStringUtf16BeTrailingOddByteIsReplacedByReplacementCharacter() {
+        final String actual = StringUtils.newStringUtf16Be(new byte[] {0x00, 0x41, 0x00});
+        Assert.assertEquals("A\uFFFD", actual);
+    }
+
+    @Test
+    public void testNewStringUtf16BeUnpairedLowSurrogateIsReplacedByReplacementCharacter() {
+        final String actual = StringUtils.newStringUtf16Be(new byte[] {(byte) 0xDC, 0x00});
+        Assert.assertEquals("\uFFFD", actual);
+    }
+
+    @Test
+    public void testNewStringUsAsciiNonAsciiByteIsReplacedByReplacementCharacter() {
+        final String actual = StringUtils.newStringUsAscii(new byte[] {'a', (byte) 0xE9});
+        Assert.assertEquals("a\uFFFD", actual);
+    }
+}
+```
+
+Nota: el método `newStringIso8859_1(null)` se prueba como lanza `NullPointerException`, porque así se comporta la implementación actual. La Javadoc dice que devuelve `null`, así que esa discrepancia debe revisarse en el código de producción.
