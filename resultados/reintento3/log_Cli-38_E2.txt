@@ -1,0 +1,4 @@
+Casos: 1; estrategias: ['E2']; repeticiones: 1; corridas: 1; modelo: claude-haiku-5-5
+AVISO: no se puede enviar 'temperature'; se continúa sin ese parámetro (temperatura por defecto del modelo). Anótelo en el informe.
+[1/1] Cli-38 E2 r1: detecta=0 estables=0/0 llamadas=0 limite_o_error
+Resultados en resultados/reintento3/ejecuciones_Cli-38_E2.csv
