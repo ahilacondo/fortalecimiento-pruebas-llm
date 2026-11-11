@@ -1,0 +1,8 @@
+Casos: 10; estrategias: ['E1', 'E2', 'E3', 'E4']; repeticiones: 1; corridas: 40; modelo: claude-haiku-5-5
+AVISO: no se puede enviar 'temperature'; se continúa sin ese parámetro (temperatura por defecto del modelo). Anótelo en el informe.
+[9/40] Codec-4 E3 r1: detecta=1 estables=25/25 llamadas=2 ok
+[10/40] Codec-4 E4 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[19/40] Codec-3 E2 r1: detecta=0 estables=34/34 llamadas=1 sin_diferencia
+[20/40] Codec-3 E3 r1: detecta=0 estables=37/37 llamadas=2 sin_diferencia
+[21/40] Codec-3 E4 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+Resultados en resultados/Codec/ejecuciones_Codec.csv
