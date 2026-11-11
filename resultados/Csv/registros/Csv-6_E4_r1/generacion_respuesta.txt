@@ -1,0 +1,215 @@
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVRecord} que cubren los requisitos
+ * documentados no verificados por {@code CSVRecordTest}.
+ * Los registros se obtienen mediante la API pública de {@link CSVFormat} y {@link CSVParser}.
+ */
+public class CSVRecordLLMTest {
+
+    /** Enum cuyo toString() coincide con el nombre de la cabecera. */
+    private enum Column { FIRST_NAME, LAST_NAME }
+
+    private static List<CSVRecord> parse(final CSVFormat format, final String content) throws IOException {
+        try (CSVParser parser = format.parse(new StringReader(content))) {
+            return parser.getRecords();
+        }
+    }
+
+    // Requisito 1: getRecordNumber() con valores distintos de 0
+
+    @Test
+    public void testGetRecordNumberIsNotZeroForParsedRecords() throws IOException {
+        final List<CSVRecord> records = parse(CSVFormat.DEFAULT, "a,b\nc,d\n");
+        assertEquals(2, records.size());
+        assertTrue("El número del primer registro debe ser mayor que 0", records.get(0).getRecordNumber() > 0);
+        assertTrue("El número del segundo registro debe ser mayor que 0", records.get(1).getRecordNumber() > 0);
+    }
+
+    @Test
+    public void testGetRecordNumberIncreasesForConsecutiveRecords() throws IOException {
+        final List<CSVRecord> records = parse(CSVFormat.DEFAULT, "a,b\nc,d\ne,f\n");
+        assertEquals(3, records.size());
+        final long first = records.get(0).getRecordNumber();
+        assertNotEquals(0L, first);
+        assertEquals(first + 1, records.get(1).getRecordNumber());
+        assertEquals(first + 2, records.get(2).getRecordNumber());
+    }
+
+    // Requisito 2: getComment()
+
+    @Test
+    public void testGetCommentReturnsCommentOfRecord() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentMarker('#');
+        final List<CSVRecord> records = parse(format, "#comentario\na,b\n");
+        assertEquals(1, records.size());
+        assertEquals("comentario", records.get(0).getComment());
+    }
+
+    @Test
+    public void testGetCommentReturnsNullWhenNoComment() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentMarker('#');
+        final List<CSVRecord> records = parse(format, "a,b\n");
+        assertEquals(1, records.size());
+        assertNull(records.get(0).getComment());
+    }
+
+    // Requisito 3: size()
+
+    @Test
+    public void testSizeReturnsNumberOfValues() throws IOException {
+        assertEquals(3, parse(CSVFormat.DEFAULT, "a,b,c\n").get(0).size());
+    }
+
+    @Test
+    public void testSizeCountsEmptyValues() throws IOException {
+        assertEquals(3, parse(CSVFormat.DEFAULT, "a,,c\n").get(0).size());
+    }
+
+    @Test
+    public void testSizeForSingleValue() throws IOException {
+        assertEquals(1, parse(CSVFormat.DEFAULT, "a\n").get(0).size());
+    }
+
+    // Requisito 4: iterator() en cuanto a cantidad
+
+    @Test
+    public void testIteratorReturnsExactlyAllValuesInOrder() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b,c\n").get(0);
+        final List<String> collected = new ArrayList<>();
+        for (final String value : record) {
+            collected.add(value);
+        }
+        assertEquals(Arrays.asList("a", "b", "c"), collected);
+    }
+
+    @Test
+    public void testIteratorHasNoExtraElements() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b,c\n").get(0);
+        final Iterator<String> it = record.iterator();
+        assertEquals("a", it.next());
+        assertEquals("b", it.next());
+        assertEquals("c", it.next());
+        assertFalse("El iterador no debe tener elementos sobrantes", it.hasNext());
+    }
+
+    @Test
+    public void testIteratorOnRecordWithEmptyValueCountsIt() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,,c\n").get(0);
+        final List<String> collected = new ArrayList<>();
+        record.forEach(collected::add);
+        assertEquals(3, collected.size());
+        assertEquals("", collected.get(1));
+    }
+
+    // Requisito 5: get(Enum) con columna mapeada
+
+    @Test
+    public void testGetByEnumReturnsValueOfMappedColumn() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader(Column.FIRST_NAME.toString(), Column.LAST_NAME.toString());
+        final CSVRecord record = parse(format, "Ana,Lopez\n").get(0);
+        assertEquals("Ana", record.get(Column.FIRST_NAME));
+        assertEquals("Lopez", record.get(Column.LAST_NAME));
+    }
+
+    @Test
+    public void testGetByEnumAndByNameReturnSameValue() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader(Column.FIRST_NAME.toString(), Column.LAST_NAME.toString());
+        final CSVRecord record = parse(format, "Ana,Lopez\n").get(0);
+        assertEquals(record.get(Column.FIRST_NAME.toString()), record.get(Column.FIRST_NAME));
+    }
+
+    // Requisito 6: isSet() para columna mapeada con índice fuera de los valores
+
+    @Test
+    public void testIsSetReturnsFalseForMappedColumnBeyondValueCount() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader("first", "second", "third");
+        final CSVRecord record = parse(format, "A,B\n").get(0);
+        assertTrue(record.isMapped("third"));
+        assertFalse("Una columna mapeada sin valor debe devolver false", record.isSet("third"));
+        assertFalse(record.isConsistent());
+    }
+
+    @Test
+    public void testIsSetReturnsTrueForMappedColumnWithinValueCount() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader("first", "second", "third");
+        final CSVRecord record = parse(format, "A,B\n").get(0);
+        assertTrue(record.isSet("first"));
+        assertTrue(record.isSet("second"));
+    }
+
+    // Requisito 7: toMap() sin cabeceras
+
+    /**
+     * La Javadoc indica que toMap() devuelve un mapa vacío sin cabeceras, pero la
+     * implementación actual lanza NullPointerException porque putIn() itera sobre un
+     * mapping nulo. Esta prueba fija el comportamiento real observado; si se corrige
+     * la implementación, debe cambiarse a comprobar un mapa vacío.
+     */
+    @Test(expected = NullPointerException.class)
+    public void testToMapWithoutHeaderCurrentlyThrowsNullPointerException() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b\n").get(0);
+        record.toMap();
+    }
+
+    // Requisito 8: el mapa de toMap() no está conectado al registro
+
+    @Test
+    public void testModifyingToMapResultDoesNotAlterRecordValues() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader("first", "second");
+        final CSVRecord record = parse(format, "1,2\n").get(0);
+        final Map<String, String> map = record.toMap();
+        map.put("first", "X");
+        map.put("second", "Y");
+        map.put("extra", "Z");
+        assertEquals("1", record.get("first"));
+        assertEquals("2", record.get("second"));
+        assertEquals("1", record.get(0));
+        assertEquals("2", record.get(1));
+        assertEquals(2, record.size());
+    }
+
+    @Test
+    public void testClearingToMapResultDoesNotAffectRecord() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader("first", "second");
+        final CSVRecord record = parse(format, "1,2\n").get(0);
+        record.toMap().clear();
+        assertEquals("1", record.get("first"));
+        assertEquals("2", record.get("second"));
+        assertTrue(record.isSet("first"));
+    }
+
+    @Test
+    public void testToMapReturnsIndependentMapInstances() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader("first", "second");
+        final CSVRecord record = parse(format, "1,2\n").get(0);
+        final Map<String, String> first = record.toMap();
+        final Map<String, String> second = record.toMap();
+        assertNotNull(first);
+        assertTrue("Cada llamada debe devolver un mapa distinto", first != second);
+        first.put("first", "changed");
+        assertEquals("1", second.get("first"));
+        assertEquals("1", record.get("first"));
+    }
+}
+```
+
+**Nota sobre el requisito 7:** la Javadoc de `toMap()` dice que devuelve un mapa vacío si el registro no tiene cabeceras, pero el código lanza `NullPointerException`. La prueba `testToMapWithoutHeaderCurrentlyThrowsNullPointerException` documenta el comportamiento actual, no el documentado. Conviene decidir si se corrige la implementación (devolver un mapa vacío) o la Javadoc, y ajustar la prueba en consecuencia. Tampoco pude compilar ni ejecutar el archivo, así que los valores concretos de `getRecordNumber()` y `getComment()` dependen del comportamiento del parser de la versión de commons-csv que use el proyecto. Las pruebas de número de registro comprueban solo que sean mayores que 0 y consecutivos para no fijar un valor inicial concreto.

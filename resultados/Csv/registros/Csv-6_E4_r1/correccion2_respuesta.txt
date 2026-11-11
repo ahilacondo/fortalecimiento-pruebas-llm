@@ -1,0 +1,66 @@
+El error no viene de `withCommentMarker` ni de una API que falte. El archivo que pegaste contiene texto en español (la explicación) mezclado con el código Java. Cuando javac encuentra texto fuera de una clase en la línea 3, emite exactamente `class, interface, or enum expected`. Por eso el problema es sintáctico y no depende de la versión de `CSVFormat`.
+
+Tampoco tengo el contenido original de las pruebas, porque en el archivo solo aparece la línea `package`. Por eso reconstruyo el archivo a partir de los nombres de métodos que mencionaste. Revisa las aserciones contra la intención original antes de darlas por buenas. Asumo JUnit 4, que es lo que usa Commons CSV 1.x; si tu suite usa JUnit 5, hay que cambiar los imports y la anotación `@Test`.
+
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.util.List;
+
+import org.junit.Test;
+
+public class CSVRecordLLMTest {
+
+    @Test
+    public void testGetCommentReturnsCommentOfRecord() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentMarker('#');
+        try (CSVParser parser = CSVParser.parse("#comentario\na,b\n", format)) {
+            final List<CSVRecord> records = parser.getRecords();
+            assertEquals(1, records.size());
+            assertEquals("comentario", records.get(0).getComment());
+        }
+    }
+
+    @Test
+    public void testGetCommentIsNullWhenNoComment() throws IOException {
+        try (CSVParser parser = CSVParser.parse("a,b\n", CSVFormat.DEFAULT)) {
+            final CSVRecord record = parser.iterator().next();
+            assertNull(record.getComment());
+        }
+    }
+
+    @Test
+    public void testSizeAndGetByIndex() throws IOException {
+        try (CSVParser parser = CSVParser.parse("a,b,c\n", CSVFormat.DEFAULT)) {
+            final CSVRecord record = parser.iterator().next();
+            assertEquals(3, record.size());
+            assertEquals("a", record.get(0));
+            assertEquals("c", record.get(2));
+        }
+    }
+
+    @Test
+    public void testIsConsistentWithoutHeaderMapping() throws IOException {
+        try (CSVParser parser = CSVParser.parse("a,b\n", CSVFormat.DEFAULT)) {
+            final CSVRecord record = parser.iterator().next();
+            assertTrue(record.isConsistent());
+        }
+    }
+
+    @Test
+    public void testIsMappedFalseWithoutHeader() throws IOException {
+        try (CSVParser parser = CSVParser.parse("a,b\n", CSVFormat.DEFAULT)) {
+            final CSVRecord record = parser.iterator().next();
+            assertFalse(record.isMapped("columna"));
+        }
+    }
+}
+```
+
+Antes de compilar, verifica que el archivo no contenga texto fuera del código Java. Si tienes la versión original de `CSVRecordLLMTest.java` (por ejemplo, en el control de versiones o en una copia anterior), restáurala y corrige solo el texto extraño. Así conservarás las aserciones originales. Si me pegas el contenido completo de ese archivo, te devuelvo la versión corregida sin reconstruir nada.

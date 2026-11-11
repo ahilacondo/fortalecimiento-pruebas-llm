@@ -1,0 +1,1 @@
+    [javac] /root/hito2_workdir_otro_Csv/Csv_6_b/.test_suite/org/apache/commons/csv/CSVRecordLLMTest.java:288: error: cannot find symbol

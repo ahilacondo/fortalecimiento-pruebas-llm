@@ -1,0 +1,278 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Csv/Csv_6_b/.test_suite/org/apache/commons/csv/CSVRecordLLMTest.java:231: error: cannot find symbol
+
+Archivo anterior:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.StringReader;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVRecord} que usan únicamente la API pública.
+ * Los registros se obtienen mediante {@link CSVFormat} y {@link CSVParser}.
+ */
+public class CSVRecordLLMTest {
+
+    private enum Column { FIRST, SECOND }
+
+    /** Parsea los datos y devuelve todos los registros. */
+    private static List<CSVRecord> parseAll(final CSVFormat format, final String data) throws IOException {
+        try (CSVParser parser = format.parse(new StringReader(data))) {
+            return parser.getRecords();
+        }
+    }
+
+    /** Parsea los datos y devuelve el primer registro. */
+    private static CSVRecord firstRecord(final CSVFormat format, final String data) throws IOException {
+        final List<CSVRecord> records = parseAll(format, data);
+        assertFalse("Se esperaba al menos un registro", records.isEmpty());
+        return records.get(0);
+    }
+
+    private static CSVFormat headerFormat() {
+        return CSVFormat.DEFAULT.withHeader("first", "second", "third");
+    }
+
+    @Test
+    public void testGetIntReturnsEachValueByIndex() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,b,c\n");
+        assertEquals("a", record.get(0));
+        assertEquals("b", record.get(1));
+        assertEquals("c", record.get(2));
+    }
+
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetIntOutOfRangeThrows() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,b\n");
+        record.get(2);
+    }
+
+    @Test
+    public void testGetStringReturnsValueByHeaderName() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        assertEquals("1", record.get("first"));
+        assertEquals("2", record.get("second"));
+        assertEquals("3", record.get("third"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGetStringUnknownNameThrows() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        record.get("unknown");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testGetStringWithoutHeaderThrows() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "1,2,3\n");
+        record.get("first");
+    }
+
+    @Test
+    public void testGetEnumReturnsValueByEnumName() throws IOException {
+        final CSVRecord record = firstRecord(
+                CSVFormat.DEFAULT.withHeader("FIRST", "SECOND"), "x,y\n");
+        assertEquals("x", record.get(Column.FIRST));
+        assertEquals("y", record.get(Column.SECOND));
+    }
+
+    @Test
+    public void testIsMappedTrueOnlyForHeaderNames() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        assertTrue(record.isMapped("first"));
+        assertTrue(record.isMapped("third"));
+        assertFalse(record.isMapped("fourth"));
+        assertFalse(record.isMapped("FIRST"));
+    }
+
+    @Test
+    public void testIsMappedFalseWithoutHeader() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "1,2,3\n");
+        assertFalse(record.isMapped("first"));
+    }
+
+    @Test
+    public void testIsSetTrueForValuesPresentInRecord() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        assertTrue(record.isSet("first"));
+        assertTrue(record.isSet("third"));
+    }
+
+    @Test
+    public void testIsSetFalseWhenRecordIsShorterThanHeader() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2\n");
+        assertTrue(record.isSet("first"));
+        assertTrue(record.isSet("second"));
+        assertFalse(record.isSet("third"));
+    }
+
+    @Test
+    public void testIsSetFalseForUnmappedName() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "1,2,3\n");
+        assertFalse(record.isSet("first"));
+    }
+
+    @Test
+    public void testIsConsistentTrueWhenSizeMatchesHeader() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        assertTrue(record.isConsistent());
+    }
+
+    @Test
+    public void testIsConsistentTrueWithoutHeader() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "1,2\n");
+        assertTrue(record.isConsistent());
+    }
+
+    @Test
+    public void testIsConsistentFalseWhenRecordShorterThanHeader() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2\n");
+        assertFalse(record.isConsistent());
+    }
+
+    @Test
+    public void testSizeReturnsNumberOfValues() throws IOException {
+        assertEquals(3, firstRecord(CSVFormat.DEFAULT, "a,b,c\n").size());
+        assertEquals(1, firstRecord(CSVFormat.DEFAULT, "a\n").size());
+        assertEquals(3, firstRecord(headerFormat(), "1,2,3\n").size());
+    }
+
+    @Test
+    public void testIteratorReturnsValuesInOrder() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,b,c\n");
+        final Iterator<String> it = record.iterator();
+        assertTrue(it.hasNext());
+        assertEquals("a", it.next());
+        assertEquals("b", it.next());
+        assertEquals("c", it.next());
+        assertFalse(it.hasNext());
+    }
+
+    @Test
+    public void testIteratorOnRecordWithEmptyValueIncludesEmptyString() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,,c\n");
+        final Iterator<String> it = record.iterator();
+        assertEquals("a", it.next());
+        assertEquals("", it.next());
+        assertEquals("c", it.next());
+        assertFalse(it.hasNext());
+    }
+
+    @Test
+    public void testToStringRepresentsValuesAsArray() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,b,c\n");
+        assertEquals("[a, b, c]", record.toString());
+    }
+
+    @Test
+    public void testToMapContainsHeaderNamesAndValues() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        final Map<String, String> map = record.toMap();
+        assertEquals(3, map.size());
+        assertEquals("1", map.get("first"));
+        assertEquals("2", map.get("second"));
+        assertEquals("3", map.get("third"));
+        assertFalse(map.containsKey("fourth"));
+    }
+
+    @Test
+    public void testToMapReturnsIndependentCopy() throws IOException {
+        final CSVRecord record = firstRecord(headerFormat(), "1,2,3\n");
+        final Map<String, String> map = record.toMap();
+        map.put("first", "changed");
+        map.remove("second");
+        assertEquals("1", record.get("first"));
+        assertEquals("2", record.get("second"));
+    }
+
+    @Test
+    public void testGetRecordNumberIncreasesAcrossRecords() throws IOException {
+        final List<CSVRecord> records = parseAll(CSVFormat.DEFAULT, "a\nb\nc\n");
+        assertEquals(3, records.size());
+        assertEquals(records.get(0).getRecordNumber() + 1, records.get(1).getRecordNumber());
+        assertEquals(records.get(1).getRecordNumber() + 1, records.get(2).getRecordNumber());
+    }
+
+    @Test
+    public void testGetCommentNullWhenNoCommentPresent() throws IOException {
+        final CSVRecord record = firstRecord(CSVFormat.DEFAULT, "a,b\n");
+        assertNull(record.getComment());
+    }
+
+    @Test
+    public void testGetCommentReturnsCommentPrecedingRecord() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentMarker('#');
+        final CSVRecord record = firstRecord(format, "#hello\na,b\n");
+        assertEquals("hello", record.getComment());
+        assertEquals("a", record.get(0));
+        assertEquals("b", record.get(1));
+    }
+
+    @Test
+    public void testGetReturnsNullForNullString() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withNullString("NULL");
+        final CSVRecord record = firstRecord(format, "NULL,x\n");
+        assertNull(record.get(0));
+        assertEquals("x", record.get(1));
+        assertEquals(2, record.size());
+    }
+
+    @Test
+    public void testSerializationRoundTripPreservesValuesAndMapping() throws IOException, ClassNotFoundException {
+        final CSVRecord original = firstRecord(headerFormat(), "1,2,3\n");
+
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+
+        final CSVRecord copy;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            copy = (CSVRecord) in.readObject();
+        }
+
+        assertNotNull(copy);
+        assertEquals(original.toString(), copy.toString());
+        assertEquals(original.getRecordNumber(), copy.getRecordNumber());
+        assertEquals("1", copy.get("first"));
+        assertEquals("2", copy.get("second"));
+        assertEquals("3", copy.get("third"));
+        assertTrue(copy.isConsistent());
+    }
+}
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.csv` y la clase pública `CSVRecordLLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

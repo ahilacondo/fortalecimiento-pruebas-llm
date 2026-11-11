@@ -1,0 +1,8 @@
+1. `get(Enum)` devuelve el valor cuando el nombre de la constante está mapeado; solo se prueba el caso no mapeado.
+2. `getComment()` devuelve el comentario asignado en el constructor y `null` cuando no hay comentario.
+3. `getRecordNumber()` devuelve el número de registro asignado en el constructor.
+4. `size()` devuelve la cantidad de valores, y un `values` nulo se normaliza a un array vacío con tamaño 0.
+5. `isSet()` devuelve `false` para una columna mapeada cuyo índice cae fuera del array en un registro inconsistente.
+6. `toMap()` en un registro sin cabecera: el Javadoc promete un mapa vacío, pero `putIn` itera sobre `mapping` nulo, por lo que el comportamiento real no está verificado.
+7. `toString()` devuelve la misma representación que `Arrays.toString` sobre los valores.
+8. La serialización (`Serializable`) conserva valores, mapeo, comentario y número de registro tras serializar y deserializar.

@@ -1,0 +1,165 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVRecord} que complementan {@code CSVRecordTest}.
+ */
+public class CSVRecordLLMTest {
+
+    private enum ColumnFixture { FIRST_NAME, LAST_NAME }
+
+    private static Map<String, Integer> header(final String... names) {
+        final Map<String, Integer> map = new HashMap<String, Integer>();
+        for (int i = 0; i < names.length; i++) {
+            map.put(names[i], Integer.valueOf(i));
+        }
+        return map;
+    }
+
+    @Test
+    public void testGetEnumReturnsValueWhenConstantNameIsMapped() {
+        final Map<String, Integer> mapping = header("FIRST_NAME", "LAST_NAME");
+        final CSVRecord record = new CSVRecord(new String[] { "Ana", "Pérez" }, mapping, null, 1);
+
+        assertEquals("Ana", record.get(ColumnFixture.FIRST_NAME));
+        assertEquals("Pérez", record.get(ColumnFixture.LAST_NAME));
+    }
+
+    @Test
+    public void testGetEnumUsesConstantNameNotOrdinal() {
+        // Mapeo invertido: el nombre "LAST_NAME" apunta a la columna 0.
+        final Map<String, Integer> mapping = new HashMap<String, Integer>();
+        mapping.put("LAST_NAME", Integer.valueOf(0));
+        mapping.put("FIRST_NAME", Integer.valueOf(1));
+        final CSVRecord record = new CSVRecord(new String[] { "X", "Y" }, mapping, null, 1);
+
+        assertEquals("X", record.get(ColumnFixture.LAST_NAME));
+        assertEquals("Y", record.get(ColumnFixture.FIRST_NAME));
+    }
+
+    @Test
+    public void testGetCommentReturnsAssignedComment() {
+        final CSVRecord record = new CSVRecord(new String[] { "A" }, null, "comentario", 5);
+
+        assertEquals("comentario", record.getComment());
+    }
+
+    @Test
+    public void testGetCommentReturnsNullWhenNoComment() {
+        final CSVRecord record = new CSVRecord(new String[] { "A" }, null, null, 5);
+
+        assertNull(record.getComment());
+    }
+
+    @Test
+    public void testGetRecordNumberReturnsAssignedNumber() {
+        final CSVRecord record = new CSVRecord(new String[] { "A" }, null, null, 42L);
+
+        assertEquals(42L, record.getRecordNumber());
+    }
+
+    @Test
+    public void testSizeReturnsNumberOfValues() {
+        final CSVRecord record = new CSVRecord(new String[] { "A", "B", "C" }, null, null, 0);
+
+        assertEquals(3, record.size());
+    }
+
+    @Test
+    public void testNullValuesAreNormalizedToEmptyArray() {
+        final CSVRecord record = new CSVRecord(null, null, null, 0);
+
+        assertEquals(0, record.size());
+        assertEquals("[]", record.toString());
+        assertTrue(record.isConsistent());
+    }
+
+    @Test
+    public void testIsSetFalseForMappedColumnOutOfBoundsInInconsistentRecord() {
+        // "fourth" está mapeada al índice 3, pero el registro solo tiene 3 valores.
+        final Map<String, Integer> mapping = header("first", "second", "third");
+        mapping.put("fourth", Integer.valueOf(3));
+        final CSVRecord record = new CSVRecord(new String[] { "A", "B", "C" }, mapping, null, 0);
+
+        assertTrue(record.isMapped("fourth"));
+        assertFalse(record.isSet("fourth"));
+        assertTrue(record.isSet("second"));
+        assertFalse(record.isConsistent());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testToMapWithoutHeaderThrowsNullPointerException() {
+        // Comportamiento real actual: putIn itera sobre un mapping nulo.
+        // El Javadoc de toMap() promete un mapa vacío; si se corrige la
+        // implementación, esta prueba debe actualizarse a assertTrue(isEmpty()).
+        final CSVRecord record = new CSVRecord(new String[] { "A", "B" }, null, null, 0);
+
+        record.toMap();
+    }
+
+    @Test
+    public void testToStringMatchesArraysToString() {
+        final String[] values = { "a", null, "" };
+        final CSVRecord record = new CSVRecord(values, null, null, 0);
+
+        assertEquals(Arrays.toString(values), record.toString());
+        assertEquals("[a, null, ]", record.toString());
+    }
+
+    @Test
+    public void testSerializationPreservesState() throws IOException, ClassNotFoundException {
+        final Map<String, Integer> mapping = header("first", "second");
+        final CSVRecord original = new CSVRecord(new String[] { "A", "B" }, mapping, "un comentario", 7L);
+
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+
+        final CSVRecord copy;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            copy = (CSVRecord) in.readObject();
+        }
+
+        assertEquals("A", copy.get(0));
+        assertEquals("B", copy.get(1));
+        assertEquals("A", copy.get("first"));
+        assertEquals("B", copy.get("second"));
+        assertEquals("un comentario", copy.getComment());
+        assertEquals(7L, copy.getRecordNumber());
+        assertTrue(copy.isConsistent());
+        assertEquals(original.toMap(), copy.toMap());
+        assertEquals(original.toString(), copy.toString());
+    }
+}

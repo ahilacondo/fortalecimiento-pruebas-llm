@@ -1,0 +1,8 @@
+1. El número de registro devuelto por `getRecordNumber()` no se verifica con ningún valor distinto de 0.
+2. `getComment()` no se prueba: no se comprueba que devuelva el comentario proporcionado ni `null` cuando no hay comentario.
+3. `size()` no se verifica: no se comprueba que devuelva el número de valores del registro.
+4. `iterator()` no se verifica en cuanto a cantidad: el bucle existente no detecta valores faltantes ni sobrantes.
+5. `get(Enum)` solo se prueba en el caso de error; no se verifica que devuelva el valor de una columna mapeada.
+6. `isSet(String)` no se prueba para una columna mapeada cuyo índice supera la cantidad de valores, que según la documentación debe devolver false.
+7. `toMap()` documenta que devuelve un mapa vacío si el registro no tiene cabeceras, pero no hay prueba para ello; el código lanza NullPointerException porque `putIn` itera sobre un `mapping` nulo.
+8. La documentación indica que el mapa devuelto por `toMap()` no está conectado al registro, pero no se verifica que modificarlo no altere los valores del registro.

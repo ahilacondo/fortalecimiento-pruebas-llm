@@ -1,0 +1,11 @@
+No puedo confirmar la causa exacta con solo la primera línea del error. Según el número de línea, el error está en `CSVFormat.DEFAULT.withCommentMarker('#')`, en `testGetCommentReturnsCommentOfRecord`. Ese método existe en Commons CSV 1.0 y posteriores, así que es probable que el repositorio use una versión de `CSVFormat` que no lo tiene, o que la clase `CSVFormat` del proyecto sea diferente. Si cambio la llamada sin saberlo, podría cambiar lo que verifica la prueba.
+
+Para confirmarlo, ejecuta:
+
+```bash
+grep -n "withCommentMarker\|getComment\|isConsistent\|isMapped" src/main/java/org/apache/commons/csv/CSVFormat.java src/main/java/org/apache/commons/csv/CSVRecord.java
+```
+
+Y pásame el mensaje completo de javac, en particular la línea `symbol:` y la línea `location:`. Con eso puedo dar el archivo corregido sin adivinar.
+
+Mientras tanto, si `withCommentMarker` no existe en esta versión, la alternativa que no cambia el comportamiento verificado es usar el método que sí exista para fijar el marcador de comentario (por ejemplo, un setter o constructor de `CSVFormat` de esa versión). Eso requiere ver el código fuente del proyecto.

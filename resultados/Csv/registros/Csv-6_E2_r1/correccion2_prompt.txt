@@ -1,0 +1,225 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Csv/Csv_6_b/.test_suite/org/apache/commons/csv/CSVRecordLLMTest.java:79: error: method withHeader in class CSVFormat cannot be applied to given types;
+
+Archivo anterior:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVRecord} que usan únicamente la API pública
+ * (los registros se obtienen mediante {@link CSVFormat#parse(java.io.Reader)}).
+ */
+public class CSVRecordLLMTest {
+
+    private enum Column { FIRST, SECOND }
+
+    private static List<CSVRecord> parse(final CSVFormat format, final String content) throws IOException {
+        try (CSVParser parser = format.parse(new StringReader(content))) {
+            return parser.getRecords();
+        }
+    }
+
+    @Test
+    public void testGetCommentReturnsNullWhenNoCommentPresent() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b\n").get(0);
+        assertNull(record.getComment());
+    }
+
+    @Test
+    public void testGetCommentReturnsCommentLineForFollowingRecord() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final List<CSVRecord> records = parse(format, "#hello\na,b\n");
+        assertEquals(1, records.size());
+        assertEquals("hello", records.get(0).getComment());
+        assertEquals("a", records.get(0).get(0));
+    }
+
+    @Test
+    public void testGetRecordNumberStartsAtOneAndIncrements() throws IOException {
+        final List<CSVRecord> records = parse(CSVFormat.DEFAULT, "a\nb\nc\n");
+        assertEquals(3, records.size());
+        assertEquals(1L, records.get(0).getRecordNumber());
+        assertEquals(2L, records.get(1).getRecordNumber());
+        assertEquals(3L, records.get(2).getRecordNumber());
+    }
+
+    @Test
+    public void testGetByEnumUsesEnumNameAsHeader() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withHeader(Column.class);
+        final CSVRecord record = parse(format, "FIRST,SECOND\nx,y\n").get(0);
+        assertEquals("x", record.get(Column.FIRST));
+        assertEquals("y", record.get(Column.SECOND));
+    }
+
+    @Test
+    public void testGetByNameReturnsQuotedValueContainingDelimiter() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord record = parse(format, "a,b\n\"x,y\",z\n").get(0);
+        assertEquals("x,y", record.get("a"));
+        assertEquals("z", record.get("b"));
+    }
+
+    @Test
+    public void testMissingTrailingValueIsReportedAsInconsistent() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord record = parse(format, "a,b\n1\n").get(0);
+        assertEquals(1, record.size());
+        assertFalse(record.isConsistent());
+        assertTrue(record.isMapped("b"));
+        assertTrue(record.isSet("a"));
+        assertFalse(record.isSet("b"));
+        assertEquals("1", record.get("a"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGetByNameOfMissingTrailingValueThrows() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord record = parse(format, "a,b\n1\n").get(0);
+        record.get("b");
+    }
+
+    @Test
+    public void testConsistentRecordWhenValuesMatchHeader() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord record = parse(format, "a,b,c\n1,2,3\n").get(0);
+        assertTrue(record.isConsistent());
+        assertEquals(3, record.size());
+    }
+
+    @Test
+    public void testSizeReflectsNumberOfParsedValues() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b,c,d\n").get(0);
+        assertEquals(4, record.size());
+    }
+
+    @Test
+    public void testIteratorReturnsValuesInOrder() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "x,y,z\n").get(0);
+        final List<String> collected = new ArrayList<>();
+        for (final String value : record) {
+            collected.add(value);
+        }
+        assertEquals(Arrays.asList("x", "y", "z"), collected);
+    }
+
+    @Test
+    public void testIteratorHasNextReflectsRemainingValues() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "p,q\n").get(0);
+        final Iterator<String> it = record.iterator();
+        assertTrue(it.hasNext());
+        assertEquals("p", it.next());
+        assertTrue(it.hasNext());
+        assertEquals("q", it.next());
+        assertFalse(it.hasNext());
+    }
+
+    @Test
+    public void testToStringFormatsValuesAsArrayText() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b,c\n").get(0);
+        assertEquals("[a, b, c]", record.toString());
+    }
+
+    @Test
+    public void testToMapIsEmptyWithoutHeader() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b\n").get(0);
+        final Map<String, String> map = record.toMap();
+        assertNotNull(map);
+        assertTrue(map.isEmpty());
+    }
+
+    @Test
+    public void testToMapReturnsIndependentCopy() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord record = parse(format, "a,b\n1,2\n").get(0);
+        final Map<String, String> map = record.toMap();
+        map.put("a", "changed");
+        map.remove("b");
+        assertEquals("1", record.get("a"));
+        assertEquals("2", record.get("b"));
+        assertEquals(2, record.toMap().size());
+    }
+
+    @Test
+    public void testIsMappedAndIsSetFalseWithoutHeader() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "a,b\n").get(0);
+        assertFalse(record.isMapped("a"));
+        assertFalse(record.isSet("a"));
+    }
+
+    @Test
+    public void testNullStringConvertsValueToNullOnNameAccess() throws IOException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader().withNullString("NULL");
+        final CSVRecord record = parse(format, "a,b\nNULL,val\n").get(0);
+        assertNull(record.get("a"));
+        assertEquals("val", record.get("b"));
+    }
+
+    @Test
+    public void testGetByIndexReturnsEachValue() throws IOException {
+        final CSVRecord record = parse(CSVFormat.DEFAULT, "alpha,beta\n").get(0);
+        assertEquals("alpha", record.get(0));
+        assertEquals("beta", record.get(1));
+    }
+
+    @Test
+    public void testSerializationRoundTripPreservesState() throws IOException, ClassNotFoundException {
+        final CSVFormat format = CSVFormat.DEFAULT.withFirstRecordAsHeader();
+        final CSVRecord original = parse(format, "a,b\n1,2\n").get(0);
+
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+
+        final CSVRecord copy;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            copy = (CSVRecord) in.readObject();
+        }
+
+        assertEquals(original.toString(), copy.toString());
+        assertEquals(original.getRecordNumber(), copy.getRecordNumber());
+        assertEquals("1", copy.get("a"));
+        assertEquals("2", copy.get("b"));
+        assertEquals(original.toMap(), copy.toMap());
+    }
+}
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.csv` y la clase pública `CSVRecordLLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.
