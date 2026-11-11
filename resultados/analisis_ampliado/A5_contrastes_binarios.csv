@@ -1,0 +1,7 @@
+contraste,solo_primera,solo_segunda,p,p_holm
+E1 frente a E2,2,1,1.0,1.0
+E1 frente a E3,1,1,1.0,1.0
+E1 frente a E4,2,4,0.6875,1.0
+E2 frente a E3,2,3,1.0,1.0
+E2 frente a E4,0,3,0.25,1.0
+E3 frente a E4,3,5,0.7266,1.0
