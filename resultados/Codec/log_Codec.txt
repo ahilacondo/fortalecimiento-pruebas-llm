@@ -1,0 +1,43 @@
+Casos: 10; estrategias: ['E1', 'E2', 'E3', 'E4']; repeticiones: 1; corridas: 40; modelo: claude-haiku-5-5
+AVISO: no se puede enviar 'temperature'; se continúa sin ese parámetro (temperatura por defecto del modelo). Anótelo en el informe.
+[1/40] Codec-9 E1 r1: detecta=0 estables=43/43 llamadas=2 sin_diferencia
+[2/40] Codec-9 E2 r1: detecta=0 estables=26/26 llamadas=1 sin_diferencia
+[3/40] Codec-9 E3 r1: detecta=0 estables=24/24 llamadas=2 sin_diferencia
+[4/40] Codec-9 E4 r1: detecta=0 estables=4/4 llamadas=3 sin_diferencia
+[5/40] Codec-6 E1 r1: detecta=0 estables=22/22 llamadas=1 sin_diferencia
+[6/40] Codec-6 E2 r1: detecta=0 estables=25/25 llamadas=1 sin_diferencia
+[7/40] Codec-6 E3 r1: detecta=0 estables=6/6 llamadas=3 sin_diferencia
+[8/40] Codec-6 E4 r1: detecta=0 estables=15/15 llamadas=2 sin_diferencia
+[9/40] Codec-4 E1 r1: detecta=1 estables=35/35 llamadas=2 ok
+[10/40] Codec-4 E2 r1: detecta=0 estables=21/21 llamadas=2 sin_diferencia
+[11/40] Codec-4 E3 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[12/40] Codec-4 E4 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[13/40] Codec-18 E1 r1: detecta=1 estables=40/40 llamadas=1 ok
+[14/40] Codec-18 E2 r1: detecta=1 estables=45/45 llamadas=1 ok
+[15/40] Codec-18 E3 r1: detecta=1 estables=34/34 llamadas=2 ok
+[16/40] Codec-18 E4 r1: detecta=1 estables=29/29 llamadas=2 ok
+[17/40] Codec-15 E1 r1: detecta=0 estables=32/32 llamadas=1 sin_diferencia
+[18/40] Codec-15 E2 r1: detecta=0 estables=25/25 llamadas=1 sin_diferencia
+[19/40] Codec-15 E3 r1: detecta=0 estables=15/15 llamadas=2 sin_diferencia
+[20/40] Codec-15 E4 r1: detecta=0 estables=15/15 llamadas=4 sin_diferencia
+[21/40] Codec-3 E1 r1: detecta=0 estables=29/29 llamadas=1 sin_diferencia
+[22/40] Codec-3 E2 r1: detecta=0 estables=0/0 llamadas=0 limite_o_error
+[23/40] Codec-3 E3 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[24/40] Codec-3 E4 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[25/40] Codec-2 E1 r1: detecta=0 estables=32/32 llamadas=2 sin_diferencia
+[26/40] Codec-2 E2 r1: detecta=0 estables=27/27 llamadas=2 sin_diferencia
+[27/40] Codec-2 E3 r1: detecta=0 estables=6/6 llamadas=3 sin_diferencia
+[28/40] Codec-2 E4 r1: detecta=0 estables=17/17 llamadas=2 sin_diferencia
+[29/40] Codec-16 E1 r1: detecta=1 estables=38/38 llamadas=1 ok
+[30/40] Codec-16 E2 r1: detecta=1 estables=55/55 llamadas=2 ok
+[31/40] Codec-16 E3 r1: detecta=0 estables=19/19 llamadas=3 sin_diferencia
+[32/40] Codec-16 E4 r1: detecta=1 estables=28/28 llamadas=3 ok
+[33/40] Codec-17 E1 r1: detecta=0 estables=47/47 llamadas=1 sin_diferencia
+[34/40] Codec-17 E2 r1: detecta=0 estables=61/61 llamadas=1 sin_diferencia
+[35/40] Codec-17 E3 r1: detecta=0 estables=45/45 llamadas=2 sin_diferencia
+[36/40] Codec-17 E4 r1: detecta=1 estables=34/34 llamadas=2 ok
+[37/40] Codec-10 E1 r1: detecta=0 estables=22/22 llamadas=1 sin_diferencia
+[38/40] Codec-10 E2 r1: detecta=0 estables=22/22 llamadas=1 sin_diferencia
+[39/40] Codec-10 E3 r1: detecta=0 estables=25/25 llamadas=3 sin_diferencia
+[40/40] Codec-10 E4 r1: detecta=0 estables=24/24 llamadas=2 sin_diferencia
+Resultados en resultados/Codec/ejecuciones_Codec.csv
