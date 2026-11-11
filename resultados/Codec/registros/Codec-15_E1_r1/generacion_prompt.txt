@@ -1,0 +1,692 @@
+TAREA: Escribe pruebas JUnit nuevas para la clase org.apache.commons.codec.language.Soundex.
+  - No modifiques las pruebas existentes.
+  - Usa solo la API pública de la clase.
+  - Cada prueba verifica un comportamiento con aserciones explícitas.
+  - Devuelve un único archivo Java compilable, dentro de un bloque ```java.
+  - El archivo declara el paquete `org.apache.commons.codec.language` y la clase pública `SoundexLLMTest`.
+  - Usa JUnit 4 (org.junit.Test y org.junit.Assert) y solo clases del proyecto o de Java 11.
+
+CONTEXTO COMÚN
+Código de la clase `org.apache.commons.codec.language.Soundex`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.apache.commons.codec.StringEncoder;
+
+/**
+ * Encodes a string into a Soundex value. Soundex is an encoding used to relate similar names, but can also be used as a
+ * general purpose scheme to find word with similar phonemes.
+ *
+ * This class is thread-safe.
+ * Although not strictly immutable, the {@link #maxLength} field is not actually used.
+ *
+ * @version $Id$
+ */
+public class Soundex implements StringEncoder {
+
+    /**
+     * This is a default mapping of the 26 letters used in US English. A value of <code>0</code> for a letter position
+     * means do not encode.
+     * <p>
+     * (This constant is provided as both an implementation convenience and to allow Javadoc to pick
+     * up the value for the constant values page.)
+     * </p>
+     *
+     * @see #US_ENGLISH_MAPPING
+     */
+    public static final String US_ENGLISH_MAPPING_STRING = "01230120022455012623010202";
+
+    /**
+     * This is a default mapping of the 26 letters used in US English. A value of <code>0</code> for a letter position
+     * means do not encode.
+     *
+     * @see Soundex#Soundex(char[])
+     */
+    private static final char[] US_ENGLISH_MAPPING = US_ENGLISH_MAPPING_STRING.toCharArray();
+
+    /**
+     * An instance of Soundex using the US_ENGLISH_MAPPING mapping.
+     *
+     * @see #US_ENGLISH_MAPPING
+     */
+    public static final Soundex US_ENGLISH = new Soundex();
+
+    /**
+     * The maximum length of a Soundex code - Soundex codes are only four characters by definition.
+     *
+     * @deprecated This feature is not needed since the encoding size must be constant. Will be removed in 2.0.
+     */
+    @Deprecated
+    private int maxLength = 4;
+
+    /**
+     * Every letter of the alphabet is "mapped" to a numerical value. This char array holds the values to which each
+     * letter is mapped. This implementation contains a default map for US_ENGLISH
+     */
+    private final char[] soundexMapping;
+
+    /**
+     * Creates an instance using US_ENGLISH_MAPPING
+     *
+     * @see Soundex#Soundex(char[])
+     * @see Soundex#US_ENGLISH_MAPPING
+     */
+    public Soundex() {
+        this.soundexMapping = US_ENGLISH_MAPPING;
+    }
+
+    /**
+     * Creates a soundex instance using the given mapping. This constructor can be used to provide an internationalized
+     * mapping for a non-Western character set.
+     *
+     * Every letter of the alphabet is "mapped" to a numerical value. This char array holds the values to which each
+     * letter is mapped. This implementation contains a default map for US_ENGLISH
+     *
+     * @param mapping
+     *                  Mapping array to use when finding the corresponding code for a given character
+     */
+    public Soundex(final char[] mapping) {
+        this.soundexMapping = new char[mapping.length];
+        System.arraycopy(mapping, 0, this.soundexMapping, 0, mapping.length);
+    }
+
+    /**
+     * Creates a refined soundex instance using a custom mapping. This constructor can be used to customize the mapping,
+     * and/or possibly provide an internationalized mapping for a non-Western character set.
+     *
+     * @param mapping
+     *            Mapping string to use when finding the corresponding code for a given character
+     * @since 1.4
+     */
+    public Soundex(final String mapping) {
+        this.soundexMapping = mapping.toCharArray();
+    }
+
+    /**
+     * Encodes the Strings and returns the number of characters in the two encoded Strings that are the same. This
+     * return value ranges from 0 through 4: 0 indicates little or no similarity, and 4 indicates strong similarity or
+     * identical values.
+     *
+     * @param s1
+     *                  A String that will be encoded and compared.
+     * @param s2
+     *                  A String that will be encoded and compared.
+     * @return The number of characters in the two encoded Strings that are the same from 0 to 4.
+     *
+     * @see SoundexUtils#difference(StringEncoder,String,String)
+     * @see <a href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/tsqlref/ts_de-dz_8co5.asp"> MS
+     *          T-SQL DIFFERENCE </a>
+     *
+     * @throws EncoderException
+     *                  if an error occurs encoding one of the strings
+     * @since 1.3
+     */
+    public int difference(final String s1, final String s2) throws EncoderException {
+        return SoundexUtils.difference(this, s1, s2);
+    }
+
+    /**
+     * Encodes an Object using the soundex algorithm. This method is provided in order to satisfy the requirements of
+     * the Encoder interface, and will throw an EncoderException if the supplied object is not of type java.lang.String.
+     *
+     * @param obj
+     *                  Object to encode
+     * @return An object (or type java.lang.String) containing the soundex code which corresponds to the String
+     *             supplied.
+     * @throws EncoderException
+     *                  if the parameter supplied is not of type java.lang.String
+     * @throws IllegalArgumentException
+     *                  if a character is not mapped
+     */
+    @Override
+    public Object encode(final Object obj) throws EncoderException {
+        if (!(obj instanceof String)) {
+            throw new EncoderException("Parameter supplied to Soundex encode is not of type java.lang.String");
+        }
+        return soundex((String) obj);
+    }
+
+    /**
+     * Encodes a String using the soundex algorithm.
+     *
+     * @param str
+     *                  A String object to encode
+     * @return A Soundex code corresponding to the String supplied
+     * @throws IllegalArgumentException
+     *                  if a character is not mapped
+     */
+    @Override
+    public String encode(final String str) {
+        return soundex(str);
+    }
+
+    /**
+     * Used internally by the Soundex algorithm.
+     *
+     * Consonants from the same code group separated by W or H are treated as one.
+     *
+     * @param str
+     *                  the cleaned working string to encode (in upper case).
+     * @param index
+     *                  the character position to encode
+     * @return Mapping code for a particular character
+     * @throws IllegalArgumentException
+     *                  if the character is not mapped
+     */
+    private char getMappingCode(final String str, final int index) {
+        // map() throws IllegalArgumentException
+        final char mappedChar = this.map(str.charAt(index));
+        // HW rule check
+        if (index > 1 && mappedChar != '0') {
+            final char hwChar = str.charAt(index - 1);
+            if ('H' == hwChar || 'W' == hwChar) {
+                final char preHWChar = str.charAt(index - 2);
+                final char firstCode = this.map(preHWChar);
+                if (firstCode == mappedChar || 'H' == preHWChar || 'W' == preHWChar) {
+                    return 0;
+                }
+            }
+        }
+        return mappedChar;
+    }
+
+    /**
+     * Returns the maxLength. Standard Soundex
+     *
+     * @deprecated This feature is not needed since the encoding size must be constant. Will be removed in 2.0.
+     * @return int
+     */
+    @Deprecated
+    public int getMaxLength() {
+        return this.maxLength;
+    }
+
+    /**
+     * Returns the soundex mapping.
+     *
+     * @return soundexMapping.
+     */
+    private char[] getSoundexMapping() {
+        return this.soundexMapping;
+    }
+
+    /**
+     * Maps the given upper-case character to its Soundex code.
+     *
+     * @param ch
+     *                  An upper-case character.
+     * @return A Soundex code.
+     * @throws IllegalArgumentException
+     *                  Thrown if <code>ch</code> is not mapped.
+     */
+    private char map(final char ch) {
+        final int index = ch - 'A';
+        if (index < 0 || index >= this.getSoundexMapping().length) {
+            throw new IllegalArgumentException("The character is not mapped: " + ch);
+        }
+        return this.getSoundexMapping()[index];
+    }
+
+    /**
+     * Sets the maxLength.
+     *
+     * @deprecated This feature is not needed since the encoding size must be constant. Will be removed in 2.0.
+     * @param maxLength
+     *                  The maxLength to set
+     */
+    @Deprecated
+    public void setMaxLength(final int maxLength) {
+        this.maxLength = maxLength;
+    }
+
+    /**
+     * Retrieves the Soundex code for a given String object.
+     *
+     * @param str
+     *                  String to encode using the Soundex algorithm
+     * @return A soundex code for the String supplied
+     * @throws IllegalArgumentException
+     *                  if a character is not mapped
+     */
+    public String soundex(String str) {
+        if (str == null) {
+            return null;
+        }
+        str = SoundexUtils.clean(str);
+        if (str.length() == 0) {
+            return str;
+        }
+        final char out[] = {'0', '0', '0', '0'};
+        char last, mapped;
+        int incount = 1, count = 1;
+        out[0] = str.charAt(0);
+        // getMappingCode() throws IllegalArgumentException
+        last = getMappingCode(str, 0);
+        while (incount < str.length() && count < out.length) {
+            mapped = getMappingCode(str, incount++);
+            if (mapped != 0) {
+                if (mapped != '0' && mapped != last) {
+                    out[count++] = mapped;
+                }
+                last = mapped;
+            }
+        }
+        return new String(out);
+    }
+
+}
+```
+
+Clase de prueba existente `org.apache.commons.codec.language.SoundexTest`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// (FYI: Formatted and sorted with Eclipse)
+
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.apache.commons.codec.StringEncoderAbstractTest;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Tests {@link Soundex}.
+ *
+ * <p>Keep this file in UTF-8 encoding for proper Javadoc processing.</p>
+ *
+ * @version $Id$
+ */
+public class SoundexTest extends StringEncoderAbstractTest<Soundex> {
+
+    @Override
+    protected Soundex createStringEncoder() {
+        return new Soundex();
+    }
+
+    @Test
+    public void testB650() throws EncoderException {
+        this.checkEncodingVariations("B650", new String[]{
+            "BARHAM",
+            "BARONE",
+            "BARRON",
+            "BERNA",
+            "BIRNEY",
+            "BIRNIE",
+            "BOOROM",
+            "BOREN",
+            "BORN",
+            "BOURN",
+            "BOURNE",
+            "BOWRON",
+            "BRAIN",
+            "BRAME",
+            "BRANN",
+            "BRAUN",
+            "BREEN",
+            "BRIEN",
+            "BRIM",
+            "BRIMM",
+            "BRINN",
+            "BRION",
+            "BROOM",
+            "BROOME",
+            "BROWN",
+            "BROWNE",
+            "BRUEN",
+            "BRUHN",
+            "BRUIN",
+            "BRUMM",
+            "BRUN",
+            "BRUNO",
+            "BRYAN",
+            "BURIAN",
+            "BURN",
+            "BURNEY",
+            "BYRAM",
+            "BYRNE",
+            "BYRON",
+            "BYRUM"});
+    }
+
+    @Test
+    public void testBadCharacters() {
+        Assert.assertEquals("H452", this.getStringEncoder().encode("HOL>MES"));
+
+    }
+
+    @Test
+    public void testDifference() throws EncoderException {
+        // Edge cases
+        Assert.assertEquals(0, this.getStringEncoder().difference(null, null));
+        Assert.assertEquals(0, this.getStringEncoder().difference("", ""));
+        Assert.assertEquals(0, this.getStringEncoder().difference(" ", " "));
+        // Normal cases
+        Assert.assertEquals(4, this.getStringEncoder().difference("Smith", "Smythe"));
+        Assert.assertEquals(2, this.getStringEncoder().difference("Ann", "Andrew"));
+        Assert.assertEquals(1, this.getStringEncoder().difference("Margaret", "Andrew"));
+        Assert.assertEquals(0, this.getStringEncoder().difference("Janet", "Margaret"));
+        // Examples from http://msdn.microsoft.com/library/default.asp?url=/library/en-us/tsqlref/ts_de-dz_8co5.asp
+        Assert.assertEquals(4, this.getStringEncoder().difference("Green", "Greene"));
+        Assert.assertEquals(0, this.getStringEncoder().difference("Blotchet-Halls", "Greene"));
+        // Examples from http://msdn.microsoft.com/library/default.asp?url=/library/en-us/tsqlref/ts_setu-sus_3o6w.asp
+        Assert.assertEquals(4, this.getStringEncoder().difference("Smith", "Smythe"));
+        Assert.assertEquals(4, this.getStringEncoder().difference("Smithers", "Smythers"));
+        Assert.assertEquals(2, this.getStringEncoder().difference("Anothers", "Brothers"));
+    }
+
+    @Test
+    public void testEncodeBasic() {
+        Assert.assertEquals("T235", this.getStringEncoder().encode("testing"));
+        Assert.assertEquals("T000", this.getStringEncoder().encode("The"));
+        Assert.assertEquals("Q200", this.getStringEncoder().encode("quick"));
+        Assert.assertEquals("B650", this.getStringEncoder().encode("brown"));
+        Assert.assertEquals("F200", this.getStringEncoder().encode("fox"));
+        Assert.assertEquals("J513", this.getStringEncoder().encode("jumped"));
+        Assert.assertEquals("O160", this.getStringEncoder().encode("over"));
+        Assert.assertEquals("T000", this.getStringEncoder().encode("the"));
+        Assert.assertEquals("L200", this.getStringEncoder().encode("lazy"));
+        Assert.assertEquals("D200", this.getStringEncoder().encode("dogs"));
+    }
+
+    /**
+     * Examples from http://www.bradandkathy.com/genealogy/overviewofsoundex.html
+     */
+    @Test
+    public void testEncodeBatch2() {
+        Assert.assertEquals("A462", this.getStringEncoder().encode("Allricht"));
+        Assert.assertEquals("E166", this.getStringEncoder().encode("Eberhard"));
+        Assert.assertEquals("E521", this.getStringEncoder().encode("Engebrethson"));
+        Assert.assertEquals("H512", this.getStringEncoder().encode("Heimbach"));
+        Assert.assertEquals("H524", this.getStringEncoder().encode("Hanselmann"));
+        Assert.assertEquals("H431", this.getStringEncoder().encode("Hildebrand"));
+        Assert.assertEquals("K152", this.getStringEncoder().encode("Kavanagh"));
+        Assert.assertEquals("L530", this.getStringEncoder().encode("Lind"));
+        Assert.assertEquals("L222", this.getStringEncoder().encode("Lukaschowsky"));
+        Assert.assertEquals("M235", this.getStringEncoder().encode("McDonnell"));
+        Assert.assertEquals("M200", this.getStringEncoder().encode("McGee"));
+        Assert.assertEquals("O155", this.getStringEncoder().encode("Opnian"));
+        Assert.assertEquals("O155", this.getStringEncoder().encode("Oppenheimer"));
+        Assert.assertEquals("R355", this.getStringEncoder().encode("Riedemanas"));
+        Assert.assertEquals("Z300", this.getStringEncoder().encode("Zita"));
+        Assert.assertEquals("Z325", this.getStringEncoder().encode("Zitzmeinn"));
+    }
+
+    /**
+     * Examples from http://www.archives.gov/research_room/genealogy/census/soundex.html
+     */
+    @Test
+    public void testEncodeBatch3() {
+        Assert.assertEquals("W252", this.getStringEncoder().encode("Washington"));
+        Assert.assertEquals("L000", this.getStringEncoder().encode("Lee"));
+        Assert.assertEquals("G362", this.getStringEncoder().encode("Gutierrez"));
+        Assert.assertEquals("P236", this.getStringEncoder().encode("Pfister"));
+        Assert.assertEquals("J250", this.getStringEncoder().encode("Jackson"));
+        Assert.assertEquals("T522", this.getStringEncoder().encode("Tymczak"));
+        // For VanDeusen: D-250 (D, 2 for the S, 5 for the N, 0 added) is also
+        // possible.
+        Assert.assertEquals("V532", this.getStringEncoder().encode("VanDeusen"));
+    }
+
+    /**
+     * Examples from: http://www.myatt.demon.co.uk/sxalg.htm
+     */
+    @Test
+    public void testEncodeBatch4() {
+        Assert.assertEquals("H452", this.getStringEncoder().encode("HOLMES"));
+        Assert.assertEquals("A355", this.getStringEncoder().encode("ADOMOMI"));
+        Assert.assertEquals("V536", this.getStringEncoder().encode("VONDERLEHR"));
+        Assert.assertEquals("B400", this.getStringEncoder().encode("BALL"));
+        Assert.assertEquals("S000", this.getStringEncoder().encode("SHAW"));
+        Assert.assertEquals("J250", this.getStringEncoder().encode("JACKSON"));
+        Assert.assertEquals("S545", this.getStringEncoder().encode("SCANLON"));
+        Assert.assertEquals("S532", this.getStringEncoder().encode("SAINTJOHN"));
+
+    }
+
+    @Test
+    public void testEncodeIgnoreApostrophes() throws EncoderException {
+        this.checkEncodingVariations("O165", new String[]{
+            "OBrien",
+            "'OBrien",
+            "O'Brien",
+            "OB'rien",
+            "OBr'ien",
+            "OBri'en",
+            "OBrie'n",
+            "OBrien'"});
+    }
+
+    /**
+     * Test data from http://www.myatt.demon.co.uk/sxalg.htm
+     *
+     * @throws EncoderException
+     */
+    @Test
+    public void testEncodeIgnoreHyphens() throws EncoderException {
+        this.checkEncodingVariations("K525", new String[]{
+            "KINGSMITH",
+            "-KINGSMITH",
+            "K-INGSMITH",
+            "KI-NGSMITH",
+            "KIN-GSMITH",
+            "KING-SMITH",
+            "KINGS-MITH",
+            "KINGSM-ITH",
+            "KINGSMI-TH",
+            "KINGSMIT-H",
+            "KINGSMITH-"});
+    }
+
+    @Test
+    public void testEncodeIgnoreTrimmable() {
+        Assert.assertEquals("W252", this.getStringEncoder().encode(" \t\n\r Washington \t\n\r "));
+    }
+
+    /**
+     * Consonants from the same code group separated by W or H are treated as one.
+     *
+     * Test data from http://www.myatt.demon.co.uk/sxalg.htm
+     */
+    @Test
+    public void testHWRuleEx2() {
+        Assert.assertEquals("B312", this.getStringEncoder().encode("BOOTHDAVIS"));
+        Assert.assertEquals("B312", this.getStringEncoder().encode("BOOTH-DAVIS"));
+    }
+
+    /**
+     * Consonants from the same code group separated by W or H are treated as one.
+     *
+     * @throws EncoderException
+     */
+    @Test
+    public void testHWRuleEx3() throws EncoderException {
+        Assert.assertEquals("S460", this.getStringEncoder().encode("Sgler"));
+        Assert.assertEquals("S460", this.getStringEncoder().encode("Swhgler"));
+        // Also S460:
+        this.checkEncodingVariations("S460", new String[]{
+            "SAILOR",
+            "SALYER",
+            "SAYLOR",
+            "SCHALLER",
+            "SCHELLER",
+            "SCHILLER",
+            "SCHOOLER",
+            "SCHULER",
+            "SCHUYLER",
+            "SEILER",
+            "SEYLER",
+            "SHOLAR",
+            "SHULER",
+            "SILAR",
+            "SILER",
+            "SILLER"});
+    }
+
+    /**
+     * Examples for MS SQLServer from
+     * http://msdn.microsoft.com/library/default.asp?url=/library/en-us/tsqlref/ts_setu-sus_3o6w.asp
+     */
+    @Test
+    public void testMsSqlServer1() {
+        Assert.assertEquals("S530", this.getStringEncoder().encode("Smith"));
+        Assert.assertEquals("S530", this.getStringEncoder().encode("Smythe"));
+    }
+
+    /**
+     * Examples for MS SQLServer from
+     * http://support.microsoft.com/default.aspx?scid=http://support.microsoft.com:80/support
+     * /kb/articles/Q100/3/65.asp&NoWebContent=1
+     *
+     * @throws EncoderException
+     */
+    @Test
+    public void testMsSqlServer2() throws EncoderException {
+        this.checkEncodingVariations("E625", new String[]{"Erickson", "Erickson", "Erikson", "Ericson", "Ericksen", "Ericsen"});
+    }
+
+    /**
+     * Examples for MS SQLServer from http://databases.about.com/library/weekly/aa042901a.htm
+     */
+    @Test
+    public void testMsSqlServer3() {
+        Assert.assertEquals("A500", this.getStringEncoder().encode("Ann"));
+        Assert.assertEquals("A536", this.getStringEncoder().encode("Andrew"));
+        Assert.assertEquals("J530", this.getStringEncoder().encode("Janet"));
+        Assert.assertEquals("M626", this.getStringEncoder().encode("Margaret"));
+        Assert.assertEquals("S315", this.getStringEncoder().encode("Steven"));
+        Assert.assertEquals("M240", this.getStringEncoder().encode("Michael"));
+        Assert.assertEquals("R163", this.getStringEncoder().encode("Robert"));
+        Assert.assertEquals("L600", this.getStringEncoder().encode("Laura"));
+        Assert.assertEquals("A500", this.getStringEncoder().encode("Anne"));
+    }
+
+    /**
+     * https://issues.apache.org/jira/browse/CODEC-54 https://issues.apache.org/jira/browse/CODEC-56
+     */
+    @Test
+    public void testNewInstance() {
+        Assert.assertEquals("W452", new Soundex().soundex("Williams"));
+    }
+
+    @Test
+    public void testNewInstance2() {
+        Assert.assertEquals("W452", new Soundex(Soundex.US_ENGLISH_MAPPING_STRING.toCharArray()).soundex("Williams"));
+    }
+
+    @Test
+    public void testNewInstance3() {
+        Assert.assertEquals("W452", new Soundex(Soundex.US_ENGLISH_MAPPING_STRING).soundex("Williams"));
+    }
+
+    @Test
+    public void testSoundexUtilsConstructable() {
+        new SoundexUtils();
+    }
+
+    @Test
+    public void testSoundexUtilsNullBehaviour() {
+        Assert.assertEquals(null, SoundexUtils.clean(null));
+        Assert.assertEquals("", SoundexUtils.clean(""));
+        Assert.assertEquals(0, SoundexUtils.differenceEncoded(null, ""));
+        Assert.assertEquals(0, SoundexUtils.differenceEncoded("", null));
+    }
+
+    /**
+     * https://issues.apache.org/jira/browse/CODEC-54 https://issues.apache.org/jira/browse/CODEC-56
+     */
+    @Test
+    public void testUsEnglishStatic() {
+        Assert.assertEquals("W452", Soundex.US_ENGLISH.soundex("Williams"));
+    }
+
+    /**
+     * Fancy characters are not mapped by the default US mapping.
+     *
+     * http://issues.apache.org/bugzilla/show_bug.cgi?id=29080
+     */
+    @Test
+    public void testUsMappingEWithAcute() {
+        Assert.assertEquals("E000", this.getStringEncoder().encode("e"));
+        if (Character.isLetter('\u00e9')) { // e-acute
+            try {
+                //         uppercase E-acute
+                Assert.assertEquals("\u00c9000", this.getStringEncoder().encode("\u00e9"));
+                Assert.fail("Expected IllegalArgumentException not thrown");
+            } catch (final IllegalArgumentException e) {
+                // expected
+            }
+        } else {
+            Assert.assertEquals("", this.getStringEncoder().encode("\u00e9"));
+        }
+    }
+
+    /**
+     * Fancy characters are not mapped by the default US mapping.
+     *
+     * http://issues.apache.org/bugzilla/show_bug.cgi?id=29080
+     */
+    @Test
+    public void testUsMappingOWithDiaeresis() {
+        Assert.assertEquals("O000", this.getStringEncoder().encode("o"));
+        if (Character.isLetter('\u00f6')) { // o-umlaut
+            try {
+                //         uppercase O-umlaut
+                Assert.assertEquals("\u00d6000", this.getStringEncoder().encode("\u00f6"));
+                Assert.fail("Expected IllegalArgumentException not thrown");
+            } catch (final IllegalArgumentException e) {
+                // expected
+            }
+        } else {
+            Assert.assertEquals("", this.getStringEncoder().encode("\u00f6"));
+        }
+    }
+    
+    /**
+     * Tests example from http://en.wikipedia.org/wiki/Soundex#American_Soundex as of 2015-03-22.
+     */
+    @Test
+    public void testWikipediaAmericanSoundex() {
+        Assert.assertEquals("R163", this.getStringEncoder().encode("Robert"));        
+        Assert.assertEquals("R163", this.getStringEncoder().encode("Rupert"));        
+        Assert.assertEquals("A261", this.getStringEncoder().encode("Ashcraft"));        
+        Assert.assertEquals("A261", this.getStringEncoder().encode("Ashcroft"));        
+        Assert.assertEquals("T522", this.getStringEncoder().encode("Tymczak"));        
+        Assert.assertEquals("P236", this.getStringEncoder().encode("Pfister"));        
+    }
+}
+```
+

@@ -1,0 +1,8 @@
+1. Los constructores `Soundex(char[])` y `Soundex(String)` deben usar el mapeo proporcionado para generar los códigos; todas las pruebas usan solo el mapeo por defecto.
+2. Un valor `0` en la posición de una letra del mapeo significa "no codificar"; ninguna prueba usa un mapeo personalizado con ceros.
+3. Una letra cuyo índice queda fuera de la longitud del mapeo personalizado debe lanzar `IllegalArgumentException`; solo se prueban letras acentuadas con el mapeo por defecto.
+4. `encode(Object)` debe devolver el mismo código que `encode(String)` cuando recibe un `String`; el método sobrecargado no se prueba en absoluto.
+5. `encode(Object)` debe lanzar `EncoderException` si el parámetro no es un `String`; este caso no está cubierto.
+6. La clase debe ser thread-safe, según su Javadoc; no hay pruebas de uso concurrente de instancias ni de `US_ENGLISH`.
+7. Los métodos `getMaxLength`/`setMaxLength` están marcados como obsoletos y el campo `maxLength` no debe afectar a la codificación; ninguna prueba verifica que cambiarlo no altere los resultados.
+8. El método `difference` debe devolver valores entre 0 y 4, y el constructor `Soundex(String)` está marcado como `@since 1.4`; el rango completo no se verifica con mapeos alternativos.

@@ -1,0 +1,180 @@
+```java
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Soundex} que cubren comportamientos no verificados
+ * por {@link SoundexTest}.
+ */
+public class SoundexLLMTest {
+
+    // ---------------------------------------------------------------------
+    // 1. Comportamiento con null
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testSoundexMethodWithNullReturnsNull() {
+        Assert.assertNull(new Soundex().soundex(null));
+    }
+
+    @Test
+    public void testEncodeStringWithNullReturnsNull() {
+        Assert.assertNull(new Soundex().encode((String) null));
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. encode(Object) con argumentos que no son String
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEncodeObjectWithIntegerThrowsEncoderException() {
+        try {
+            new Soundex().encode((Object) Integer.valueOf(1234));
+            Assert.fail("Se esperaba EncoderException para un Integer");
+        } catch (final EncoderException e) {
+            Assert.assertNotNull("El mensaje de la excepción no debe ser null", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithNullThrowsEncoderException() {
+        try {
+            new Soundex().encode((Object) null);
+            Assert.fail("Se esperaba EncoderException para null como Object");
+        } catch (final EncoderException e) {
+            Assert.assertNotNull("El mensaje de la excepción no debe ser null", e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Equivalencia entre encode(Object) y encode(String)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEncodeObjectMatchesEncodeStringForStringInputs() throws EncoderException {
+        final Soundex soundex = new Soundex();
+        final String[] inputs = {"Robert", "Washington", "Ashcraft", "Tymczak", "", "   "};
+        for (final String input : inputs) {
+            final Object encodedAsObject = soundex.encode((Object) input);
+            Assert.assertTrue("El resultado de encode(Object) debe ser String para: '" + input + "'",
+                    encodedAsObject instanceof String);
+            Assert.assertEquals("encode(Object) y encode(String) difieren para: '" + input + "'",
+                    soundex.encode(input), encodedAsObject);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. Cadena vacía
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEncodeEmptyStringReturnsEmptyString() {
+        Assert.assertEquals("", new Soundex().encode(""));
+    }
+
+    @Test
+    public void testSoundexEmptyStringReturnsEmptyString() {
+        Assert.assertEquals("", new Soundex().soundex(""));
+    }
+
+    @Test
+    public void testEncodeEmptyStringIsNotDefaultZeroCode() {
+        final String result = new Soundex().encode("");
+        Assert.assertNotEquals("0000", result);
+        Assert.assertEquals(0, result.length());
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. Constructor Soundex(char[]) copia el mapeo
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testCharArrayConstructorCopiesMapping() {
+        final char[] mapping = Soundex.US_ENGLISH_MAPPING_STRING.toCharArray();
+        final Soundex soundex = new Soundex(mapping);
+
+        // 'R' (índice 17) se codifica como '6' por defecto: "BAR" -> "B600"
+        Assert.assertEquals("B600", soundex.encode("BAR"));
+
+        // Modificar el array original no debe afectar al codificador ya creado
+        mapping[17] = '9';
+        Assert.assertEquals("B600", soundex.encode("BAR"));
+
+        // Un nuevo codificador sí usa el array modificado
+        Assert.assertEquals("B900", new Soundex(mapping).encode("BAR"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. Constructor Soundex(String) con mapeo personalizado
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testStringConstructorUsesCustomMapping() {
+        final Soundex identity = new Soundex("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        Assert.assertEquals("BAR0", identity.encode("BAR"));
+        Assert.assertNotEquals(Soundex.US_ENGLISH.encode("BAR"), identity.encode("BAR"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. Mapeo personalizado más corto de 26 caracteres
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testShortMappingEncodesLettersWithinRange() {
+        final Soundex soundex = new Soundex("0123");
+        // A->0, B->1, D->3
+        Assert.assertEquals("B300", soundex.encode("BAD"));
+        Assert.assertEquals("A000", soundex.encode("A"));
+    }
+
+    @Test
+    public void testShortMappingThrowsForLetterOutOfRange() {
+        final Soundex soundex = new Soundex("0123");
+        try {
+            soundex.encode("BAR"); // 'R' está fuera del rango 'A'..'D'
+            Assert.fail("Se esperaba IllegalArgumentException para 'R' con mapeo de 4 caracteres");
+        } catch (final IllegalArgumentException e) {
+            Assert.assertNotNull("El mensaje de la excepción no debe ser null", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testShortMappingThrowsForSingleUnmappedLetter() {
+        final Soundex soundex = new Soundex("0123");
+        try {
+            soundex.encode("Z");
+            Assert.fail("Se esperaba IllegalArgumentException para 'Z' con mapeo de 4 caracteres");
+        } catch (final IllegalArgumentException e) {
+            Assert.assertNotNull("El mensaje de la excepción no debe ser null", e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 8. setMaxLength / getMaxLength (deprecados) sin efecto en soundex
+    // ---------------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testGetMaxLengthDefaultIsFour() {
+        Assert.assertEquals(4, new Soundex().getMaxLength());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSetMaxLengthDoesNotChangeSoundexOutput() {
+        final Soundex soundex = new Soundex();
+
+        soundex.setMaxLength(10);
+        Assert.assertEquals(10, soundex.getMaxLength());
+        Assert.assertEquals("R163", soundex.soundex("Robert"));
+
+        soundex.setMaxLength(2);
+        Assert.assertEquals(2, soundex.getMaxLength());
+        Assert.assertEquals("R163", soundex.soundex("Robert"));
+        Assert.assertEquals("W252", soundex.encode("Washington"));
+    }
+}
+```

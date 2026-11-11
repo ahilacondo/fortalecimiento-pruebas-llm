@@ -1,0 +1,8 @@
+1. `soundex(null)` y `encode(null)` devuelven `null`; las pruebas solo verifican el comportamiento nulo de `SoundexUtils.clean`, no el de `Soundex`.
+2. `encode(Object)` lanza `EncoderException` cuando el argumento no es un `String` (por ejemplo, un `Integer` o `null`).
+3. `encode(Object)` con un `String` devuelve el mismo resultado que `encode(String)`; esta equivalencia no se comprueba.
+4. `encode("")` devuelve la cadena vacía y no un código como `"0000"`; solo se prueba indirectamente mediante `difference`.
+5. El constructor `Soundex(char[])` copia el array de mapeo, así que modificar el array original después no altera el codificador.
+6. El constructor `Soundex(String)` con un mapeo personalizado produce códigos según ese mapeo, no según el mapeo por defecto.
+7. Con un mapeo personalizado más corto de 26 caracteres, las letras fuera de rango lanzan `IllegalArgumentException`.
+8. `setMaxLength` (deprecado) no modifica la salida de `soundex`, y `getMaxLength` devuelve el valor por defecto 4 tras la construcción.

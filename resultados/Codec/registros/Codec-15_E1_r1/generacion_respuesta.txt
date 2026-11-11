@@ -1,0 +1,262 @@
+```java
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Soundex} que usan únicamente su API pública.
+ */
+public class SoundexLLMTest {
+
+    // ---------------------------------------------------------------
+    // Constantes y construcción
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testUsEnglishMappingStringValue() {
+        Assert.assertEquals("01230120022455012623010202", Soundex.US_ENGLISH_MAPPING_STRING);
+    }
+
+    @Test
+    public void testUsEnglishConstantEncodesLikeDefaultInstance() {
+        final Soundex defaultInstance = new Soundex();
+        final String[] words = {"Robert", "Ashcraft", "Tymczak", "Williams", "Ellery"};
+        for (final String word : words) {
+            Assert.assertEquals("Mismatch for " + word,
+                    defaultInstance.encode(word), Soundex.US_ENGLISH.encode(word));
+        }
+    }
+
+    @Test
+    public void testCharArrayConstructorCopiesMapping() {
+        final char[] mapping = Soundex.US_ENGLISH_MAPPING_STRING.toCharArray();
+        final Soundex soundex = new Soundex(mapping);
+        // Modificar el arreglo original no debe afectar a la instancia
+        for (int i = 0; i < mapping.length; i++) {
+            mapping[i] = '0';
+        }
+        Assert.assertEquals("R163", soundex.encode("Robert"));
+    }
+
+    @Test
+    public void testStringConstructorWithAllZeroMappingEncodesOnlyFirstLetter() {
+        final Soundex soundex = new Soundex("0".repeat(26));
+        Assert.assertEquals("R000", soundex.encode("Robert"));
+        Assert.assertEquals("A000", soundex.encode("Abcdef"));
+    }
+
+    @Test
+    public void testCustomMappingTooShortThrowsForUnmappedLetter() {
+        final Soundex soundex = new Soundex("0123");
+        try {
+            soundex.encode("Z");
+            Assert.fail("Se esperaba IllegalArgumentException");
+        } catch (final IllegalArgumentException expected) {
+            // esperado: 'Z' queda fuera del mapeo
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Casos nulos, vacíos y entradas no alfabéticas
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testEncodeNullStringReturnsNull() {
+        Assert.assertNull(new Soundex().encode((String) null));
+    }
+
+    @Test
+    public void testSoundexNullReturnsNull() {
+        Assert.assertNull(new Soundex().soundex(null));
+    }
+
+    @Test
+    public void testEncodeEmptyStringReturnsEmpty() {
+        Assert.assertEquals("", new Soundex().encode(""));
+    }
+
+    @Test
+    public void testEncodeOnlyDigitsReturnsEmpty() {
+        // Los dígitos se eliminan en la limpieza previa, quedando una cadena vacía
+        Assert.assertEquals("", new Soundex().encode("123"));
+    }
+
+    @Test
+    public void testDigitsAreIgnored() {
+        Assert.assertEquals("R163", new Soundex().encode("R2o3b4e5r6t7"));
+    }
+
+    @Test
+    public void testSingleLetterPadsWithZeros() {
+        Assert.assertEquals("A000", new Soundex().encode("A"));
+    }
+
+    // ---------------------------------------------------------------
+    // Comportamiento de encode(Object)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testEncodeObjectWithStringReturnsCode() throws EncoderException {
+        final Object result = new Soundex().encode((Object) "Robert");
+        Assert.assertEquals("R163", result);
+    }
+
+    @Test
+    public void testEncodeObjectWithEmptyStringReturnsEmpty() throws EncoderException {
+        Assert.assertEquals("", new Soundex().encode((Object) ""));
+    }
+
+    @Test
+    public void testEncodeObjectWithNonStringThrowsEncoderException() {
+        try {
+            new Soundex().encode((Object) Integer.valueOf(42));
+            Assert.fail("Se esperaba EncoderException");
+        } catch (final EncoderException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithNullThrowsEncoderException() {
+        try {
+            new Soundex().encode((Object) null);
+            Assert.fail("Se esperaba EncoderException");
+        } catch (final EncoderException expected) {
+            // null no es instancia de String
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Algoritmo: colapso de códigos, vocales y truncamiento
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testRepeatedSameCodeCollapses() {
+        Assert.assertEquals("B000", new Soundex().encode("Bbbbb"));
+    }
+
+    @Test
+    public void testAdjacentDifferentCodesAreAllKept() {
+        Assert.assertEquals("A123", new Soundex().encode("Abcd"));
+    }
+
+    @Test
+    public void testVowelSeparatesDuplicateCodes() {
+        // La vocal 'A' separa las dos 'B', que se codifican ambas como 1
+        Assert.assertEquals("A110", new Soundex().encode("Abab"));
+    }
+
+    @Test
+    public void testResultIsTruncatedToFourCharacters() {
+        final String code = new Soundex().encode("Abcdefghijklmnop");
+        Assert.assertEquals(4, code.length());
+        Assert.assertEquals("A123", code);
+    }
+
+    @Test
+    public void testEllerySkipsRepeatedAndVowelCodes() {
+        Assert.assertEquals("E460", new Soundex().encode("Ellery"));
+    }
+
+    @Test
+    public void testHoneymanKnownCode() {
+        Assert.assertEquals("H555", new Soundex().encode("Honeyman"));
+    }
+
+    @Test
+    public void testVanDeusenWithAndWithoutSpaceAreEqual() {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals("V532", soundex.encode("VanDeusen"));
+        Assert.assertEquals("V532", soundex.encode("Van Deusen"));
+    }
+
+    // ---------------------------------------------------------------
+    // Normalización de entrada
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testLowerCaseInputIsUppercased() {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals("R163", soundex.encode("robert"));
+        Assert.assertEquals(soundex.encode("ROBERT"), soundex.encode("robert"));
+    }
+
+    @Test
+    public void testPunctuationAndSpacesAreIgnored() {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals("K525", soundex.encode("King-Smith"));
+        Assert.assertEquals("K525", soundex.encode("KINGSMITH"));
+        Assert.assertEquals("R163", soundex.encode("  R o b e r t  "));
+    }
+
+    @Test
+    public void testSoundexMethodMatchesEncode() {
+        final Soundex soundex = new Soundex();
+        final String[] words = {"Robert", "Tymczak", "Pfister", "Lee", "Gutierrez"};
+        for (final String word : words) {
+            Assert.assertEquals(soundex.encode(word), soundex.soundex(word));
+        }
+    }
+
+    @Test
+    public void testUnmappedAccentedLetterThrowsIllegalArgument() {
+        try {
+            new Soundex().encode("\u00f1"); // ñ
+            Assert.fail("Se esperaba IllegalArgumentException");
+        } catch (final IllegalArgumentException expected) {
+            // esperado: la letra no está en el mapeo US_ENGLISH
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // difference()
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testDifferenceIdenticalEncodingsIsFour() throws EncoderException {
+        Assert.assertEquals(4, new Soundex().difference("Robert", "Rupert"));
+        Assert.assertEquals(4, new Soundex().difference("Lee", "Lee"));
+    }
+
+    @Test
+    public void testDifferenceCompletelyDifferentIsZero() throws EncoderException {
+        // E460 frente a H555: ninguna posición coincide
+        Assert.assertEquals(0, new Soundex().difference("Ellery", "Honeyman"));
+    }
+
+    @Test
+    public void testDifferenceIsSymmetric() throws EncoderException {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals(soundex.difference("Ann", "Andrew"),
+                soundex.difference("Andrew", "Ann"));
+    }
+
+    @Test
+    public void testDifferenceWithinRange() throws EncoderException {
+        final int value = new Soundex().difference("Washington", "Jackson");
+        Assert.assertTrue("Fuera de rango: " + value, value >= 0 && value <= 4);
+    }
+
+    // ---------------------------------------------------------------
+    // API deprecada maxLength (pública, no afecta a la codificación)
+    // ---------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testMaxLengthDefaultIsFour() {
+        Assert.assertEquals(4, new Soundex().getMaxLength());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSetMaxLengthDoesNotChangeEncoding() {
+        final Soundex soundex = new Soundex();
+        soundex.setMaxLength(6);
+        Assert.assertEquals(6, soundex.getMaxLength());
+        Assert.assertEquals("R163", soundex.encode("Robert"));
+        Assert.assertEquals("A123", soundex.encode("Abcd"));
+    }
+}
+```

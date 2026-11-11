@@ -1,0 +1,227 @@
+package org.apache.commons.codec.language;
+
+import org.apache.commons.codec.EncoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Soundex} que cubren accesores deprecados,
+ * ramas de la regla HW, límites del mapeo y validaciones de entrada.
+ */
+public class SoundexLLMTest {
+
+    // ---------------------------------------------------------------
+    // getMaxLength / setMaxLength (líneas 208 y 246-247)
+    // ---------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testGetMaxLengthDefaultIsFour() {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals(4, soundex.getMaxLength());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSetMaxLengthUpdatesStoredValue() {
+        final Soundex soundex = new Soundex();
+        soundex.setMaxLength(6);
+        Assert.assertEquals(6, soundex.getMaxLength());
+        soundex.setMaxLength(0);
+        Assert.assertEquals(0, soundex.getMaxLength());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSetMaxLengthDoesNotAffectEncoding() {
+        final Soundex soundex = new Soundex();
+        soundex.setMaxLength(10);
+        Assert.assertEquals("R163", soundex.encode("Robert"));
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testSetMaxLengthIsIsolatedPerInstance() {
+        final Soundex modified = new Soundex();
+        modified.setMaxLength(9);
+        final Soundex fresh = new Soundex();
+        Assert.assertEquals(9, modified.getMaxLength());
+        Assert.assertEquals(4, fresh.getMaxLength());
+    }
+
+    // ---------------------------------------------------------------
+    // Regla HW (rama parcial de la condición en getMappingCode)
+    // ---------------------------------------------------------------
+
+    /** Rama: firstCode == mappedChar verdadera. */
+    @Test
+    public void testHWRuleSameCodeAcrossHIsSuppressed() {
+        Assert.assertEquals("B312", new Soundex().encode("BOOTHDAVIS"));
+    }
+
+    /** Rama: 'H' == preHWChar verdadera. */
+    @Test
+    public void testHWRulePrecedingHIsSuppressed() {
+        Assert.assertEquals("H000", new Soundex().encode("HHL"));
+    }
+
+    /** Rama: 'W' == preHWChar verdadera. */
+    @Test
+    public void testHWRulePrecedingWIsSuppressed() {
+        Assert.assertEquals("A000", new Soundex().encode("AWWL"));
+    }
+
+    /** Rama: todas las condiciones falsas tras H; la consonante se codifica. */
+    @Test
+    public void testHWRuleDifferentCodeAcrossHIsEncoded() {
+        Assert.assertEquals("B400", new Soundex().encode("BAHL"));
+    }
+
+    /** Rama: todas las condiciones falsas tras W; la consonante se codifica. */
+    @Test
+    public void testHWRuleDifferentCodeAcrossWIsEncoded() {
+        Assert.assertEquals("B400", new Soundex().encode("BAWL"));
+    }
+
+    /** Rama: mappedChar == '0' en índice > 1 no pasa por la regla HW. */
+    @Test
+    public void testZeroMappedCharAfterHIsIgnored() {
+        Assert.assertEquals("S000", new Soundex().encode("SHAW"));
+    }
+
+    // ---------------------------------------------------------------
+    // Límites de map(): comprobación de rango (índice >= longitud)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testMappingLastValidIndexIsAccepted() {
+        // Mapeo de 4 caracteres: 'D' (índice 3) es el último válido.
+        final Soundex soundex = new Soundex("0123");
+        Assert.assertEquals("D000", soundex.encode("D"));
+    }
+
+    @Test
+    public void testMappingFirstOutOfRangeIndexIsRejected() {
+        // 'E' (índice 4) queda fuera de un mapeo de 4 caracteres.
+        final Soundex soundex = new Soundex("0123");
+        try {
+            soundex.encode("E");
+            Assert.fail("Se esperaba IllegalArgumentException");
+        } catch (final IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("E"));
+        }
+    }
+
+    @Test
+    public void testNonAsciiLetterOutsideAlphabetIsRejected() {
+        // 'ñ' se convierte a 'Ñ' (U+00D1), fuera del rango A-Z del mapeo.
+        try {
+            Soundex.US_ENGLISH.encode("\u00f1");
+            Assert.fail("Se esperaba IllegalArgumentException");
+        } catch (final IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().contains("\u00d1"));
+        }
+    }
+
+    @Test
+    public void testNonAsciiLetterInsideWordIsRejected() {
+        try {
+            Soundex.US_ENGLISH.soundex("ab\u00f1c");
+            Assert.fail("Se esperaba IllegalArgumentException");
+        } catch (final IllegalArgumentException e) {
+            // esperado
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Constructor con char[]: copia defensiva
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testCharArrayConstructorCopiesMapping() {
+        final char[] mapping = Soundex.US_ENGLISH_MAPPING_STRING.toCharArray();
+        final Soundex soundex = new Soundex(mapping);
+        mapping[1] = '9'; // modificar el array original no debe afectar a la instancia
+        Assert.assertEquals("Z100", soundex.encode("ZB"));
+    }
+
+    @Test
+    public void testCharArrayConstructorUsesMappingAtConstruction() {
+        final char[] mapping = Soundex.US_ENGLISH_MAPPING_STRING.toCharArray();
+        mapping[1] = '9';
+        final Soundex soundex = new Soundex(mapping);
+        // 'B' ahora se codifica como '9', por lo que no coincide con la 'Z' ('2').
+        Assert.assertEquals("Z900", soundex.encode("ZB"));
+    }
+
+    @Test
+    public void testStringConstructorMatchesDefaultMapping() {
+        Assert.assertEquals("Z100", new Soundex(Soundex.US_ENGLISH_MAPPING_STRING).encode("ZB"));
+    }
+
+    // ---------------------------------------------------------------
+    // encode(Object): validación de tipos
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testEncodeObjectWithStringReturnsCode() throws EncoderException {
+        final Object result = new Soundex().encode((Object) "Robert");
+        Assert.assertEquals("R163", result);
+    }
+
+    @Test
+    public void testEncodeObjectWithNonStringThrows() {
+        try {
+            new Soundex().encode((Object) Integer.valueOf(42));
+            Assert.fail("Se esperaba EncoderException");
+        } catch (final EncoderException e) {
+            Assert.assertNotNull(e.getMessage());
+        }
+    }
+
+    @Test
+    public void testEncodeObjectWithNullThrows() {
+        try {
+            new Soundex().encode((Object) null);
+            Assert.fail("Se esperaba EncoderException");
+        } catch (final EncoderException e) {
+            // esperado: null no es instancia de String
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Nulos, vacíos y entradas sin letras
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testSoundexNullReturnsNull() {
+        final Soundex soundex = new Soundex();
+        Assert.assertNull(soundex.soundex(null));
+        Assert.assertNull(soundex.encode((String) null));
+    }
+
+    @Test
+    public void testSoundexEmptyReturnsEmpty() {
+        Assert.assertEquals("", new Soundex().soundex(""));
+    }
+
+    @Test
+    public void testSoundexWithoutLettersReturnsEmpty() {
+        final Soundex soundex = new Soundex();
+        Assert.assertEquals("", soundex.soundex("123"));
+        Assert.assertEquals("", soundex.soundex("  "));
+        Assert.assertEquals("", soundex.soundex("1-2 3"));
+    }
+
+    @Test
+    public void testSoundexResultIsAlwaysFourCharacters() {
+        final String code = new Soundex().soundex("Pneumonoultramicroscopic");
+        Assert.assertEquals(4, code.length());
+        Assert.assertEquals('P', code.charAt(0));
+    }
+
+    @Test
+    public void testSoundexOfSingleLetterPadsWithZeros() {
+        Assert.assertEquals("A000", new Soundex().soundex("a"));
+    }
+}
