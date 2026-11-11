@@ -92,7 +92,8 @@ def limpiar_eje(ax):
 
 def fig_mapa(d: pd.DataFrame, salida: Path):
     proyectos = ["Lang", "Cli", "Codec", "Csv"]
-    fig, axes = plt.subplots(1, 4, figsize=(19, 5.6), gridspec_kw={"wspace": 1.55})
+    fig, axes = plt.subplots(2, 2, figsize=(10.5, 9.6), gridspec_kw={"wspace": 0.8, "hspace": 0.3})
+    axes = axes.ravel()
     cat = {n: i for i, (n, _) in enumerate(DESENLACES)}
     simbolo = {DESENLACES[0][0]: "✔", DESENLACES[1][0]: "", DESENLACES[2][0]: "C", DESENLACES[3][0]: "T"}
     for ax, p in zip(axes, proyectos):
@@ -119,9 +120,8 @@ def fig_mapa(d: pd.DataFrame, salida: Path):
             s.set_visible(False)
         ax.tick_params(length=0)
     handles = [Patch(color=c, label=n) for n, c in DESENLACES]
-    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10, bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("Resultado de cada corrida: 40 casos × 4 estrategias (1 repetición)", x=0.01, ha="left",
-                 fontsize=13, fontweight="bold", y=1.0)
+    fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=10, bbox_to_anchor=(0.5, 0.0))
+    fig.subplots_adjust(bottom=0.1)
     fig.savefig(salida, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -183,6 +183,86 @@ def fig_costo(c: pd.DataFrame, salida: Path):
     ax.grid(True, color=GRID, lw=0.6); ax.set_axisbelow(True)
     limpiar_eje(ax)
     ax.set_title("Costo en tokens frente a casos detectados", loc="left", fontsize=12, fontweight="bold")
+    fig.savefig(salida, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _ic_base() -> dict:
+    """IC 95 % de analizar.py (tabla_r1), para que la figura coincida con la Tabla 25 del informe."""
+    ruta = RAIZ / "resultados" / "analisis_base" / "tabla_r1_deteccion.csv"
+    if not ruta.exists():
+        ruta = RAIZ / "analisis" / "salida" / "tabla_r1_deteccion.csv"
+    t = pd.read_csv(ruta)
+    ic = {}
+    for _, r in t.iterrows():
+        lo, hi = r["IC 95 %"].strip("[]").split(";")
+        ic[r.iloc[0][:2]] = (float(lo), float(hi))
+    return ic
+
+
+def fig_informe9(d: pd.DataFrame, salida: Path):
+    """Figura 9 del informe: detección por estrategia con IC 95 % (a) y por proyecto (b)."""
+    ests = list(NOMBRES)
+    n = d.caso.nunique()
+    ic = _ic_base()
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10.5, 4.2), gridspec_kw={"width_ratios": [1, 1.25], "wspace": 0.28})
+    tasa = [d[d.estrategia == e].detecta_fallo.mean() for e in ests]
+    for i, e in enumerate(ests):
+        a1.bar(i, tasa[i], 0.62, color=COL_E[e])
+        lo, hi = ic[e]
+        a1.errorbar(i, tasa[i], yerr=[[tasa[i] - lo], [hi - tasa[i]]], color=INK, capsize=5, lw=1.4)
+        a1.text(i, hi + 0.02, f"{int(round(tasa[i] * n))} de {n}", ha="center", fontsize=9, color=INK2)
+    a1.set_xticks(range(4)); a1.set_xticklabels(ests); a1.set_ylim(0, 0.5)
+    a1.set_ylabel("Tasa de detección (casos detectados / 40)")
+    a1.set_title("(a) Por estrategia, con IC de 95 %", loc="left", fontsize=10.5, fontweight="bold")
+    proyectos = ["Lang", "Cli", "Codec", "Csv"]
+    ancho = 0.19
+    for j, e in enumerate(ests):
+        vals = [int(d[(d.proyecto == p) & (d.estrategia == e)].detecta_fallo.sum()) for p in proyectos]
+        xs = np.arange(4) + (j - 1.5) * (ancho + 0.02)
+        a2.bar(xs, vals, ancho, color=COL_E[e], label=NOMBRES[e])
+        for x, v in zip(xs, vals):
+            a2.text(x, v + 0.08, str(v), ha="center", va="bottom", fontsize=8.5, color=INK2)
+    a2.set_xticks(range(4)); a2.set_xticklabels(proyectos); a2.set_ylim(0, 4.2)
+    a2.set_ylabel("Casos detectados (de 10)")
+    a2.set_title("(b) Por proyecto", loc="left", fontsize=10.5, fontweight="bold")
+    a2.legend(frameon=False, ncol=2, loc="upper left", fontsize=8.5)
+    for ax in (a1, a2):
+        ax.yaxis.grid(True, color=GRID, lw=0.6); ax.set_axisbelow(True); limpiar_eje(ax)
+    fig.savefig(salida, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def fig_informe10(d: pd.DataFrame, c: pd.DataFrame, salida: Path):
+    """Figura 10 del informe: cobertura ganada (a) y costo frente a detección (b)."""
+    ests = list(NOMBRES)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10.5, 4.2), gridspec_kw={"wspace": 0.28})
+    g = d.groupby("estrategia")      # las 160 corridas, igual que la Tabla 27 de analizar.py
+    lin = g.delta_cobertura_lineas.mean().reindex(ests)
+    ram = g.delta_cobertura_ramas.mean().reindex(ests)
+    x = np.arange(4)
+    a1.bar(x - 0.2, lin.values, 0.36, color="#2a78d6", label="Líneas")
+    a1.bar(x + 0.2, ram.values, 0.36, color="#eda100", label="Ramas")
+    for xi, v in zip(x - 0.2, lin.values):
+        a1.text(xi, v + 0.2, f"{v:.1f}", ha="center", fontsize=8.5, color=INK2)
+    for xi, v in zip(x + 0.2, ram.values):
+        a1.text(xi, v + 0.2, f"{v:.1f}", ha="center", fontsize=8.5, color=INK2)
+    a1.set_xticks(x); a1.set_xticklabels([e for e in ests]); a1.set_ylim(0, 14)
+    a1.set_ylabel("Aumento de cobertura (puntos porcentuales)")
+    a1.legend(frameon=False, fontsize=9, loc="upper left")
+    a1.set_title("(a) Cobertura ganada en la clase objetivo", loc="left", fontsize=10.5, fontweight="bold")
+    for e, r in c.iterrows():
+        a2.scatter(r["tokens_por_caso"] / 1000, r["casos_detectados"], s=170, color=COL_E[e],
+                   edgecolor=SUP, linewidth=2, zorder=3)
+        a2.annotate(e, (r["tokens_por_caso"] / 1000, r["casos_detectados"]), textcoords="offset points",
+                    xytext=(0, 13), ha="center", fontsize=10, color=INK, fontweight="bold")
+    a2.set_xlabel("Tokens por caso (miles)"); a2.set_ylabel("Casos detectados (de 40)")
+    a2.set_xlim(30, 72); a2.set_ylim(0, 8)
+    a2.set_title("(b) Costo frente a detección", loc="left", fontsize=10.5, fontweight="bold")
+    a2.grid(True, color=GRID, lw=0.6); a2.set_axisbelow(True)
+    for ax in (a1, a2):
+        limpiar_eje(ax)
+    a1.yaxis.grid(True, color=GRID, lw=0.6); a1.set_axisbelow(True)
     fig.savefig(salida, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -285,6 +365,8 @@ def main() -> None:
     fig_desenlace(d, out / "fig_B_desenlace_por_estrategia.png")
     fig_proyecto(d, out / "fig_C_deteccion_por_proyecto.png")
     fig_costo(a3, out / "fig_D_costo_vs_deteccion.png")
+    fig_informe9(d, out / "fig_informe_09_deteccion.png")
+    fig_informe10(d, a3, out / "fig_informe_10_cobertura_y_costo.png")
     print("\n".join(md))
     print("Salida en", out)
 
