@@ -1,0 +1,8 @@
+1. Decodificación de la variante estándar Base32: ningún test comprueba que `decode` reproduzca los vectores RFC 4648.
+2. Decodificación de la variante Base32 Hex: no hay verificación del resultado al decodificar con el alfabeto hexadecimal.
+3. Round-trip codificar-decodificar con datos aleatorios: las aserciones de decodificación están comentadas y solo se verifica la longitud codificada.
+4. Manejo del carácter de padding en la decodificación: parada en el primer pad y descarte correcto de bits parciales para los módulos 2 a 7.
+5. Descarte de caracteres no alfabéticos (CRLF, espacios) en la decodificación de entrada con saltos de línea.
+6. Validación de argumentos en los constructores: lineLength mayor que 0 sin separador, separador que contiene caracteres del alfabeto o el pad, y pad que pertenece al alfabeto o es espacio en blanco.
+7. Comportamiento de isInAlphabet: bytes negativos y fuera del rango de la tabla, el propio carácter de padding, y diferencias entre el alfabeto estándar y el hexadecimal.
+8. Contenido exacto de la codificación de bytes no ASCII (valores de 0x80 a 0xFF), porque los vectores son solo ASCII y los datos aleatorios solo verifican la longitud.

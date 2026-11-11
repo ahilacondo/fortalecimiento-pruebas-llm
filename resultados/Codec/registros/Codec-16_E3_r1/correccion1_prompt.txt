@@ -1,0 +1,272 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Codec/Codec_16_b/.test_suite/org/apache/commons/codec/binary/Base32LLMTest.java:1: error: illegal character: '`'
+
+Archivo anterior:
+```java
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base32} que cubren decodificación, alfabeto hexadecimal,
+ * round-trip, bytes no ASCII, {@code isInAlphabet} y validación de argumentos de los constructores.
+ */
+public class Base32LLMTest {
+
+    private static final String[][] RFC_STANDARD = {
+        {"", ""},
+        {"f", "MY======"},
+        {"fo", "MZXQ===="},
+        {"foo", "MZXW6==="},
+        {"foob", "MZXW6YQ="},
+        {"fooba", "MZXW6YTB"},
+        {"foobar", "MZXW6YTBOI======"},
+    };
+
+    private static final String[][] RFC_HEX = {
+        {"", ""},
+        {"f", "CO======"},
+        {"fo", "CPNG===="},
+        {"foo", "CPNMU==="},
+        {"foob", "CPNMUOG="},
+        {"fooba", "CPNMUOJ1"},
+        {"foobar", "CPNMUOJ1E8======"},
+    };
+
+    private static byte[] ascii(final String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(final byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static void assertRejected(final Runnable action, final String message) {
+        try {
+            action.run();
+            fail(message);
+        } catch (final IllegalArgumentException e) {
+            assertNotNull(e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 1. Decodificación de la variante estándar
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testDecodeStandardRfc4648Vectors() {
+        final Base32 codec = new Base32();
+        for (final String[] pair : RFC_STANDARD) {
+            assertArrayEquals("Vector: " + pair[1], ascii(pair[0]), codec.decode(ascii(pair[1])));
+        }
+    }
+
+    @Test
+    public void testDecodeStandardWithoutPaddingAndPartialBlocks() {
+        final Base32 codec = new Base32();
+        assertArrayEquals(ascii(""), codec.decode(ascii("")));
+        assertArrayEquals(ascii(""), codec.decode(ascii("M")));          // modulus 1: sin bytes completos
+        assertArrayEquals(ascii("f"), codec.decode(ascii("MY")));        // modulus 2
+        assertArrayEquals(ascii("f"), codec.decode(ascii("MZX")));       // modulus 3
+        assertArrayEquals(ascii("fo"), codec.decode(ascii("MZXQ")));     // modulus 4
+        assertArrayEquals(ascii("foo"), codec.decode(ascii("MZXW6")));   // modulus 5
+        assertArrayEquals(ascii("foo"), codec.decode(ascii("MZXW6Y")));  // modulus 6
+        assertArrayEquals(ascii("foob"), codec.decode(ascii("MZXW6YQ"))); // modulus 7
+        assertArrayEquals(ascii("fooba"), codec.decode(ascii("MZXW6YTBO"))); // bloque completo + modulus 1
+    }
+
+    @Test
+    public void testDecodeStopsAtFirstPaddingCharacter() {
+        final Base32 codec = new Base32();
+        assertArrayEquals(ascii("f"), codec.decode(ascii("MY======MZXQ====")));
+        assertArrayEquals(ascii("fooba"), codec.decode(ascii("MZXW6YTB=AAAAAAA")));
+    }
+
+    @Test
+    public void testDecodeWithCustomPaddingCharacter() {
+        final Base32 codec = new Base32((byte) '%');
+        assertArrayEquals(ascii("foob"), codec.decode(ascii("MZXW6YQ%")));
+        assertArrayEquals(ascii("f"), codec.decode(ascii("MY%%%%%%")));
+        assertArrayEquals(ascii("fooba"), codec.decode(ascii("MZXW6YTB%MZ")));
+    }
+
+    @Test
+    public void testDecodeIgnoresLineSeparatorsAndWhitespace() {
+        final Base32 codec = new Base32();
+        assertArrayEquals(ascii("foobar"), codec.decode(ascii("MZXW6YTB\r\nOI======")));
+        assertArrayEquals(ascii("foobar"), codec.decode(ascii("MZXW 6YTB\tOI======")));
+        assertArrayEquals(ascii("foobar"), codec.decode(ascii(" MZXW6YTBOI====== \r\n")));
+    }
+
+    @Test
+    public void testDecodeChunkedOutputOfChunkedCodec() {
+        final Base32 codec = new Base32(20);
+        assertArrayEquals(ascii("foobar"), codec.decode(ascii("MZXW6YTBOI======\r\n")));
+        final byte[] encoded = codec.encode(ascii("foobar"));
+        assertArrayEquals(ascii("foobar"), codec.decode(encoded));
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Decodificación de la variante Base32 Hex
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testDecodeHexRfc4648Vectors() {
+        final Base32 codec = new Base32(true);
+        for (final String[] pair : RFC_HEX) {
+            assertArrayEquals("Vector hex: " + pair[1], ascii(pair[0]), codec.decode(ascii(pair[1])));
+        }
+    }
+
+    @Test
+    public void testDecodeHexIgnoresLettersOutsideHexAlphabet() {
+        final Base32 codec = new Base32(true);
+        // 'Z' no pertenece al alfabeto hexadecimal: se descarta, sin bits que aportar.
+        assertArrayEquals(ascii(""), codec.decode(ascii("ZZZZZZZZ")));
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Round-trip con datos aleatorios
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testRoundTripRandomDataStandard() {
+        final Base32 codec = new Base32();
+        final Random random = new Random(42L);
+        for (int len = 0; len <= 64; len++) {
+            final byte[] data = new byte[len];
+            random.nextBytes(data);
+            assertArrayEquals("len=" + len, data, codec.decode(codec.encode(data)));
+            assertArrayEquals("len=" + len, data, codec.decode(ascii(codec.encodeAsString(data))));
+        }
+    }
+
+    @Test
+    public void testRoundTripRandomDataHex() {
+        final Base32 codec = new Base32(true);
+        final Random random = new Random(7L);
+        for (int len = 0; len <= 64; len++) {
+            final byte[] data = new byte[len];
+            random.nextBytes(data);
+            assertArrayEquals("len=" + len, data, codec.decode(codec.encode(data)));
+        }
+    }
+
+    @Test
+    public void testRoundTripRandomDataChunked() {
+        final Base32 codec = new Base32(10);
+        final Random random = new Random(1234L);
+        for (int len = 0; len <= 64; len++) {
+            final byte[] data = new byte[len];
+            random.nextBytes(data);
+            assertArrayEquals("len=" + len, data, codec.decode(codec.encode(data)));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 8. Bytes no ASCII (0x80 a 0xFF)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEncodeHighBitBytesStandard() {
+        final Base32 codec = new Base32();
+        assertEquals("QA======", codec.encodeAsString(new byte[] {(byte) 0x80}));
+        assertEquals("74======", codec.encodeAsString(new byte[] {(byte) 0xFF}));
+        assertEquals("77777777", codec.encodeAsString(new byte[] {
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}));
+    }
+
+    @Test
+    public void testEncodeHighBitBytesHex() {
+        final Base32 codec = new Base32(true);
+        assertEquals("VS======", codec.encodeAsString(new byte[] {(byte) 0xFF}));
+    }
+
+    @Test
+    public void testDecodeHighBitBytes() {
+        final Base32 codec = new Base32();
+        assertArrayEquals(new byte[] {(byte) 0x80}, codec.decode(ascii("QA======")));
+        assertArrayEquals(new byte[] {(byte) 0xFF}, codec.decode(ascii("74======")));
+        assertArrayEquals(new byte[] {
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF},
+            codec.decode(ascii("77777777")));
+        assertArrayEquals(new byte[] {(byte) 0xFF}, new Base32(true).decode(ascii("VS======")));
+    }
+
+    @Test
+    public void testRoundTripAllByteValues() {
+        final byte[] data = new byte[256];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) i;
+        }
+        assertArrayEquals(data, new Base32().decode(new Base32().encode(data)));
+        assertArrayEquals(data, new Base32(true).decode(new Base32(true).encode(data)));
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. isInAlphabet
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testIsInAlphabetStandardAcceptsOnlyAlphabetCharacters() {
+        final Base32 codec = new Base32();
+        assertTrue(codec.isInAlphabet((byte) 'A'));
+        assertTrue(codec.isInAlphabet((byte) 'Z'));
+        assertTrue(codec.isInAlphabet((byte) '2'));
+        assertTrue(codec.isInAlphabet((byte) '7'));
+        assertFalse(codec.isInAlphabet((byte) '0'));
+        assertFalse(codec.isInAlphabet((byte) '1'));
+        assertFalse(codec.isInAlphabet((byte) '8'));
+        assertFalse(codec.isInAlphabet((byte) '9'));
+        assertFalse(codec.isInAlphabet((byte) 'a'));
+        assertFalse(codec.isInAlphabet((byte) ' '));
+    }
+
+    @Test
+    public void testIsInAlphabetRejectsNegativeAndOutOfRangeBytes() {
+        final Base32 codec = new Base32();
+        assertFalse(codec.isInAlphabet((byte) 0x00));
+        assertFalse(codec.isInAlphabet((byte) 0x7F));
+        assertFalse(codec.isInAlphabet((byte) 0x80));
+        assertFalse(codec.isInAlphabet((byte) 0xFF));
+    }
+
+    @Test
+    public void testIsInAlphabetRejectsPaddingCharacter() {
+        final Base32 defaultPad = new Base32();
+        assertFalse(defaultPad.isInAlphabet((byte) '='));
+
+        final Base32 customPad = new Base32((byte) '%');
+        assertFalse(customPad.isInAlphabet((byte) '%'));
+        assertFalse(customPad.isInAlphabet((byte) '='));
+    }
+
+    @Test
+    public void testIsInAlphabetDiffersBetweenStandardAndHex() {
+        final Base32 standard = new Base32();
+        final Base32 hex = new Base32(true);
+
+        assertFalse(standard.isInAlphabet((byte) '0'));
+        assertTrue(hex.isInAlphabet((byte) '0'));
+
+        assertFalse(standard.isInAlphabet((byte) '8'));
+        assertTrue(hex.isInAlphabet((byte) '8'));
+
+        assertTrue(standard.isInAlphabet((byte) 'Z'));
+        assertFalse(hex.isInAlphabet((byte) '
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.codec.binary` y la clase pública `Base32LLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

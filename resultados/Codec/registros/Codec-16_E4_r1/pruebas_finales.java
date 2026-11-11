@@ -1,0 +1,319 @@
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.nio.charset.StandardCharsets;
+
+import org.junit.Test;
+
+public class Base32LLMTest {
+
+    private static byte[] bytes(final String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(final byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static String encodeToString(final Base32 codec, final String s) {
+        return str(codec.encode(bytes(s)));
+    }
+
+    private static String decodeToString(final Base32 codec, final String s) {
+        return str(codec.decode(bytes(s)));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 1: la decodificación es la inversa de la codificación
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testDecodeRfc4648VectorsStandardAlphabet() {
+        final Base32 codec = new Base32();
+        assertEquals("", decodeToString(codec, ""));
+        assertEquals("f", decodeToString(codec, "MY======"));
+        assertEquals("fo", decodeToString(codec, "MZXQ===="));
+        assertEquals("foo", decodeToString(codec, "MZXW6==="));
+        assertEquals("foob", decodeToString(codec, "MZXW6YQ="));
+        assertEquals("fooba", decodeToString(codec, "MZXW6YTB"));
+        assertEquals("foobar", decodeToString(codec, "MZXW6YTBOI======"));
+    }
+
+    @Test
+    public void testDecodeWithoutPaddingPartialBlock() {
+        final Base32 codec = new Base32();
+        // "MY" son 10 bits: se descartan 2 y se obtiene un solo octeto 'f'
+        assertEquals("f", decodeToString(codec, "MY"));
+        assertEquals("fooba", decodeToString(codec, "MZXW6YTB"));
+    }
+
+    @Test
+    public void testDecodeIsInverseOfEncodeForAllLengths() {
+        final Base32 codec = new Base32();
+        for (int len = 0; len < 40; len++) {
+            final byte[] original = new byte[len];
+            for (int i = 0; i < len; i++) {
+                original[i] = (byte) (i * 37 + 11);
+            }
+            final byte[] roundTrip = codec.decode(codec.encode(original));
+            assertArrayEquals("Longitud " + len, original, roundTrip);
+        }
+    }
+
+    @Test
+    public void testDecodeEmptyInputReturnsEmptyArray() {
+        final Base32 codec = new Base32();
+        assertEquals(0, codec.decode(new byte[0]).length);
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 2: decode ignora caracteres no Base32 (CR, LF, espacios)
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testDecodeIgnoresCrLfInsideData() {
+        final Base32 codec = new Base32();
+        assertEquals("fooba", decodeToString(codec, "MZXW\r\n6YTB"));
+    }
+
+    @Test
+    public void testDecodeIgnoresSpaces() {
+        final Base32 codec = new Base32();
+        assertEquals("fooba", decodeToString(codec, "MZ XW6Y TB"));
+    }
+
+    @Test
+    public void testDecodeChunkedOutputRecoversOriginal() {
+        final Base32 codec = new Base32(20);
+        final String encoded = encodeToString(codec, "foobar");
+        assertEquals("MZXW6YTBOI======\r\n", encoded);
+        assertEquals("foobar", decodeToString(codec, encoded));
+    }
+
+    @Test
+    public void testDecodeChunkedLongDataRecoversOriginal() {
+        final Base32 codec = new Base32(10);
+        final byte[] original = new byte[100];
+        for (int i = 0; i < original.length; i++) {
+            original[i] = (byte) (i * 13 + 7);
+        }
+        final byte[] encoded = codec.encode(original);
+        assertTrue("La salida troceada debe contener CRLF", str(encoded).contains("\r\n"));
+        assertArrayEquals(original, codec.decode(encoded));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 3: alfabeto base32hex en decodificación
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testDecodeHexRfc4648Vectors() {
+        final Base32 codec = new Base32(true);
+        assertEquals("", decodeToString(codec, ""));
+        assertEquals("f", decodeToString(codec, "CO======"));
+        assertEquals("fo", decodeToString(codec, "CPNG===="));
+        assertEquals("foo", decodeToString(codec, "CPNMU==="));
+        assertEquals("foob", decodeToString(codec, "CPNMUOG="));
+        assertEquals("fooba", decodeToString(codec, "CPNMUOJ1"));
+        assertEquals("foobar", decodeToString(codec, "CPNMUOJ1E8======"));
+    }
+
+    @Test
+    public void testHexRoundTripForAllLengths() {
+        final Base32 codec = new Base32(true);
+        for (int len = 0; len < 40; len++) {
+            final byte[] original = new byte[len];
+            for (int i = 0; i < len; i++) {
+                original[i] = (byte) (i * 29 + 3);
+            }
+            assertArrayEquals("Longitud " + len, original, codec.decode(codec.encode(original)));
+        }
+    }
+
+    @Test
+    public void testHexDecodeChunkedRecoversOriginal() {
+        final Base32 codec = new Base32(0, new byte[] {'\r', '\n'}, true, (byte) '=');
+        final byte[] original = bytes("foobar");
+        // Con lineLength 0 no hay troceado, así que añadimos CRLF a mano.
+        final String encoded = "CPNMUOJ1\r\nE8======";
+        assertArrayEquals(original, codec.decode(bytes(encoded)));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 4: lineLength se redondea hacia abajo a múltiplo de 8
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testLineLength10BehavesAs16CharLines() {
+        final Base32 codec = new Base32(10);
+        // 10 -> (10/5)*8 = 16 caracteres por línea
+        assertEquals("MZXW6YTBMZXW6YTB\r\n", encodeToString(codec, "foobafooba"));
+    }
+
+    @Test
+    public void testLineLength10WithSixBytesEndsWithSeparator() {
+        final Base32 codec = new Base32(10);
+        assertEquals("MZXW6YTBOI======\r\n", encodeToString(codec, "foobar"));
+    }
+
+    @Test
+    public void testLineLength9BehavesAs8CharLines() {
+        final Base32 codec = new Base32(9);
+        // 9 -> (9/5)*8 = 8 caracteres por línea
+        assertEquals("MZXW6YTB\r\nMZXW6YTB\r\n", encodeToString(codec, "foobafooba"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 5: separador de línea personalizado
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testCustomLineSeparatorIsUsed() {
+        final Base32 codec = new Base32(10, bytes("\n"));
+        assertEquals("MZXW6YTBMZXW6YTB\n", encodeToString(codec, "foobafooba"));
+    }
+
+    @Test
+    public void testCustomLineSeparatorRepeatedPerLine() {
+        final Base32 codec = new Base32(9, bytes("\n"));
+        assertEquals("MZXW6YTB\nMZXW6YTB\n", encodeToString(codec, "foobafooba"));
+    }
+
+    @Test
+    public void testCustomMultiByteSeparatorIsUsed() {
+        final Base32 codec = new Base32(9, bytes("|--|"));
+        assertEquals("MZXW6YTB|--|MZXW6YTB|--|", encodeToString(codec, "foobafooba"));
+    }
+
+    @Test
+    public void testCustomSeparatorWithLineLengthZeroIsNotEmitted() {
+        final Base32 codec = new Base32(0, bytes("\n"));
+        assertEquals("MZXW6YTBMZXW6YTB", encodeToString(codec, "foobafooba"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 6: separador con caracteres del alfabeto -> IAE
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testSeparatorContainingAlphabetCharacterThrows() {
+        try {
+            new Base32(10, bytes("A"));
+            fail("Se esperaba IllegalArgumentException por separador con carácter del alfabeto");
+        } catch (final IllegalArgumentException expected) {
+            assertTrue(expected.getMessage() != null);
+        }
+    }
+
+    @Test
+    public void testSeparatorContainingPadCharacterThrows() {
+        try {
+            new Base32(10, bytes("\r=\n"));
+            fail("Se esperaba IllegalArgumentException por separador con el carácter de relleno");
+        } catch (final IllegalArgumentException expected) {
+            assertTrue(expected.getMessage() != null);
+        }
+    }
+
+    @Test
+    public void testSeparatorContainingHexAlphabetCharacterThrowsForHexCodec() {
+        // En modo hex, '0'..'9' y 'A'..'V' pertenecen al alfabeto
+        try {
+            new Base32(10, bytes("\r\n0"), true);
+            fail("Se esperaba IllegalArgumentException por separador con carácter del alfabeto hex");
+        } catch (final IllegalArgumentException expected) {
+            assertTrue(expected.getMessage() != null);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 7: lineLength > 0 con separador nulo -> IAE
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testNullSeparatorWithPositiveLineLengthThrows() {
+        try {
+            new Base32(10, null);
+            fail("Se esperaba IllegalArgumentException con lineSeparator nulo y lineLength > 0");
+        } catch (final IllegalArgumentException expected) {
+            assertTrue(expected.getMessage() != null);
+        }
+    }
+
+    @Test
+    public void testNullSeparatorWithPositiveLineLengthThrowsForHexConstructor() {
+        try {
+            new Base32(8, null, true);
+            fail("Se esperaba IllegalArgumentException con lineSeparator nulo y lineLength > 0 (hex)");
+        } catch (final IllegalArgumentException expected) {
+            assertTrue(expected.getMessage() != null);
+        }
+    }
+
+    @Test
+    public void testNullSeparatorWithZeroLineLengthIsAccepted() {
+        final Base32 codec = new Base32(0, null);
+        assertEquals("MZXW6YTBOI======", encodeToString(codec, "foobar"));
+    }
+
+    // ---------------------------------------------------------------
+    // Requisito 8: isInAlphabet
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testIsInAlphabetStandardAcceptsAllBase32Letters() {
+        final Base32 codec = new Base32();
+        for (char c = 'A'; c <= 'Z'; c++) {
+            assertTrue("Debe aceptar " + c, codec.isInAlphabet((byte) c));
+        }
+        for (char c = '2'; c <= '7'; c++) {
+            assertTrue("Debe aceptar " + c, codec.isInAlphabet((byte) c));
+        }
+    }
+
+    @Test
+    public void testIsInAlphabetStandardRejectsOtherCharacters() {
+        final Base32 codec = new Base32();
+        assertFalse(codec.isInAlphabet((byte) '0'));
+        assertFalse(codec.isInAlphabet((byte) '1'));
+        assertFalse(codec.isInAlphabet((byte) '8'));
+        assertFalse(codec.isInAlphabet((byte) '9'));
+        assertFalse(codec.isInAlphabet((byte) 'a'));
+        assertFalse(codec.isInAlphabet((byte) 'z'));
+        assertFalse(codec.isInAlphabet((byte) '='));
+        assertFalse(codec.isInAlphabet((byte) ' '));
+        assertFalse(codec.isInAlphabet((byte) '\r'));
+        assertFalse(codec.isInAlphabet((byte) '\n'));
+        assertFalse(codec.isInAlphabet((byte) '-'));
+        assertFalse(codec.isInAlphabet((byte) 0));
+        assertFalse(codec.isInAlphabet((byte) -1));
+        assertFalse(codec.isInAlphabet((byte) 0x80));
+    }
+
+    @Test
+    public void testIsInAlphabetHexAcceptsDigitsAndLettersUpToV() {
+        final Base32 codec = new Base32(true);
+        for (char c = '0'; c <= '9'; c++) {
+            assertTrue("Debe aceptar " + c, codec.isInAlphabet((byte) c));
+        }
+        for (char c = 'A'; c <= 'V'; c++) {
+            assertTrue("Debe aceptar " + c, codec.isInAlphabet((byte) c));
+        }
+    }
+
+    @Test
+    public void testIsInAlphabetHexRejectsOtherCharacters() {
+        final Base32 codec = new Base32(true);
+        assertFalse(codec.isInAlphabet((byte) 'W'));
+        assertFalse(codec.isInAlphabet((byte) 'Z'));
+        assertFalse(codec.isInAlphabet((byte) 'a'));
+        assertFalse(codec.isInAlphabet((byte) '='));
+        assertFalse(codec.isInAlphabet((byte) '\r'));
+        assertFalse(codec.isInAlphabet((byte) 0x80));
+    }
+}

@@ -1,0 +1,8 @@
+1. El Javadoc de `decode` describe la inversa de la codificación, pero no hay ninguna prueba activa de decodificación: las únicas aserciones sobre decodificación están comentadas.
+2. `decode` debe ignorar los caracteres no Base32 (CR y LF) para procesar datos troceados, y esto no se verifica.
+3. El alfabeto base32hex no se verifica en la dirección de decodificación, aunque el Javadoc lo describe como variante soportada.
+4. Una longitud de línea que no es múltiplo de 8 debe redondearse hacia abajo al múltiplo de 8 más cercano; las pruebas usan 10 y 20 sin comprobar la salida exacta para 10.
+5. El constructor con `lineLength` y `lineSeparator` debe usar un separador personalizado; las pruebas solo cubren el CRLF por defecto.
+6. Debe lanzarse `IllegalArgumentException` si `lineSeparator` contiene caracteres del alfabeto Base32, y esto no se prueba.
+7. Debe lanzarse `IllegalArgumentException` si `lineLength > 0` y `lineSeparator` es nulo, y esto no se prueba.
+8. `isInAlphabet` debe devolver `true` para los caracteres del alfabeto Base32 y `false` para el resto, y no tiene ninguna prueba.
