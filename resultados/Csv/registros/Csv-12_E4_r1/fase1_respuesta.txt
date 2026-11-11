@@ -1,0 +1,8 @@
+1. El formato DEFAULT debe usar coma, comilla doble, CRLF e ignorar líneas vacías (ignoreEmptyLines=true); ninguna prueba verifica estos ajustes, ya que testRFC4180 solo cubre RFC4180.
+2. El formato EXCEL debe usar coma, comilla doble, CRLF, no ignorar líneas vacías y permitir nombres de columna ausentes (allowMissingColumnNames=true); no hay pruebas de estos valores.
+3. El formato TDF debe usar tabulador como delimitador, comilla doble, CRLF y eliminar los espacios alrededor de los valores (ignoreSurroundingSpaces=true); no hay pruebas para TDF.
+4. El formato MYSQL debe usar tabulador como delimitador, no tener carácter de comilla, usar LF como separador de registro, no ignorar líneas vacías y usar barra invertida como carácter de escape; no hay pruebas para MYSQL.
+5. Llamar a withHeader() sin argumentos debe indicar que la primera fila del origen se usa como cabecera, y withHeader(null) debe deshabilitar la cabecera; no hay pruebas de estos comportamientos.
+6. withSkipHeaderRecord(true) debe omitir el primer registro al parsear cuando ese registro repite los nombres de columna; testEqualsSkipHeaderRecord solo comprueba la desigualdad de los objetos, no el efecto al parsear.
+7. newFormat(delimiter) debe dejar todos los demás campos en null o false, incluido allowMissingColumnNames; no hay pruebas que verifiquen estos valores por defecto.
+8. withRecordSeparator debe lanzar IllegalArgumentException si el separador no es CR, LF ni CRLF según el Javadoc, pero el código no valida esto; no hay pruebas que detecten la discrepancia.

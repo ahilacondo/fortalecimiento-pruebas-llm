@@ -1,0 +1,8 @@
+1. `format()` no tiene pruebas para valores que contienen el carácter de cita, el delimitador o saltos de línea, que deben encapsularse según el formato.
+2. `format()` no verifica que los valores `null` se escriban como `nullString` cuando está definido, ni que la salida se recorte con `trim()`.
+3. `withHeader()` sin argumentos (cabecera leída del fichero) y `withHeader(null)` (cabecera desactivada, `getHeader()` devuelve `null`) no tienen prueba.
+4. `withAllowMissingColumnNames()` y `getAllowMissingColumnNames()` no se prueban, y `equals`/`hashCode` ignoran ese campo, lo que no se detecta.
+5. Los formatos predefinidos `DEFAULT`, `EXCEL`, `TDF` y `MYSQL` no verifican sus ajustes (delimitador, escape, comillas nulas, espacios, separador de registro); solo se prueba `RFC4180`.
+6. Los métodos predicado `isCommentMarkerSet()`, `isEscapeCharacterSet()`, `isQuoteCharacterSet()` e `isNullStringSet()` no tienen pruebas, ni en su valor verdadero ni en el falso.
+7. `newFormat(CR)` y `withDelimiter(CR)` no se prueban, ni la sobrecarga `withRecordSeparator(char)` con valores distintos de CR y LF; `withQuoteMode(QuoteMode.NONE)` aceptado con escape definido tampoco se verifica.
+8. La inmutabilidad no se comprueba: ningún test confirma que los métodos `with*` devuelven una instancia nueva y dejan intacta la original, ni que `toString()` refleje correctamente la configuración.
