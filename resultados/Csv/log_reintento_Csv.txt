@@ -1,0 +1,6 @@
+Casos: 10; estrategias: ['E1', 'E2', 'E3', 'E4']; repeticiones: 1; corridas: 40; modelo: claude-haiku-5-5
+AVISO: no se puede enviar 'temperature'; se continúa sin ese parámetro (temperatura por defecto del modelo). Anótelo en el informe.
+[25/40] Csv-15 E3 r1: detecta=0 estables=46/46 llamadas=3 sin_diferencia
+[34/40] Csv-14 E2 r1: detecta=0 estables=0/0 llamadas=0 limite_o_error
+[35/40] Csv-14 E3 r1: detecta=0 estables=49/49 llamadas=2 sin_diferencia
+Resultados en resultados/Csv/ejecuciones_Csv.csv
