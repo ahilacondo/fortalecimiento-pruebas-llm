@@ -1,0 +1,8 @@
+1. Con política `Quote.NONE` y escape activo, el carácter de escape dentro del valor se duplica o escapa correctamente, y los CR/LF se transforman en las secuencias literales `\r` y `\n`.
+2. Con escape activo y sin comillas, el propio carácter de escape presente en el valor se escapa (por ejemplo, `!` pasa a `!!`).
+3. Con un delimitador distinto de la coma (`;`, tabulador, etc.), los valores que contienen ese delimitador se encapsulan en `MINIMAL` o se escapan según la configuración.
+4. `printComment` normaliza saltos de línea CR y CRLF dentro del comentario, sin duplicar el carácter de inicio de comentario ni generar líneas vacías extra.
+5. `printComment` invocado a mitad de un registro (sin `newRecord`) inserta primero un separador de registro antes de escribir el comentario.
+6. En `printRecords(ResultSet)`, los valores SQL NULL se escriben como la cadena nula configurada (o vacío), y no solo los `null` pasados directamente a `print`.
+7. Con `Quote.MINIMAL`, un valor vacío como primer campo de un registro se escribe como `""`, y un primer campo que empieza por carácter no alfanumérico se encapsula.
+8. `Quote.NON_NUMERIC` encapsula los `null` y `Quote.ALL` encapsula también los valores vacíos; además, `flush`, `close` y `getOut` se comportan correctamente con un `Appendable` que no implementa `Flushable` ni `Closeable`, y `println` sin separador de registro no escribe nada.

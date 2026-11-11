@@ -1,0 +1,306 @@
+/*
+ * Pruebas adicionales para org.apache.commons.csv.CSVPrinter.
+ * Cubren comportamientos no verificados por CSVPrinterTest.
+ */
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+
+import org.junit.Test;
+
+public class CSVPrinterLLMTest {
+
+    /** Appendable que no implementa Flushable ni Closeable. */
+    private static final class PlainAppendable implements Appendable {
+        private final StringBuilder sb = new StringBuilder();
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            sb.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            sb.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            sb.append(c);
+            return this;
+        }
+
+        @Override
+        public String toString() {
+            return sb.toString();
+        }
+    }
+
+    /** Crea un ResultSet simulado (proxy) con las filas dadas. */
+    private static ResultSet fakeResultSet(final String[][] rows, final int columns) {
+        final ClassLoader cl = CSVPrinterLLMTest.class.getClassLoader();
+        final ResultSetMetaData meta = (ResultSetMetaData) Proxy.newProxyInstance(cl,
+                new Class<?>[] { ResultSetMetaData.class }, (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) {
+                        return columns;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        final int[] cursor = { -1 };
+        return (ResultSet) Proxy.newProxyInstance(cl, new Class<?>[] { ResultSet.class }, (proxy, method, args) -> {
+            switch (method.getName()) {
+            case "getMetaData":
+                return meta;
+            case "next":
+                cursor[0]++;
+                return cursor[0] < rows.length;
+            case "getString":
+                return rows[cursor[0]][((Integer) args[0]) - 1];
+            default:
+                throw new UnsupportedOperationException(method.getName());
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------
+    // 1. Quote.NONE con escape: escapa '!', ',', CR y LF
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testQuoteNoneEscapesEscapeDelimiterAndNewlines() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withEscape('!').withQuotePolicy(Quote.NONE);
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("a!b,c\rd\ne");
+        printer.flush();
+        assertEquals("a!!b!,c!rd!ne", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteNoneEscapesOnlyEscapeCharWhenNoSpecialChars() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withEscape('!').withQuotePolicy(Quote.NONE);
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("wow!");
+        assertEquals("wow!!", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 2. Escape activo sin comillas: el propio escape se duplica
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testEscapeWithoutQuotesDoublesEscapeChar() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuoteChar(null).withEscape('!'));
+        printer.print("hola!mundo");
+        assertEquals("hola!!mundo", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testEscapeWithoutQuotesEscapesEscapeInEveryPosition() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuoteChar(null).withEscape('!'));
+        printer.print("!a!");
+        assertEquals("!!a!!", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 3. Delimitador distinto de la coma
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testMinimalQuotesValueContainingSemicolonDelimiter() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withDelimiter(';'));
+        printer.print("a;b");
+        printer.print("c");
+        assertEquals("\"a;b\";c", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalDoesNotQuoteCommaWhenDelimiterIsSemicolon() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withDelimiter(';'));
+        printer.print("a,b");
+        printer.print("c");
+        assertEquals("a,b;c", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testNoneEscapesSemicolonWhenDelimiterIsSemicolon() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withDelimiter(';').withEscape('!')
+                .withQuotePolicy(Quote.NONE);
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("a;b");
+        printer.print("c,d");
+        assertEquals("a!;b;c,d", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 4. printComment normaliza CR y CRLF
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentNormalizesCrLfAndCr() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#').withRecordSeparator("\n");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.printComment("line1\r\nline2\rline3");
+        assertEquals("# line1\n# line2\n# line3\n", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintCommentDoesNotProduceExtraEmptyLinesForCrLf() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#').withRecordSeparator("\n");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.printComment("a\r\nb");
+        assertEquals("# a\n# b\n", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 5. printComment a mitad de registro inserta separador primero
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentMidRecordInsertsRecordSeparatorFirst() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#').withRecordSeparator("\n");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("a");
+        printer.printComment("c");
+        assertEquals("a\n# c\n", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 6. printRecords(ResultSet) escribe NULL SQL como cadena nula
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintRecordsResultSetWritesSqlNullAsCustomNullString() throws Exception {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withRecordSeparator("\n").withNullString("NULL");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        final String[][] rows = { { "a", null }, { null, "c" } };
+        printer.printRecords(fakeResultSet(rows, 2));
+        assertEquals("a,NULL\nNULL,c\n", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintRecordsResultSetWritesSqlNullAsEmptyByDefault() throws Exception {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withRecordSeparator("\n");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        final String[][] rows = { { "x", null } };
+        printer.printRecords(fakeResultSet(rows, 2));
+        assertEquals("x,\n", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 7. Quote.MINIMAL con primer campo vacío o no alfanumérico
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testMinimalQuotesEmptyFirstFieldOfRecord() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.print("");
+        printer.print("x");
+        assertEquals("\"\",x", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalQuotesFirstFieldStartingWithNonAlphanumeric() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.print("-x");
+        assertEquals("\"-x\"", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalDoesNotQuoteFirstFieldStartingWithDigit() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.print("1x");
+        assertEquals("1x", sw.toString());
+        printer.close();
+    }
+
+    // ---------------------------------------------------------------
+    // 8. NON_NUMERIC con null, ALL con vacíos, Appendable simple
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testNonNumericQuotesNullValue() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuotePolicy(Quote.NON_NUMERIC));
+        printer.print(null);
+        printer.print("a");
+        assertEquals("\"\",\"a\"", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteAllQuotesEmptyValues() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuotePolicy(Quote.ALL));
+        printer.print("");
+        printer.print("b");
+        assertEquals("\"\",\"b\"", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testFlushAndCloseWithPlainAppendableDoNotFail() throws IOException {
+        final PlainAppendable out = new PlainAppendable();
+        final CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT);
+        printer.print("a");
+        printer.flush();
+        printer.close();
+        assertEquals("a", out.toString());
+    }
+
+    @Test
+    public void testGetOutReturnsSameAppendable() throws IOException {
+        final PlainAppendable out = new PlainAppendable();
+        final CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT);
+        assertSame(out, printer.getOut());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintlnWithoutRecordSeparatorWritesNothing() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withRecordSeparator((String) null));
+        printer.print("a");
+        printer.println();
+        printer.print("b");
+        assertEquals("ab", sw.toString());
+        printer.close();
+    }
+}

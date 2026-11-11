@@ -1,0 +1,8 @@
+1. `flush()` debe delegar en el `Flushable` subyacente; ninguna prueba verifica el vaciado del destino.
+2. `close()` debe cerrar el `Appendable` subyacente si implementa `Closeable`; las pruebas lo invocan pero nunca comprueban su efecto.
+3. `getOut()` debe devolver el mismo `Appendable` de destino con el que se construyó el printer; no hay prueba para este método.
+4. `printComment` debe iniciar el comentario en una línea nueva cuando el registro actual ya tiene valores impresos; todas las pruebas de comentarios empiezan con un registro vacío.
+5. `printComment` debe tratar un salto CR+LF dentro del comentario como un único salto de línea, insertando el carácter de comentario y un espacio una sola vez por línea; `testMultiLineComment` solo cubre LF.
+6. Tras `printComment`, la siguiente impresión debe comenzar en un registro nuevo, sin delimitador inicial; no se verifica.
+7. `printRecord(Iterable<?>)` debe imprimir los valores separados por el delimitador y terminar con el separador de registro; no hay prueba directa de esta sobrecarga.
+8. `printRecords(ResultSet)` debe propagar `SQLException` cuando se produce un error de acceso a la base de datos; las pruebas solo cubren el flujo correcto.

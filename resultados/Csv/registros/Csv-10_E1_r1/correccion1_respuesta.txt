@@ -1,0 +1,206 @@
+El error se debe a que el archivo empieza con una línea ```` ```java ```` que se copió dentro del código fuente, y el carácter `` ` `` no es válido en Java. Además, el texto termina a mitad del método `testDoubleQuoteN`, así que no puedo reconstruir esa prueba sin inventar su comportamiento. La omito para que el archivo compile. Si me pasas el resto del archivo, la añado sin cambiar lo que verifica.
+
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.Closeable;
+import java.io.Flushable;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que usan únicamente su API pública.
+ */
+public class CSVPrinterLLMTest {
+
+    private static final String RS = CSVFormat.DEFAULT.getRecordSeparator();
+
+    /** Appendable que registra las llamadas a flush y close. */
+    private static final class TrackingAppendable implements Appendable, Flushable, Closeable {
+        private final StringBuilder buffer = new StringBuilder();
+        private boolean flushed;
+        private boolean closed;
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            buffer.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            buffer.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            buffer.append(c);
+            return this;
+        }
+
+        @Override
+        public void flush() {
+            flushed = true;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    /** Imprime un registro con los valores dados y devuelve el texto producido. */
+    private static String printRecordWith(final CSVFormat format, final Object... values) throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.printRecord(values);
+        printer.close();
+        return sw.toString();
+    }
+
+    @Test
+    public void testPrintRecordEmptyIterableWritesOnlyRecordSeparator() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord(new ArrayList<String>());
+        printer.close();
+        assertEquals(RS, sw.toString());
+    }
+
+    @Test
+    public void testPrintRecordIterableMatchesVarargsOutput() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord(Arrays.asList("a", "b,c"));
+        printer.close();
+        assertEquals("a,\"b,c\"" + RS, sw.toString());
+    }
+
+    @Test
+    public void testConstructorDoesNotWriteAnything() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        assertEquals("", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testGetOutReturnsSameAppendable() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        assertSame(sw, printer.getOut());
+        printer.close();
+    }
+
+    @Test
+    public void testCustomRecordSeparatorIsUsed() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withRecordSeparator("\n"));
+        printer.printRecord("a", "b");
+        printer.close();
+        assertEquals("a,b\n", sw.toString());
+    }
+
+    @Test
+    public void testCustomDelimiterDoesNotQuoteComma() throws IOException {
+        assertEquals("a,b;c" + RS,
+                printRecordWith(CSVFormat.DEFAULT.withDelimiter(';'), "a,b", "c"));
+    }
+
+    @Test
+    public void testCustomDelimiterQuotesValueContainingDelimiter() throws IOException {
+        assertEquals("\"a;b\";c" + RS,
+                printRecordWith(CSVFormat.DEFAULT.withDelimiter(';'), "a;b", "c"));
+    }
+
+    @Test
+    public void testTabDelimiterDoesNotQuoteComma() throws IOException {
+        assertEquals("a,b\tc" + RS,
+                printRecordWith(CSVFormat.DEFAULT.withDelimiter('\t'), "a,b", "c"));
+    }
+
+    @Test
+    public void testLeadingSpaceIsQuoted() throws IOException {
+        assertEquals("\" a\"" + RS, printRecordWith(CSVFormat.DEFAULT, " a"));
+    }
+
+    @Test
+    public void testLeadingSpaceInMiddleOfRecordIsQuoted() throws IOException {
+        assertEquals("x,\" a\"" + RS, printRecordWith(CSVFormat.DEFAULT, "x", " a"));
+    }
+
+    @Test
+    public void testLeadingHashIsQuoted() throws IOException {
+        assertEquals("\"#x\"" + RS, printRecordWith(CSVFormat.DEFAULT, "#x"));
+    }
+
+    @Test
+    public void testTrailingControlCharacterIsQuoted() throws IOException {
+        assertEquals("\"a\u0001\"" + RS, printRecordWith(CSVFormat.DEFAULT, "a\u0001"));
+    }
+
+    @Test
+    public void testEmptyFirstValueIsQuoted() throws IOException {
+        assertEquals("\"\",x" + RS, printRecordWith(CSVFormat.DEFAULT, "", "x"));
+    }
+
+    @Test
+    public void testEmptyMiddleValueIsNotQuoted() throws IOException {
+        assertEquals("a,,b" + RS, printRecordWith(CSVFormat.DEFAULT, "a", "", "b"));
+    }
+
+    @Test
+    public void testSingleEmptyValueRecordIsQuoted() throws IOException {
+        assertEquals("\"\"" + RS, printRecordWith(CSVFormat.DEFAULT, ""));
+    }
+
+    @Test
+    public void testNullFirstValueIsWrittenAsQuotedEmpty() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.print(null);
+        printer.close();
+        assertEquals("\"\"", sw.toString());
+    }
+
+    @Test
+    public void testQuoteCharacterIsDoubled() throws IOException {
+        assertEquals("\"say \"\"hi\"\"\"" + RS, printRecordWith(CSVFormat.DEFAULT, "say \"hi\""));
+    }
+}
+```
+
+Cambios realizados:
+1. Eliminé la línea ```` ```java ```` inicial que provocaba el error `illegal character: '`'`.
+2. Eliminé el fragmento final incompleto (`testDoubleQuoteN`), que impedía compilar.
+3. No modifiqué las aserciones de las pruebas existentes.
+
+Las importaciones `assertFalse`, `assertTrue`, `List` y la clase `TrackingAppendable` no se usan en las pruebas visibles. Son advertencias, no errores, así que no impiden compilar. Podrían usarse en las pruebas que faltan.

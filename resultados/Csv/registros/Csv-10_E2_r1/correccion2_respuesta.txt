@@ -1,0 +1,189 @@
+**Causa del error:** el archivo está incompleto. El comentario `// PEGA AQUÍ EL RESTO DEL ARCHIVO ORIGINAL...` quedó dentro de la clase y nunca se cerró la llave de `CSVPrinterLLMTest`, por lo que javac llega al final del archivo sin terminar el bloque.
+
+No tengo el resto de tus pruebas, así que no puedo restaurar su contenido original. Lo que sí puedo hacer es entregar un archivo que compila, completar el helper de `ResultSet` que se menciona en el comentario y dejar una prueba de ejemplo. Pega tus métodos `@Test` originales antes de la llave final de la clase.
+
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.io.Closeable;
+import java.io.Flushable;
+import java.io.IOException;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que cubren ramas y líneas no ejecutadas
+ * por la suite existente. Solo usan la API pública de la clase.
+ */
+public class CSVPrinterLLMTest {
+
+    private static final String RS = CSVFormat.DEFAULT.getRecordSeparator();
+
+    /** Appendable que implementa Closeable y Flushable y registra las llamadas. */
+    private static final class TrackingAppendable implements Appendable, Closeable, Flushable {
+        final StringBuilder sb = new StringBuilder();
+        boolean closed;
+        boolean flushed;
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            sb.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            sb.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            sb.append(c);
+            return this;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        @Override
+        public void flush() {
+            flushed = true;
+        }
+    }
+
+    /**
+     * Crea un ResultSet simulado mediante proxies de la API estándar de Java.
+     *
+     * @param columns nombres de las columnas (índice 1 en JDBC = columns[0])
+     * @param rows    filas de datos; cada fila tiene un valor por columna
+     */
+    private static ResultSet newResultSet(final String[] columns, final Object[][] rows) {
+        final int[] cursor = {-1};
+        final InvocationHandler handler = (proxy, method, args) -> {
+            final String name = method.getName();
+            if (method.getDeclaringClass() == Object.class) {
+                switch (name) {
+                    case "toString":
+                        return "FakeResultSet";
+                    case "hashCode":
+                        return System.identityHashCode(proxy);
+                    case "equals":
+                        return proxy == args[0];
+                    default:
+                        throw new UnsupportedOperationException(name);
+                }
+            }
+            switch (name) {
+                case "next":
+                    cursor[0]++;
+                    return cursor[0] < rows.length;
+                case "getObject":
+                    return rows[cursor[0]][columnIndex(columns, args[0])];
+                case "getString": {
+                    final Object value = rows[cursor[0]][columnIndex(columns, args[0])];
+                    return value == null ? null : String.valueOf(value);
+                }
+                case "getMetaData":
+                    return newResultSetMetaData(columns);
+                case "close":
+                    return null;
+                default:
+                    throw new UnsupportedOperationException(name);
+            }
+        };
+        return (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(), new Class<?>[]{ResultSet.class}, handler);
+    }
+
+    private static ResultSetMetaData newResultSetMetaData(final String[] columns) {
+        final InvocationHandler handler = (proxy, method, args) -> {
+            final String name = method.getName();
+            if (method.getDeclaringClass() == Object.class) {
+                return name.equals("toString") ? "FakeResultSetMetaData" : null;
+            }
+            switch (name) {
+                case "getColumnCount":
+                    return columns.length;
+                case "getColumnLabel":
+                case "getColumnName":
+                    return columns[(Integer) args[0] - 1];
+                default:
+                    throw new UnsupportedOperationException(name);
+            }
+        };
+        return (ResultSetMetaData) Proxy.newProxyInstance(
+                ResultSetMetaData.class.getClassLoader(),
+                new Class<?>[]{ResultSetMetaData.class}, handler);
+    }
+
+    /** Convierte un índice JDBC (1-based) o un nombre de columna en índice de array (0-based). */
+    private static int columnIndex(final String[] columns, final Object key) {
+        if (key instanceof Integer) {
+            return (Integer) key - 1;
+        }
+        for (int i = 0; i < columns.length; i++) {
+            if (columns[i].equals(key)) {
+                return i;
+            }
+        }
+        throw new IllegalArgumentException("Columna desconocida: " + key);
+    }
+
+    @Test
+    public void testPrintRecordWithTrackingAppendable() throws IOException {
+        final TrackingAppendable out = new TrackingAppendable();
+        try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT)) {
+            printer.printRecord("a", "b");
+        }
+        assertEquals("a,b" + RS, out.sb.toString());
+        assertTrue(out.closed);
+    }
+
+    @Test
+    public void testPrintRecordsFromResultSet() throws IOException {
+        final ResultSet rs = newResultSet(
+                new String[]{"name", "age"},
+                new Object[][]{{"x", 1}, {"y", 2}});
+        final TrackingAppendable out = new TrackingAppendable();
+        try (CSVPrinter printer = new CSVPrinter(out, CSVFormat.DEFAULT)) {
+            printer.printRecords(rs);
+        }
+        assertEquals("x,1" + RS + "y,2" + RS, out.sb.toString());
+    }
+
+    // PEGA AQUÍ LOS MÉTODOS @Test ORIGINALES, ANTES DE LA LLAVE DE CIERRE
+}
+```
+
+Notas:
+
+- **Antes de compilar:** pega tus métodos `@Test` originales en la línea del comentario final. Si usaban otros imports (por ejemplo `Arrays` o `StringWriter`), agrégalos al bloque de imports.
+- **Prueba `testPrintRecordsFromResultSet`:** la escribí para verificar el helper con `printRecords(ResultSet)`. Si tu versión de commons-csv usa otro orden de llamadas sobre `ResultSet`, el proxy puede necesitar más métodos; en ese caso, el `UnsupportedOperationException` te indicará cuál falta.
+- **Versión de Java:** el código usa lambdas, así que requiere Java 8 o superior, como exige commons-csv.

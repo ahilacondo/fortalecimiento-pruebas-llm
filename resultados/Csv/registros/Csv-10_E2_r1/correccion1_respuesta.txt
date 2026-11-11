@@ -1,0 +1,94 @@
+El error viene de que el archivo contiene las marcas de Markdown ``` como texto. Javac interpreta el carácter `` ` `` como un carácter ilegal en la línea 1. Hay dos fences al inicio (```` ```java ```` duplicado), y el bloque de código de tu mensaje termina a mitad de la clase, en `private static Result`, así que no tengo el resto del archivo ni las pruebas originales.
+
+No puedo devolver el archivo completo y compilable sin inventar las pruebas que faltan, lo que cambiaría el comportamiento que verifican. Lo que sí puedo darte es la parte corregida hasta donde llega el código:
+
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.Closeable;
+import java.io.Flushable;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que cubren ramas y líneas no ejecutadas
+ * por la suite existente. Solo usan la API pública de la clase.
+ */
+public class CSVPrinterLLMTest {
+
+    private static final String RS = CSVFormat.DEFAULT.getRecordSeparator();
+
+    /** Appendable que implementa Closeable y Flushable y registra las llamadas. */
+    private static final class TrackingAppendable implements Appendable, Closeable, Flushable {
+        final StringBuilder sb = new StringBuilder();
+        boolean closed;
+        boolean flushed;
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            sb.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            sb.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            sb.append(c);
+            return this;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        @Override
+        public void flush() {
+            flushed = true;
+        }
+    }
+
+    /** Crea un ResultSet simulado mediante proxies de la API estándar de Java. */
+    // PEGA AQUÍ EL RESTO DEL ARCHIVO ORIGINAL A PARTIR DE ESTE PUNTO
+```
+
+Para cerrar el archivo necesito el resto del contenido original, desde el método `createResultSet` (o como se llame) hasta el final de la clase. Si me lo pasas completo, te devuelvo el archivo entero corregido.
+
+Mientras tanto, para evitar el mismo error al pegar:
+- No incluyas líneas con ```` ``` ```` en el archivo `.java`. Las marcas de Markdown solo sirven para mostrar código en el chat.
+- Comprueba que el archivo empieza con el comentario de licencia o con `package`, sin texto previo.
+- Revisa que no haya caracteres como `` ` `` o `…` fuera de comentarios o cadenas.
+- Si el archivo se copió desde un chat, busca `` ` `` con un editor antes de compilar.

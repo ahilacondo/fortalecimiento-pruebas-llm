@@ -1,0 +1,377 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.Closeable;
+import java.io.Flushable;
+import java.io.IOException;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que cubren requisitos de la documentación
+ * no verificados por {@code CSVPrinterTest}.
+ */
+public class CSVPrinterLLMTest {
+
+    /**
+     * Appendable de prueba que registra las llamadas a flush() y close().
+     */
+    private static final class RecordingAppendable implements Appendable, Flushable, Closeable {
+        private final StringBuilder content = new StringBuilder();
+        private boolean flushed;
+        private boolean closed;
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            content.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            content.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            content.append(c);
+            return this;
+        }
+
+        @Override
+        public void flush() {
+            flushed = true;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 1. flush() delega en el Flushable subyacente
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testFlushDelegatesToUnderlyingFlushable() throws IOException {
+        final RecordingAppendable app = new RecordingAppendable();
+        final CSVPrinter printer = new CSVPrinter(app, CSVFormat.DEFAULT);
+        assertFalse("No debe vaciarse antes de llamar a flush()", app.flushed);
+
+        printer.flush();
+
+        assertTrue("flush() debe delegar en el Flushable subyacente", app.flushed);
+        assertFalse("flush() no debe cerrar el destino", app.closed);
+    }
+
+    @Test
+    public void testFlushWithNonFlushableAppendableDoesNotFail() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+        printer.print("abc");
+
+        printer.flush();
+
+        assertEquals("flush() no debe alterar el contenido escrito", "abc", sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 2. close() cierra el Appendable subyacente si es Closeable
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testCloseClosesUnderlyingCloseable() throws IOException {
+        final RecordingAppendable app = new RecordingAppendable();
+        final CSVPrinter printer = new CSVPrinter(app, CSVFormat.DEFAULT);
+        printer.printRecord("a", "b");
+        assertFalse("No debe estar cerrado antes de close()", app.closed);
+
+        printer.close();
+
+        assertTrue("close() debe cerrar el Appendable subyacente", app.closed);
+        assertEquals("a,b" + CSVFormat.DEFAULT.getRecordSeparator(), app.content.toString());
+    }
+
+    @Test
+    public void testCloseWithNonCloseableAppendableDoesNotFail() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+        printer.print("x");
+
+        printer.close();
+
+        assertEquals("close() no debe alterar el contenido de un Appendable no Closeable", "x", sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 3. getOut() devuelve el mismo Appendable de destino
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testGetOutReturnsSameAppendableInstance() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+
+        assertSame("getOut() debe devolver el mismo destino con el que se construyó", sb, printer.getOut());
+    }
+
+    @Test
+    public void testGetOutReflectsWrittenContent() throws IOException {
+        final RecordingAppendable app = new RecordingAppendable();
+        final CSVPrinter printer = new CSVPrinter(app, CSVFormat.DEFAULT);
+        printer.print("valor");
+
+        assertSame("getOut() debe devolver la misma instancia", app, printer.getOut());
+        assertEquals("valor", printer.getOut().toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 4. printComment inicia una línea nueva si el registro ya tiene valores
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentStartsNewLineWhenRecordHasValues() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+        final String rs = format.getRecordSeparator();
+
+        printer.print("a");
+        printer.printComment("comentario");
+
+        assertEquals("a" + rs + "# comentario" + rs, sb.toString());
+    }
+
+    @Test
+    public void testPrintCommentAfterPrintRecordStartsNewLine() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+        final String rs = format.getRecordSeparator();
+
+        printer.printRecord("x", "y");
+        printer.printComment("nota");
+
+        assertEquals("x,y" + rs + "# nota" + rs, sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 5. CR+LF dentro del comentario es un único salto de línea
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentCrLfIsSingleLineBreak() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+        final String rs = format.getRecordSeparator();
+
+        printer.printComment("linea1\r\nlinea2");
+
+        assertEquals("# linea1" + rs + "# linea2" + rs, sb.toString());
+    }
+
+    @Test
+    public void testPrintCommentCrLfDoesNotProduceEmptyCommentLine() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+
+        printer.printComment("a\r\nb");
+
+        assertFalse("CR+LF no debe generar una línea de comentario vacía",
+                sb.toString().contains("# \r\n"));
+        assertEquals(1, countOccurrences(sb.toString(), "# "), 0);
+        assertEquals(2, countOccurrences(sb.toString(), "# "));
+    }
+
+    // ---------------------------------------------------------------
+    // 6. Tras printComment, la siguiente impresión empieza registro nuevo
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintAfterCommentHasNoLeadingDelimiter() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+        final String rs = format.getRecordSeparator();
+
+        printer.printComment("nota");
+        printer.print("a");
+
+        assertEquals("# nota" + rs + "a", sb.toString());
+    }
+
+    @Test
+    public void testPrintRecordAfterCommentStartsNewRecord() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withCommentStart('#');
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+        final String rs = format.getRecordSeparator();
+
+        printer.printComment("nota");
+        printer.printRecord("x", "y");
+
+        assertEquals("# nota" + rs + "x,y" + rs, sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 7. printRecord(Iterable<?>) imprime valores separados y termina el registro
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintRecordIterableJoinsValuesWithDelimiterAndEndsRecord() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT;
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+
+        printer.printRecord(Arrays.asList("a", "b c", "d"));
+
+        assertEquals("a,b c,d" + format.getRecordSeparator(), sb.toString());
+    }
+
+    @Test
+    public void testPrintRecordIterableEmptyOnlyWritesRecordSeparator() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT;
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+
+        printer.printRecord(new ArrayList<String>());
+
+        assertEquals(format.getRecordSeparator(), sb.toString());
+    }
+
+    @Test
+    public void testPrintRecordIterableUsesNullStringForNullElements() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVFormat format = CSVFormat.DEFAULT.withNullString("NULL");
+        final CSVPrinter printer = new CSVPrinter(sb, format);
+
+        printer.printRecord(Arrays.asList("a", null, "c"));
+
+        assertEquals("a,NULL,c" + format.getRecordSeparator(), sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // 8. printRecords(ResultSet) propaga SQLException
+    // ---------------------------------------------------------------
+
+    @Test
+    public void testPrintRecordsResultSetPropagatesSQLException() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+
+        final ResultSetMetaData metaData = (ResultSetMetaData) Proxy.newProxyInstance(
+                ResultSetMetaData.class.getClassLoader(),
+                new Class<?>[] { ResultSetMetaData.class },
+                (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) {
+                        return Integer.valueOf(2);
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+
+        final ResultSet resultSet = (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(),
+                new Class<?>[] { ResultSet.class },
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                    case "getMetaData":
+                        return metaData;
+                    case "next":
+                        return Boolean.TRUE;
+                    case "getString":
+                        throw new SQLException("fallo simulado de base de datos");
+                    default:
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
+
+        try {
+            printer.printRecords(resultSet);
+            fail("Se esperaba una SQLException");
+        } catch (final SQLException e) {
+            assertEquals("fallo simulado de base de datos", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testPrintRecordsResultSetWithoutRowsWritesNothing() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+
+        final ResultSetMetaData metaData = (ResultSetMetaData) Proxy.newProxyInstance(
+                ResultSetMetaData.class.getClassLoader(),
+                new Class<?>[] { ResultSetMetaData.class },
+                (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) {
+                        return Integer.valueOf(2);
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+
+        final ResultSet resultSet = (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(),
+                new Class<?>[] { ResultSet.class },
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                    case "getMetaData":
+                        return metaData;
+                    case "next":
+                        return Boolean.FALSE;
+                    default:
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
+
+        printer.printRecords(resultSet);
+
+        assertEquals("Un ResultSet sin filas no debe producir salida", "", sb.toString());
+    }
+
+    // ---------------------------------------------------------------
+    // Utilidad
+    // ---------------------------------------------------------------
+
+    private static int countOccurrences(final String text, final String token) {
+        int count = 0;
+        int idx = text.indexOf(token);
+        while (idx >= 0) {
+            count++;
+            idx = text.indexOf(token, idx + token.length());
+        }
+        return count;
+    }
+}
+```
