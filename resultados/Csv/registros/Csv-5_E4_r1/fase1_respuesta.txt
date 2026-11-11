@@ -1,0 +1,8 @@
+1. `flush()` debe delegar en el flujo subyacente cuando implementa Flushable y no debe fallar cuando no lo implementa.
+2. `getOut()` debe devolver el mismo Appendable con el que se construyó el printer.
+3. `printComment` debe iniciar una nueva línea antes del comentario cuando el printer no está al inicio de un registro.
+4. `printComment` debe tratar los saltos de línea CR y CRLF dentro del comentario como saltos de línea, anteponiendo el carácter de comentario y un espacio.
+5. `printRecords(ResultSet)` debe imprimir valores NULL de la base de datos según la regla de `print` (cadena vacía o nullString) y no emitir nada para un conjunto de resultados vacío.
+6. `printRecords(Iterable)` y `printRecords(Object[])` deben imprimir cada elemento escalar (que no sea array ni Iterable) como un registro de un solo campo.
+7. `println()` debe emitir el separador de registro configurado en el formato, aunque sea distinto del separador por defecto, y dejar el printer en estado de nuevo registro.
+8. El constructor debe rechazar o no soportar formatos híbridos (encapsulación y escape con caracteres distintos), tal como indica la documentación.

@@ -1,0 +1,141 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Csv/Csv_5_b/.test_suite/org/apache/commons/csv/CSVPrinterLLMTest.java:1: error: illegal character: '`'
+
+Archivo anterior:
+```java
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.util.ArrayList;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que ejercitan ramas y caminos
+ * no cubiertos por la suite existente, usando únicamente la API pública.
+ */
+public class CSVPrinterLLMTest {
+
+    private final String rs = CSVFormat.DEFAULT.getRecordSeparator();
+
+    /** Appendable que solo implementa Appendable (ni Closeable ni Flushable). */
+    private static final class RecordingAppendable implements Appendable {
+        final StringBuilder sb = new StringBuilder();
+
+        @Override
+        public Appendable append(final CharSequence csq) {
+            sb.append(csq);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final CharSequence csq, final int start, final int end) {
+            sb.append(csq, start, end);
+            return this;
+        }
+
+        @Override
+        public Appendable append(final char c) {
+            sb.append(c);
+            return this;
+        }
+    }
+
+    /** Writer que registra si se invocaron close() y flush(). */
+    private static final class TrackingWriter extends StringWriter {
+        boolean closed;
+        boolean flushed;
+
+        @Override
+        public void flush() {
+            flushed = true;
+            super.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            super.close();
+        }
+    }
+
+    /** Crea un ResultSet simulado mediante Proxy que devuelve las filas indicadas. */
+    private static ResultSet resultSetOf(final String[][] rows) {
+        final int[] cursor = { -1 };
+        final ResultSetMetaData meta = (ResultSetMetaData) Proxy.newProxyInstance(
+                ResultSetMetaData.class.getClassLoader(),
+                new Class<?>[] { ResultSetMetaData.class },
+                (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) {
+                        return rows.length == 0 ? 0 : rows[0].length;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        return (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(),
+                new Class<?>[] { ResultSet.class },
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                    case "getMetaData":
+                        return meta;
+                    case "next":
+                        cursor[0]++;
+                        return cursor[0] < rows.length;
+                    case "getString":
+                        return rows[cursor[0]][(Integer) args[0] - 1];
+                    default:
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
+    }
+
+    @Test
+    public void testFlushAndCloseDelegateToFlushableAndCloseable() throws Exception {
+        final TrackingWriter tw = new TrackingWriter();
+        final CSVPrinter printer = new CSVPrinter(tw, CSVFormat.DEFAULT);
+        printer.printRecord("a", "b");
+        assertFalse(tw.flushed);
+        assertFalse(tw.closed);
+        printer.flush();
+        assertTrue(tw.flushed);
+        assertFalse(tw.closed);
+        printer.close();
+        assertTrue(tw.closed);
+        assertEquals("a,b" + rs, tw.toString());
+    }
+
+    @Test
+    public void testFlushAndCloseWithPlainAppendableDoNotFail() throws Exception {
+        final RecordingAppendable app = new RecordingAppendable();
+        final CSVPrinter printer = new CSVPrinter(app, CSVFormat.DEFAULT);
+        printer.printRecord("a", "b");
+        printer.flush();
+        printer.close();
+        assertEquals("a,b" + rs, app.sb.toString());
+    }
+
+    @Test
+    public void testGetOutReturnsSameAppendable() throws Exception {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        assertSame(sw, printer.getOut());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDelimiterEqualToQuoteCharIsRejected() throws Exception {
+        new CSVPrinter(new StringWriter(), CSVFormat.
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.csv` y la clase pública `CSVPrinterLLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

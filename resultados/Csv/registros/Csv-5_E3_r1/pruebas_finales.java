@@ -1,0 +1,262 @@
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVPrinter} que cubren comportamientos no verificados
+ * por {@code CSVPrinterTest}. Solo utilizan la API pública de la clase.
+ *
+ * @version $Id$
+ */
+public class CSVPrinterLLMTest {
+
+    private static final String RS = CSVFormat.DEFAULT.getRecordSeparator();
+
+    /**
+     * Crea un {@link ResultSet} simulado mediante un proxy dinámico, sin depender de una base de datos.
+     */
+    private static ResultSet fakeResultSet(final String[][] rows, final int columns) {
+        final int[] cursor = { -1 };
+
+        final ResultSetMetaData metaData = (ResultSetMetaData) Proxy.newProxyInstance(
+                CSVPrinterLLMTest.class.getClassLoader(),
+                new Class<?>[] { ResultSetMetaData.class },
+                (proxy, method, args) -> {
+                    if ("getColumnCount".equals(method.getName())) {
+                        return columns;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+
+        return (ResultSet) Proxy.newProxyInstance(
+                CSVPrinterLLMTest.class.getClassLoader(),
+                new Class<?>[] { ResultSet.class },
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                    case "next":
+                        cursor[0]++;
+                        return cursor[0] < rows.length;
+                    case "getMetaData":
+                        return metaData;
+                    case "getString":
+                        return rows[cursor[0]][((Integer) args[0]) - 1];
+                    default:
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
+    }
+
+    // ------------------------------------------------------------------
+    // 1. getOut()
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testGetOutReturnsSameAppendableUsedInConstructor() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        assertSame(sw, printer.getOut());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 2. close() y flush() con un Appendable que no es Closeable ni Flushable
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testFlushAndCloseWithNonFlushableNonCloseableAppendable() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        final CSVPrinter printer = new CSVPrinter(sb, CSVFormat.DEFAULT);
+        printer.print("abc");
+        printer.flush();
+        printer.close();
+        assertEquals("abc", sb.toString());
+        assertSame(sb, printer.getOut());
+    }
+
+    // ------------------------------------------------------------------
+    // 3. printComment con CR suelto o CRLF: cada línea recibe el prefijo
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentLoneCarriageReturnStartsNewCommentLine() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withCommentStart('#'));
+        printer.printComment("a\rb");
+        assertEquals("# a" + RS + "# b" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintCommentCrLfProducesSingleNewCommentLine() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withCommentStart('#'));
+        printer.printComment("a\r\nb");
+        assertEquals("# a" + RS + "# b" + RS, sw.toString());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 4. printComment con valores previos en la línea actual
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testPrintCommentAfterValuesInsertsRecordSeparatorFirst() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withCommentStart('#'));
+        printer.print("x");
+        printer.printComment("c");
+        assertEquals("x" + RS + "# c" + RS, sw.toString());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Quote.NONE con escape configurado: el propio carácter de escape se escapa
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testQuoteNoneEscapesEscapeCharacterAndDelimiter() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withEscape('!').withQuotePolicy(Quote.NONE);
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("a!b,c");
+        assertEquals("a!!b!,c", sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteNoneEscapesValueThatIsOnlyEscapeCharacter() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withEscape('!').withQuotePolicy(Quote.NONE);
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.print("!");
+        assertEquals("!!", sw.toString());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Política MINIMAL: encapsulado de valor vacío inicial, primer y último carácter
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testMinimalQuotesEmptyFirstFieldOfRecord() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord("", "x");
+        assertEquals("\"\",x" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalDoesNotQuoteEmptyNonFirstField() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord("a", "");
+        assertEquals("a," + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalQuotesNonAlphanumericFirstCharacter() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord("#x", "y");
+        assertEquals("\"#x\",y" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testMinimalQuotesValueEndingWithControlCharacter() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecord("a\u0001", "b");
+        assertEquals("\"a\u0001\",b" + RS, sw.toString());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 7. printRecords(Iterable) con escalares mezclados con arrays e iterables
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testPrintRecordsIterableMixesScalarArrayAndIterable() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        printer.printRecords(Arrays.asList("a", new String[] { "b", "c" }, Arrays.asList("d", "e")));
+        assertEquals("a" + RS + "b,c" + RS + "d,e" + RS, sw.toString());
+        printer.close();
+    }
+
+    // ------------------------------------------------------------------
+    // 8. Valores nulos con Quote.ALL, Quote.NON_NUMERIC y printRecords(ResultSet)
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testQuoteAllEmitsEmptyQuotedValueForNull() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuotePolicy(Quote.ALL));
+        printer.printRecord("a", null);
+        assertEquals("\"a\",\"\"" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteAllEmitsQuotedNullStringForNull() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withQuotePolicy(Quote.ALL).withNullString("NULL");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.printRecord("a", null);
+        assertEquals("\"a\",\"NULL\"" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteNonNumericQuotesNullAsEmptyAndLeavesNumberUnquoted() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT.withQuotePolicy(Quote.NON_NUMERIC));
+        printer.printRecord("a", null, Integer.valueOf(2));
+        assertEquals("\"a\",\"\",2" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testQuoteNonNumericQuotesNullStringForNull() throws IOException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withQuotePolicy(Quote.NON_NUMERIC).withNullString("NULL");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        printer.printRecord((Object) null);
+        assertEquals("\"NULL\"" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintRecordsResultSetWithNullColumnsDefaultPolicy() throws IOException, java.sql.SQLException {
+        final StringWriter sw = new StringWriter();
+        final CSVPrinter printer = new CSVPrinter(sw, CSVFormat.DEFAULT);
+        final String[][] rows = { { "1", null }, { null, "b" } };
+        printer.printRecords(fakeResultSet(rows, 2));
+        // Fila 1: "1" y columna NULL vacía. Fila 2: NULL inicial vacío se encapsula por MINIMAL.
+        assertEquals("1," + RS + "\"\",b" + RS, sw.toString());
+        printer.close();
+    }
+
+    @Test
+    public void testPrintRecordsResultSetWithNullStringAndQuoteAll() throws IOException, java.sql.SQLException {
+        final StringWriter sw = new StringWriter();
+        final CSVFormat format = CSVFormat.DEFAULT.withQuotePolicy(Quote.ALL).withNullString("NULL");
+        final CSVPrinter printer = new CSVPrinter(sw, format);
+        final String[][] rows = { { "1", null } };
+        printer.printRecords(fakeResultSet(rows, 2));
+        assertEquals("\"1\",\"NULL\"" + RS, sw.toString());
+        printer.close();
+    }
+}

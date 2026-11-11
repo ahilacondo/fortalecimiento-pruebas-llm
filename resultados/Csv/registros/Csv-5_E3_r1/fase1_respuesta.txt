@@ -1,0 +1,8 @@
+1. Comportamiento de `getOut()`: devuelve el mismo Appendable con el que se construyó el printer.
+2. `close()` y `flush()` no fallan ni delegan cuando el destino no implementa Closeable ni Flushable (por ejemplo, un StringBuilder).
+3. `printComment` con saltos de línea CR suelto o CRLF en el comentario: no se verifica que cada línea reciba el prefijo de comentario.
+4. `printComment` cuando ya hay valores en la línea actual: se debe insertar un salto de registro antes del comentario.
+5. Con `Quote.NONE` y escape configurado, el propio carácter de escape presente en el valor se duplica o escapa correctamente; los tests actuales solo cubren delimitador, CR y LF.
+6. Con política `MINIMAL`, un valor vacío como primer campo de un registro se encapsula como `""`, y un primer carácter no alfanumérico o un último carácter de control (≤ espacio) provocan encapsulado.
+7. `printRecords(Iterable)` con elementos escalares mezclados con arrays o iterables: la rama que llama a `printRecord` con un valor simple no está cubierta.
+8. Valores nulos con `Quote.ALL`, `Quote.NON_NUMERIC` o con `printRecords(ResultSet)` y `nullString` configurado: no se verifica la salida para columnas NULL de la base de datos.
