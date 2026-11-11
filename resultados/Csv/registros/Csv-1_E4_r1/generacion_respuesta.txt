@@ -1,0 +1,276 @@
+```java
+/*
+ * Pruebas adicionales para ExtendedBufferedReader.
+ * Cubren los requisitos 1-8 de la fase 1. No modifican ExtendedBufferedReaderTest.
+ */
+package org.apache.commons.csv;
+
+import java.io.StringReader;
+
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+
+public class ExtendedBufferedReaderLLMTest {
+
+    // ------------------------------------------------------------------
+    // Requisito 1: readAgain() devuelve UNDEFINED si aún no se ha leído nada
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readAgainReturnsUndefinedBeforeAnyRead() {
+        ExtendedBufferedReader br = getBufferedReader("abc");
+        assertEquals(ExtendedBufferedReader.UNDEFINED, br.readAgain());
+    }
+
+    @Test
+    public void readAgainReturnsUndefinedForEmptyInputBeforeAnyRead() {
+        ExtendedBufferedReader br = getBufferedReader("");
+        assertEquals(ExtendedBufferedReader.UNDEFINED, br.readAgain());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 2: readLine() deja lastChar con el último carácter de la línea,
+    // sin CR ni LF
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readLineSetsLastCharToLastCharOfLineWithCrLfTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("abc\r\ndef");
+        assertEquals("abc", br.readLine());
+        assertEquals('c', br.readAgain());
+    }
+
+    @Test
+    public void readLineSetsLastCharToLastCharOfLineWithCrTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("xyz\rq");
+        assertEquals("xyz", br.readLine());
+        assertEquals('z', br.readAgain());
+    }
+
+    @Test
+    public void readLineSetsLastCharToLastCharOfLineWithLfTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("foo\nbar\n");
+        assertEquals("foo", br.readLine());
+        assertEquals('o', br.readAgain());
+        assertEquals("bar", br.readLine());
+        assertEquals('r', br.readAgain());
+    }
+
+    @Test
+    public void readLineLastCharIsNeverCarriageReturnOrLineFeed() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("ab\r\n");
+        assertEquals("ab", br.readLine());
+        int last = br.readAgain();
+        assertNotEquals('\r', last);
+        assertNotEquals('\n', last);
+        assertEquals('b', last);
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 3: readLine() establece lastChar a END_OF_STREAM al llegar al EOF
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readLineSetsEndOfStreamOnEmptyInput() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("");
+        assertNull(br.readLine());
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.readAgain());
+    }
+
+    @Test
+    public void readLineSetsEndOfStreamAfterLastLineIsConsumed() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\n");
+        assertEquals("a", br.readLine());
+        assertEquals('a', br.readAgain());
+        assertNull(br.readLine());
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.readAgain());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 4: readLine() ante una línea vacía mantiene lastChar
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readLineOnEmptyLineOnFreshReaderKeepsUndefined() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("\n");
+        assertEquals("", br.readLine());
+        assertEquals(ExtendedBufferedReader.UNDEFINED, br.readAgain());
+    }
+
+    @Test
+    public void readLineOnEmptyLineKeepsPreviouslyReadChar() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("x\n\ny");
+        assertEquals('x', br.read());
+        assertEquals("", br.readLine());
+        assertEquals('x', br.readAgain());
+        assertEquals("y", br.readLine());
+        assertEquals('y', br.readAgain());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 5: read() incrementa el contador de líneas ante terminadores
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readIncrementsLineCounterOnLineFeed() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\nb");
+        assertEquals(0, br.getLineNumber());
+        assertEquals('a', br.read());
+        assertEquals(0, br.getLineNumber());
+        assertEquals('\n', br.read());
+        assertEquals(1, br.getLineNumber());
+        assertEquals('b', br.read());
+        assertEquals(1, br.getLineNumber());
+    }
+
+    /*
+     * Requisito 5 (CR): según la documentación, read() debe contar el CR como
+     * terminador de línea. La implementación actual solo cuenta '\n' en read(),
+     * por lo que esta prueba falla con el código actual (relacionado con CSV-75).
+     */
+    @Test
+    public void readIncrementsLineCounterOnCarriageReturn() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\rb");
+        assertEquals('a', br.read());
+        assertEquals(0, br.getLineNumber());
+        assertEquals('\r', br.read());
+        assertEquals(1, br.getLineNumber());
+        assertEquals('b', br.read());
+        assertEquals(1, br.getLineNumber());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 6: read(char[], int, int) cuenta CR, LF y CRLF como un único
+    // terminador de línea
+    // ------------------------------------------------------------------
+
+    @Test
+    public void readCharArrayCountsLoneLineFeedAsOneTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\nb");
+        char[] buf = new char[10];
+        assertEquals(3, br.read(buf, 0, buf.length));
+        assertEquals(1, br.getLineNumber());
+    }
+
+    @Test
+    public void readCharArrayCountsLoneCarriageReturnAsOneTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\rb");
+        char[] buf = new char[10];
+        assertEquals(3, br.read(buf, 0, buf.length));
+        assertEquals(1, br.getLineNumber());
+    }
+
+    @Test
+    public void readCharArrayCountsCrLfAsOneTerminator() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\r\nb");
+        char[] buf = new char[10];
+        assertEquals(4, br.read(buf, 0, buf.length));
+        assertEquals(1, br.getLineNumber());
+    }
+
+    @Test
+    public void readCharArrayCountsConsecutiveLineFeedsSeparately() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("\n\n");
+        char[] buf = new char[10];
+        assertEquals(2, br.read(buf, 0, buf.length));
+        assertEquals(2, br.getLineNumber());
+    }
+
+    @Test
+    public void readCharArrayCountsMixedTerminatorsAsSingleTerminators() throws Exception {
+        // a(CR)b(LF)c(CRLF)d -> terminadores: CR, LF, CRLF = 3
+        ExtendedBufferedReader br = getBufferedReader("a\rb\nc\r\nd");
+        char[] buf = new char[20];
+        int n = br.read(buf, 0, buf.length);
+        assertEquals(8, n);
+        assertEquals(3, br.getLineNumber());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 7: lookAhead() no altera el valor devuelto por readAgain()
+    // ------------------------------------------------------------------
+
+    @Test
+    public void lookAheadDoesNotChangeReadAgainAfterRead() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("ab");
+        assertEquals('a', br.read());
+        assertEquals('b', br.lookAhead());
+        assertEquals('a', br.readAgain());
+    }
+
+    @Test
+    public void lookAheadOnFreshReaderKeepsReadAgainUndefined() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("ab");
+        assertEquals('a', br.lookAhead());
+        assertEquals(ExtendedBufferedReader.UNDEFINED, br.readAgain());
+    }
+
+    @Test
+    public void lookAheadAtEndOfStreamKeepsReadAgain() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a");
+        assertEquals('a', br.read());
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.lookAhead());
+        assertEquals('a', br.readAgain());
+    }
+
+    @Test
+    public void lookAheadDoesNotChangeLineCounter() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\nb");
+        assertEquals('a', br.read());
+        assertEquals('\n', br.read());
+        assertEquals(1, br.getLineNumber());
+        assertEquals('b', br.lookAhead());
+        assertEquals(1, br.getLineNumber());
+        assertEquals('\n', br.readAgain());
+    }
+
+    // ------------------------------------------------------------------
+    // Requisito 8: getLineNumber() (la documentación menciona -1, pero el código
+    // nunca lo devuelve). Se fija el comportamiento actual: nunca es negativo
+    // ------------------------------------------------------------------
+
+    @Test
+    public void getLineNumberIsZeroOnFreshReader() {
+        ExtendedBufferedReader br = getBufferedReader("a\nb");
+        assertEquals(0, br.getLineNumber());
+    }
+
+    @Test
+    public void getLineNumberIsNeverNegativeDuringMixedOperations() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("a\r\nb\rc\nd");
+        assertNotEquals(-1, br.getLineNumber());
+        assertTrue(br.getLineNumber() >= 0);
+
+        br.read();
+        assertTrue(br.getLineNumber() >= 0);
+        br.lookAhead();
+        assertTrue(br.getLineNumber() >= 0);
+        br.readLine();
+        assertTrue(br.getLineNumber() >= 0);
+        br.readLine();
+        assertTrue(br.getLineNumber() >= 0);
+        br.readLine();
+        assertTrue(br.getLineNumber() >= 0);
+        assertNull(br.readLine());
+        assertTrue(br.getLineNumber() >= 0);
+    }
+
+    @Test
+    public void getLineNumberIsNeverNegativeAtEndOfStream() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("");
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.read());
+        assertEquals(0, br.getLineNumber());
+        assertNull(br.readLine());
+        assertTrue(br.getLineNumber() >= 0);
+    }
+
+    private ExtendedBufferedReader getBufferedReader(String s) {
+        return new ExtendedBufferedReader(new StringReader(s));
+    }
+}
+```
+
+Notas:
+- `readIncrementsLineCounterOnCarriageReturn` es una prueba intencionadamente exigente: verifica el requisito 5 para CR con `read()`. Con la implementación actual (que solo cuenta `'\n'` en `read()`) fallará, lo que pone en evidencia el defecto relacionado con CSV-75. No la he desactivado para que el fallo quede visible.
+- Las pruebas usan los miembros con visibilidad de paquete (`readAgain`, `lookAhead`, `getLineNumber`, `END_OF_STREAM`, `UNDEFINED`) porque la clase es package-private y el test está en el mismo paquete; no se usan otras APIs.

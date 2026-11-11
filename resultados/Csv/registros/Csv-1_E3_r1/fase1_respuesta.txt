@@ -1,0 +1,8 @@
+1. `read()` incrementa el contador de líneas al leer `'\n'`, y ninguna prueba activa lo verifica porque `testReadChar` está vacío.
+2. `read()` no incrementa el contador de líneas al leer un `'\r'` aislado (sin `'\n'` posterior).
+3. `read(char[], int, int)` incrementa el contador por un `'\r'` aislado y por un `'\n'` que no sigue a `'\r'` dentro del bloque leído.
+4. `read(char[], int, int)` cuenta un único salto para una secuencia `'\r\n'` que cruza el límite entre dos bloques, usando `lastChar` como carácter previo.
+5. `read(char[], int, int)` con `offset > 0` evalúa un `'\n'` en la posición `offset` comparando con `buf[offset-1]` en lugar del último carácter realmente leído.
+6. `read(char[], int, int)` establece `readAgain()` en `END_OF_STREAM` cuando el flujo se agota con `len == -1`, porque `testEmptyInput` solo usa longitud 0.
+7. `readLine()` no modifica `readAgain()` cuando devuelve una línea vacía, de modo que conserva el carácter leído anteriormente.
+8. `readLine()` establece `readAgain()` al último carácter de la línea leída (que nunca es CR ni LF), comportamiento que `testReadLine` no comprueba.

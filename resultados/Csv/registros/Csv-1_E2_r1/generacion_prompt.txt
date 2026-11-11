@@ -1,0 +1,378 @@
+TAREA: Escribe pruebas JUnit nuevas para la clase org.apache.commons.csv.ExtendedBufferedReader.
+  - No modifiques las pruebas existentes.
+  - Usa solo la API pública de la clase.
+  - Cada prueba verifica un comportamiento con aserciones explícitas.
+  - Devuelve un único archivo Java compilable, dentro de un bloque ```java.
+  - El archivo declara el paquete `org.apache.commons.csv` y la clase pública `ExtendedBufferedReaderLLMTest`.
+  - Usa JUnit 4 (org.junit.Test y org.junit.Assert) y solo clases del proyecto o de Java 11.
+
+CONTEXTO COMÚN
+Código de la clase `org.apache.commons.csv.ExtendedBufferedReader`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Reader;
+
+/**
+ * ExtendedBufferedReader
+ *
+ * A special reader decorator which supports more
+ * sophisticated access to the underlying reader object.
+ *
+ * In particular the reader supports a look-ahead option,
+ * which allows you to see the next char returned by
+ * next().
+ */
+class ExtendedBufferedReader extends BufferedReader {
+
+    /** The end of stream symbol */
+    static final int END_OF_STREAM = -1;
+
+    /** Undefined state for the lookahead char */
+    static final int UNDEFINED = -2;
+
+    /** The last char returned */
+    private int lastChar = UNDEFINED;
+
+    /** The line counter */
+    private int lineCounter = 0;
+
+    /**
+     * Created extended buffered reader using default buffer-size
+     */
+    ExtendedBufferedReader(Reader r) {
+        super(r);
+    }
+
+    @Override
+    public int read() throws IOException {
+        int current = super.read();
+        if (current == '\n') {
+            lineCounter++;
+        }
+        lastChar = current;
+        return lastChar;
+    }
+
+    /**
+     * Returns the last character that was read as an integer (0 to 65535). This
+     * will be the last character returned by any of the read methods. This will
+     * not include a character read using the {@link #peek()} method. If no
+     * character has been read then this will return {@link #UNDEFINED}. If the
+     * end of the stream was reached on the last read then this will return
+     * {@link #END_OF_STREAM}.
+     * 
+     * @return the last character that was read
+     */
+    int readAgain() {
+        return lastChar;
+    }
+
+    @Override
+    public int read(char[] buf, int offset, int length) throws IOException {
+        if (length == 0) {
+            return 0;
+        }
+        
+        int len = super.read(buf, offset, length);
+        
+        if (len > 0) {
+
+            for (int i = offset; i < offset + len; i++) {
+                char ch = buf[i];
+                if (ch == '\n') {
+                    if ('\r' != (i > 0 ? buf[i-1]: lastChar)) {
+                        lineCounter++;                        
+                    }
+                } else if (ch == '\r') {
+                    lineCounter++;
+                }
+            }
+
+            lastChar = buf[offset + len - 1];
+
+        } else if (len == -1) {
+            lastChar = END_OF_STREAM;
+        }
+        
+        return len;
+    }
+
+    /**
+     * Calls {@link BufferedReader#readLine()} which drops the line terminator(s).
+     * This method should only be called when processing a comment, otherwise
+     * information can be lost.
+     * <p>
+     * Increments  {@link #lineCounter}
+     * <p>
+     * Sets {@link #lastChar} to {@link #END_OF_STREAM} at EOF, 
+     * otherwise to last character on the line (won't be CR or LF) 
+     * 
+     * @return the line that was read, or null if reached EOF.
+     */
+    @Override
+    public String readLine() throws IOException {
+        String line = super.readLine();
+
+        if (line != null) {
+            if (line.length() > 0) {
+                lastChar = line.charAt(line.length() - 1);
+            }
+            lineCounter++;
+        } else {
+            lastChar = END_OF_STREAM;
+        }
+
+        return line;
+    }
+
+    /**
+     * Returns the next character in the current reader without consuming it. So
+     * the next call to {@link #read()} will still return this value.
+     * 
+     * @return the next character
+     * 
+     * @throws IOException if there is an error in reading
+     */
+    int lookAhead() throws IOException {
+        super.mark(1);
+        int c = super.read();
+        super.reset();
+
+        return c;
+    }
+
+    /**
+     * Returns the nof line read
+     *
+     * @return the current-line-number (or -1)
+     */
+    int getLineNumber() {
+        return lineCounter;
+    }
+}
+```
+
+Clase de prueba existente `org.apache.commons.csv.ExtendedBufferedReaderTest`:
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import java.io.StringReader;
+
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+
+public class ExtendedBufferedReaderTest {
+
+    @Test
+    public void testEmptyInput() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("");
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.read());
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.lookAhead());
+        assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.readAgain());
+        assertNull(br.readLine());
+        assertEquals(0, br.read(new char[10], 0, 0));
+    }
+
+    @Test
+    public void testReadLookahead1() {}
+// Defects4J: flaky method
+//     @Test
+//     public void testReadLookahead1() throws Exception {
+//         ExtendedBufferedReader br = getBufferedReader("1\n2\r3\n");
+//         assertEquals('1', br.lookAhead());
+//         assertEquals(ExtendedBufferedReader.UNDEFINED, br.readAgain());
+//         assertEquals('1', br.read());
+//         assertEquals('1', br.readAgain());
+// 
+//         assertEquals(0, br.getLineNumber());
+//         assertEquals('\n', br.lookAhead());
+//         assertEquals(0, br.getLineNumber());
+//         assertEquals('1', br.readAgain());
+//         assertEquals('\n', br.read());
+//         assertEquals(1, br.getLineNumber());
+//         assertEquals('\n', br.readAgain());
+//         assertEquals(1, br.getLineNumber());
+// 
+//         assertEquals('2', br.lookAhead());
+//         assertEquals(1, br.getLineNumber());
+//         assertEquals('\n', br.readAgain());
+//         assertEquals(1, br.getLineNumber());
+//         assertEquals('2', br.read());
+//         assertEquals('2', br.readAgain());
+// 
+//         assertEquals('\r', br.lookAhead());
+//         assertEquals('2', br.readAgain());
+//         assertEquals('\r', br.read());
+//         assertEquals('\r', br.readAgain());
+// 
+//         assertEquals('3', br.lookAhead());
+//         assertEquals('\r', br.readAgain());
+//         assertEquals('3', br.read());
+//         assertEquals('3', br.readAgain());
+// 
+//         assertEquals('\n', br.lookAhead());
+//         assertEquals(1, br.getLineNumber()); // will need fixing for CSV-75
+//         assertEquals('3', br.readAgain());
+//         assertEquals('\n', br.read());
+//         assertEquals(2, br.getLineNumber()); // will need fixing for CSV-75
+//         assertEquals('\n', br.readAgain());
+//         assertEquals(2, br.getLineNumber()); // will need fixing for CSV-75
+// 
+//         assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.lookAhead());
+//         assertEquals('\n', br.readAgain());
+//         assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.read());
+//         assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.readAgain());
+//         assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.read());
+//         assertEquals(ExtendedBufferedReader.END_OF_STREAM, br.lookAhead());
+// 
+//     }
+
+    @Test
+    public void testReadLookahead2() throws Exception {
+        char[] ref = new char[5];
+        char[] res = new char[5];
+        
+        ExtendedBufferedReader br = getBufferedReader("abcdefg");
+        ref[0] = 'a';
+        ref[1] = 'b';
+        ref[2] = 'c';
+        assertEquals(3, br.read(res, 0, 3));
+        assertArrayEquals(ref, res);
+        assertEquals('c', br.readAgain());
+
+        assertEquals('d', br.lookAhead());
+        ref[4] = 'd';
+        assertEquals(1, br.read(res, 4, 1));
+        assertArrayEquals(ref, res);
+        assertEquals('d', br.readAgain());
+    }
+
+    @Test
+    public void testReadLine() throws Exception {
+        ExtendedBufferedReader br = getBufferedReader("");
+        assertNull(br.readLine());
+
+        br = getBufferedReader("\n");
+        assertEquals("",br.readLine());
+        assertNull(br.readLine());
+
+        br = getBufferedReader("foo\n\nhello");
+        assertEquals(0, br.getLineNumber());
+        assertEquals("foo",br.readLine());
+        assertEquals(1, br.getLineNumber());
+        assertEquals("",br.readLine());
+        assertEquals(2, br.getLineNumber());
+        assertEquals("hello",br.readLine());
+        assertEquals(3, br.getLineNumber());
+        assertNull(br.readLine());
+        assertEquals(3, br.getLineNumber());
+
+        br = getBufferedReader("foo\n\nhello");
+        assertEquals('f', br.read());
+        assertEquals('o', br.lookAhead());
+        assertEquals("oo",br.readLine());
+        assertEquals(1, br.getLineNumber());
+        assertEquals('\n', br.lookAhead());
+        assertEquals("",br.readLine());
+        assertEquals(2, br.getLineNumber());
+        assertEquals('h', br.lookAhead());
+        assertEquals("hello",br.readLine());
+        assertNull(br.readLine());
+        assertEquals(3, br.getLineNumber());
+
+
+        br = getBufferedReader("foo\rbaar\r\nfoo");
+        assertEquals("foo",br.readLine());
+        assertEquals('b', br.lookAhead());
+        assertEquals("baar",br.readLine());
+        assertEquals('f', br.lookAhead());
+        assertEquals("foo",br.readLine());
+        assertNull(br.readLine());
+    }
+
+    /*
+     * Test to illustrate  https://issues.apache.org/jira/browse/CSV-75
+     * 
+     * TODO fix checks when code is fixed
+     */
+    @Test
+    public void testReadChar() {}
+// Defects4J: flaky method
+//     @Test
+//     public void testReadChar() throws Exception {
+//         String LF="\n"; String CR="\r"; String CRLF=CR+LF; String LFCR=LF+CR;// easier to read the string below
+//         String test="a" + LF + "b" + CR + "c" + LF + LF + "d" + CR + CR + "e" + LFCR + "f "+ CRLF;
+//         //                EOL        eol        EOL  EOL        eol  eol        EOL+CR        EOL
+//         // EOL = current EOL behaviour with read() methods
+//         // eol = additional behaviour with readLine()
+//         final int EOLct=5;
+//         final int EOLeolct=9;
+//         ExtendedBufferedReader br;
+//         
+//         br = getBufferedReader(test);
+//         assertEquals(0, br.getLineNumber());
+//         while(br.readLine()!=null) {}
+//         assertEquals(EOLeolct, br.getLineNumber());
+// 
+//         br = getBufferedReader(test);
+//         assertEquals(0, br.getLineNumber());
+//         while(br.read()!=-1) {}
+//         assertEquals(EOLct, br.getLineNumber()); // will need fixing for CSV-75
+// 
+//         br = getBufferedReader(test);
+//         assertEquals(0, br.getLineNumber());
+//         char[] buff = new char[10];
+//         while(br.read(buff ,0, 3)!=-1) {}
+//         assertEquals(EOLct, br.getLineNumber()); // will need fixing for CSV-75
+//     }
+
+    private ExtendedBufferedReader getBufferedReader(String s) {
+        return new ExtendedBufferedReader(new StringReader(s));
+    }
+}
+```
+
+BLOQUE E2. Líneas y ramas que la suite no ejecuta:
+Cobertura de líneas: 83.8 % (31/37)
+Cobertura de ramas: 54.5 % (12/22)
+Líneas que la suite no ejecuta: 59, 92-93, 96, 102-103
+Ramas parcialmente cubiertas: línea 58 (1/2 ramas); línea 87 (1/2 ramas); línea 91 (1/2 ramas); línea 95 (1/2 ramas)
+

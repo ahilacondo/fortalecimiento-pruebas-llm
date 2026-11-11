@@ -1,0 +1,8 @@
+1. readAgain() debe devolver UNDEFINED si todavía no se ha leído ningún carácter; ninguna prueba activa lo verifica (el caso está solo en un test comentado).
+2. readLine() debe dejar lastChar con el último carácter de la línea leída, sin CR ni LF; no hay ninguna aserción sobre readAgain() tras readLine().
+3. readLine() debe establecer lastChar a END_OF_STREAM al llegar al EOF; testEmptyInput llama a readLine() pero no comprueba readAgain() después.
+4. readLine() ante una línea vacía (por ejemplo "\n") debe mantener el comportamiento documentado sobre lastChar; no se verifica el valor de readAgain() tras leer una línea vacía.
+5. read() debe incrementar el contador de líneas ante los terminadores de línea según la documentación; las pruebas activas no verifican el contador tras read() con '\r' (el test de referencia está comentado).
+6. read(char[], int, int) debe contar CR, LF y CRLF como un único terminador de línea; no hay pruebas activas que lo comprueben (testReadChar está comentado).
+7. lookAhead() no debe alterar el valor devuelto por readAgain(); las pruebas activas no comprueban readAgain() inmediatamente después de lookAhead() sin una lectura posterior.
+8. La documentación de getLineNumber() indica que puede devolver -1, pero el código nunca lo hace y ninguna prueba cubre ese caso; la especificación es ambigua y debe aclararse.
