@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/mnt/c/Users/Admin/Documents/tais/fortalecimiento-pruebas-llm/prototipo/ejecutar.py", line 66, in ejecutar_corrida
+    r2 = llm.generar(sis, p2)
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/Admin/Documents/tais/fortalecimiento-pruebas-llm/prototipo/llm.py", line 58, in generar
+    raise RuntimeError(f"respuesta sin texto (stop_reason={getattr(r, 'stop_reason', '?')}, "
+RuntimeError: respuesta sin texto (stop_reason=max_tokens, tokens_salida=20000); aumente MAX_TOKENS en .env
