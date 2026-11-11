@@ -1,0 +1,9 @@
+Contraste,Estadístico,p,p ajustado (Holm),Â12,Interpretación
+Friedman: E1 a E4,2.111,0.5497,—,—,no se detectan diferencias
+Wilcoxon: E2 frente a E1,2.0,0.5637,1.0000,0.487,no significativa; efecto despreciable (n = 40)
+Wilcoxon: E3 frente a E1,1.5,1.0000,1.0000,0.500,no significativa; efecto despreciable (n = 40)
+Wilcoxon: E4 frente a E1,7.0,0.4142,1.0000,0.525,no significativa; efecto despreciable (n = 40)
+Wilcoxon: E3 frente a E2,6.0,0.6547,1.0000,0.512,no significativa; efecto despreciable (n = 40)
+Wilcoxon: E4 frente a E2,0.0,0.0833,0.5829,0.537,no significativa; efecto despreciable (n = 40)
+Cobertura alta: E3 frente a E2,2.0,0.5637,1.0000,0.536,no significativa; efecto despreciable (n = 14)
+Cobertura alta: E4 frente a E2,—,1.0000,1.0000,0.500,no significativa; efecto despreciable (n = 14)
