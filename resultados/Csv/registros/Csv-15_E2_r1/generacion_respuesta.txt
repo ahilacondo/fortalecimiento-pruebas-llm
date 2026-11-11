@@ -1,0 +1,110 @@
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVFormat} que ejercitan la API pública
+ * (predefinidos, impresión, escapado, citado, trimming, cabeceras, toString,
+ * equals/hashCode, validaciones y serialización).
+ */
+public class CSVFormatLLMTest {
+
+    /** Imprime un único valor con el formato dado y devuelve la salida. */
+    private static String printOne(final CSVFormat format, final Object value, final boolean newRecord)
+            throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        format.print(value, sb, newRecord);
+        return sb.toString();
+    }
+
+    /* ---------------------------------------------------------------
+     * Formatos predefinidos
+     * --------------------------------------------------------------- */
+
+    @Test
+    public void testPredefinedEnumReturnsMatchingFormats() {
+        assertEquals(9, CSVFormat.Predefined.values().length);
+        assertSame(CSVFormat.DEFAULT, CSVFormat.Predefined.Default.getFormat());
+        assertSame(CSVFormat.EXCEL, CSVFormat.Predefined.Excel.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD, CSVFormat.Predefined.InformixUnload.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD_CSV, CSVFormat.Predefined.InformixUnloadCsv.getFormat());
+        assertSame(CSVFormat.MYSQL, CSVFormat.Predefined.MySQL.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_CSV, CSVFormat.Predefined.PostgreSQLCsv.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_TEXT, CSVFormat.Predefined.PostgreSQLText.getFormat());
+        assertSame(CSVFormat.RFC4180, CSVFormat.Predefined.RFC4180.getFormat());
+        assertSame(CSVFormat.TDF, CSVFormat.Predefined.TDF.getFormat());
+    }
+
+    @Test
+    public void testValueOfReturnsPredefinedFormat() {
+        assertSame(CSVFormat.MYSQL, CSVFormat.valueOf("MySQL"));
+        assertSame(CSVFormat.RFC4180, CSVFormat.valueOf("RFC4180"));
+        assertSame(CSVFormat.TDF, CSVFormat.valueOf("TDF"));
+    }
+
+    @Test
+    public void testExcelAllowsMissingColumnNamesAndDisablesIgnoreEmptyLines() {
+        final CSVFormat excel = CSVFormat.EXCEL;
+        assertTrue(excel.getAllowMissingColumnNames());
+        assertFalse(excel.getIgnoreEmptyLines());
+        assertEquals(',', excel.getDelimiter());
+        assertEquals("\r\n", excel.getRecordSeparator());
+    }
+
+    @Test
+    public void testInformixUnloadCsvSettings() {
+        final CSVFormat format = CSVFormat.INFORMIX_UNLOAD_CSV;
+        assertEquals(',', format.getDelimiter());
+        assertEquals(Character.valueOf('"'), format.getQuoteCharacter());
+        assertEquals("\n", format.getRecordSeparator());
+        assertNull(format.getEscapeCharacter());
+    }
+
+    @Test
+    public void testPostgresqlCsvSettings() {
+        final CSVFormat format = CSVFormat.POSTGRESQL_CSV;
+        assertEquals(',', format.getDelimiter());
+        assertEquals(Character.valueOf('"'), format.getEscapeCharacter());
+        assertEquals(Character.valueOf('"'), format.getQuoteCharacter());
+        assertEquals("", format.getNullString());
+        assertTrue(format.isNullStringSet());
+        assertEquals(QuoteMode.ALL_NON_NULL, format.getQuoteMode());
+        assertEquals("\n", format.getRecordSeparator());
+        assertFalse(format.getIgnoreEmptyLines());
+    }
+
+    @Test
+    public void testPostgresqlTextSettings() {
+        final CSVFormat format = CSVFormat.POSTGRESQL_TEXT;
+        assertEquals('\t', format.getDelimiter());
+        assertEquals("\\N", format.getNullString());
+        assertEquals(QuoteMode.ALL_NON_NULL, format.getQuoteMode());
+        assertEquals("\n", format.getRecordSeparator());
+    }
+
+    @Test
+    public void testMySqlHasNoQuoteCharacterAndUsesEscape() {
+        final CSVFormat format = CSVFormat.MYSQL;
+        assertFalse(format.isQuoteCharacterSet());
+        assertNull(format.getQuoteCharacter());
+        assertEquals(Character.valueOf('\\'), format.get

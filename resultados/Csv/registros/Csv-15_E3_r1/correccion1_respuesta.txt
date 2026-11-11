@@ -1,0 +1,358 @@
+El error se debía al delimitador ```` ```java ```` duplicado al inicio del archivo, que el compilador leyó como código. Además, el archivo original está truncado en `testPostgresqlCsvConfiguration` (la línea `assertFalse(f.get` está incompleta). Para que compile, he eliminado esa línea incompleta y cerrado el método y la clase. Las pruebas completas no se han modificado. Si el original tenía más pruebas después de esa línea, deben añadirse de nuevo.
+
+```java
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVFormat}: escapado de salida, encapsulado MINIMAL,
+ * escritura de nulos, coherencia de equals/hashCode, impresión con trim y separadores,
+ * formatos predefinidos, configuración de formatos concretos y gestión de cabeceras.
+ */
+public class CSVFormatLLMTest {
+
+    // ---------------------------------------------------------------------
+    // 1. Escapado de salida (printAndEscape)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEscapeDelimiterWhenNoQuoteCharacterIsSet() {
+        final CSVFormat format = CSVFormat.newFormat(',').withEscape('\\');
+        assertEquals("a\\,b", format.format("a,b"));
+    }
+
+    @Test
+    public void testEscapeLineFeedWhenNoQuoteCharacterIsSet() {
+        final CSVFormat format = CSVFormat.newFormat(',').withEscape('\\');
+        assertEquals("a\\nb", format.format("a\nb"));
+    }
+
+    @Test
+    public void testEscapeCarriageReturnWhenNoQuoteCharacterIsSet() {
+        final CSVFormat format = CSVFormat.newFormat(',').withEscape('\\');
+        assertEquals("a\\rb", format.format("a\rb"));
+    }
+
+    @Test
+    public void testEscapeEscapeCharacterItself() {
+        final CSVFormat format = CSVFormat.newFormat(',').withEscape('\\');
+        // valor: a\b  ->  salida: a\\b
+        assertEquals("a\\\\b", format.format("a\\b"));
+    }
+
+    @Test
+    public void testEscapeWithCustomEscapeCharacter() {
+        final CSVFormat format = CSVFormat.newFormat(';').withEscape('!');
+        // ';' se escapa como "!;" y '!' como "!!"
+        assertEquals("x!;y!!z", format.format("x;y!z"));
+    }
+
+    @Test
+    public void testNoEscapingNeededLeavesValueUnchanged() {
+        final CSVFormat format = CSVFormat.newFormat(',').withEscape('\\');
+        assertEquals("abc", format.format("abc"));
+    }
+
+    @Test
+    public void testEscapeDelimiterWithQuoteModeNone() {
+        final CSVFormat format = CSVFormat.DEFAULT.withEscape('\\').withQuoteMode(QuoteMode.NONE);
+        assertEquals("a\\,b", format.format("a,b"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Encapsulado en modo MINIMAL (DEFAULT no define quoteMode)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testMinimalDoesNotQuoteInnerSpace() {
+        assertEquals("a b", CSVFormat.DEFAULT.format("a b"));
+    }
+
+    @Test
+    public void testMinimalQuotesLeadingSpace() {
+        assertEquals("\" a\"", CSVFormat.DEFAULT.format(" a"));
+    }
+
+    @Test
+    public void testMinimalQuotesTrailingSpace() {
+        assertEquals("\"a \"", CSVFormat.DEFAULT.format("a "));
+    }
+
+    @Test
+    public void testMinimalQuotesTrailingControlCharacter() {
+        assertEquals("\"a\t\"", CSVFormat.DEFAULT.format("a\t"));
+    }
+
+    @Test
+    public void testMinimalQuotesValueContainingDelimiter() {
+        assertEquals("\"x,y\"", CSVFormat.DEFAULT.format("x,y"));
+    }
+
+    @Test
+    public void testMinimalQuotesValueContainingLineFeed() {
+        assertEquals("\"a\nb\"", CSVFormat.DEFAULT.format("a\nb"));
+    }
+
+    @Test
+    public void testMinimalQuotesValueContainingCarriageReturn() {
+        assertEquals("\"a\rb\"", CSVFormat.DEFAULT.format("a\rb"));
+    }
+
+    @Test
+    public void testMinimalDoublesInternalQuotes() {
+        assertEquals("\"say \"\"hi\"\"\"", CSVFormat.DEFAULT.format("say \"hi\""));
+    }
+
+    @Test
+    public void testMinimalDoesNotQuotePlainValue() {
+        assertEquals("hello", CSVFormat.DEFAULT.format("hello"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Escritura de valores null según nullString y modo de comillas
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testNullWithoutNullStringWritesEmptyValue() {
+        assertEquals("", CSVFormat.DEFAULT.format(new Object[]{null}));
+    }
+
+    @Test
+    public void testNullWritesNullStringUnquotedInMinimalMode() {
+        assertEquals("NULL", CSVFormat.DEFAULT.withNullString("NULL").format(new Object[]{null}));
+    }
+
+    @Test
+    public void testNullInSecondColumnWritesNullString() {
+        assertEquals("a,N/A", CSVFormat.DEFAULT.withNullString("N/A").format("a", null));
+    }
+
+    @Test
+    public void testNullWithQuoteModeAllIsQuotedAroundNullString() {
+        final CSVFormat format = CSVFormat.DEFAULT.withNullString("NULL").withQuoteMode(QuoteMode.ALL);
+        assertEquals("\"NULL\"", format.format(new Object[]{null}));
+    }
+
+    @Test
+    public void testNullWithQuoteModeAllNonNullIsNotQuoted() {
+        final CSVFormat format = CSVFormat.DEFAULT.withNullString("NULL").withQuoteMode(QuoteMode.ALL_NON_NULL);
+        assertEquals("NULL", format.format(new Object[]{null}));
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. Coherencia de equals / hashCode
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testEqualsIgnoresTrim() {
+        final CSVFormat trimmed = CSVFormat.DEFAULT.withTrim();
+        assertTrue(trimmed.equals(CSVFormat.DEFAULT));
+        assertTrue(CSVFormat.DEFAULT.equals(trimmed));
+        assertEquals(CSVFormat.DEFAULT.hashCode(), trimmed.hashCode());
+    }
+
+    @Test
+    public void testEqualsIgnoresTrailingDelimiter() {
+        final CSVFormat withTrailing = CSVFormat.DEFAULT.withTrailingDelimiter();
+        assertTrue(withTrailing.equals(CSVFormat.DEFAULT));
+        assertEquals(CSVFormat.DEFAULT.hashCode(), withTrailing.hashCode());
+    }
+
+    @Test
+    public void testEqualsIgnoresAutoFlush() {
+        final CSVFormat autoFlush = CSVFormat.DEFAULT.withAutoFlush(true);
+        assertTrue(autoFlush.equals(CSVFormat.DEFAULT));
+        assertEquals(CSVFormat.DEFAULT.hashCode(), autoFlush.hashCode());
+    }
+
+    @Test
+    public void testEqualsIgnoresAllowMissingColumnNames() {
+        final CSVFormat allow = CSVFormat.DEFAULT.withAllowMissingColumnNames(true);
+        assertTrue(allow.equals(CSVFormat.DEFAULT));
+        assertEquals(CSVFormat.DEFAULT.hashCode(), allow.hashCode());
+    }
+
+    @Test
+    public void testEqualsIgnoresHeaderComments() {
+        final CSVFormat withComments = CSVFormat.DEFAULT.withHeaderComments("comentario");
+        assertTrue(withComments.equals(CSVFormat.DEFAULT));
+        assertEquals(CSVFormat.DEFAULT.hashCode(), withComments.hashCode());
+    }
+
+    @Test
+    public void testEqualsIgnoresIgnoreHeaderCaseButHashCodeDoesNot() {
+        final CSVFormat ignoreCase = CSVFormat.DEFAULT.withIgnoreHeaderCase(true);
+        assertTrue(ignoreCase.equals(CSVFormat.DEFAULT));
+        assertTrue(CSVFormat.DEFAULT.equals(ignoreCase));
+        // hashCode incluye ignoreHeaderCase, por lo que el contrato equals/hashCode se incumple
+        assertFalse(CSVFormat.DEFAULT.hashCode() == ignoreCase.hashCode());
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. withTrim, withTrailingDelimiter y separador de registro
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testWithTrimTrimsValuesWhenPrinting() {
+        assertEquals("a", CSVFormat.DEFAULT.withTrim().format("  a  "));
+    }
+
+    @Test
+    public void testWithoutTrimKeepsSurroundingSpacesAndQuotesValue() {
+        assertEquals("\"  a  \"", CSVFormat.DEFAULT.format("  a  "));
+    }
+
+    @Test
+    public void testWithTrailingDelimiterAddsDelimiterBeforeRecordSeparator() {
+        assertEquals("a,b,", CSVFormat.DEFAULT.withTrailingDelimiter().format("a", "b"));
+    }
+
+    @Test
+    public void testWithoutTrailingDelimiterOmitsDelimiter() {
+        assertEquals("a,b", CSVFormat.DEFAULT.format("a", "b"));
+    }
+
+    @Test
+    public void testPrintlnWithTrailingDelimiterWritesDelimiterAndSeparator() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        CSVFormat.DEFAULT.withTrailingDelimiter().println(sb);
+        assertEquals(",\r\n", sb.toString());
+    }
+
+    @Test
+    public void testPrintlnWithoutTrailingDelimiterWritesOnlySeparator() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        CSVFormat.DEFAULT.println(sb);
+        assertEquals("\r\n", sb.toString());
+    }
+
+    @Test
+    public void testPrintRecordWithTrailingDelimiter() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        CSVFormat.DEFAULT.withTrailingDelimiter().printRecord(sb, "a", "b");
+        assertEquals("a,b,\r\n", sb.toString());
+    }
+
+    @Test
+    public void testNullRecordSeparatorOmitsSeparatorInPrintRecord() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        CSVFormat.newFormat(',').printRecord(sb, "a", "b");
+        assertEquals("a,b", sb.toString());
+    }
+
+    @Test
+    public void testNullRecordSeparatorOmitsSeparatorInFormat() {
+        assertEquals("a,b", CSVFormat.newFormat(',').format("a", "b"));
+    }
+
+    @Test
+    public void testNullRecordSeparatorWithTrailingDelimiterWritesOnlyDelimiter() throws Exception {
+        final StringBuilder sb = new StringBuilder();
+        CSVFormat.newFormat(',').withTrailingDelimiter().println(sb);
+        assertEquals(",", sb.toString());
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. valueOf y Predefined.getFormat()
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testValueOfReturnsEachPredefinedFormat() {
+        for (final CSVFormat.Predefined predefined : CSVFormat.Predefined.values()) {
+            assertSame(predefined.getFormat(), CSVFormat.valueOf(predefined.name()));
+        }
+    }
+
+    @Test
+    public void testPredefinedGetFormatReturnsMatchingConstants() {
+        assertSame(CSVFormat.DEFAULT, CSVFormat.Predefined.Default.getFormat());
+        assertSame(CSVFormat.EXCEL, CSVFormat.Predefined.Excel.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD, CSVFormat.Predefined.InformixUnload.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD_CSV, CSVFormat.Predefined.InformixUnloadCsv.getFormat());
+        assertSame(CSVFormat.MYSQL, CSVFormat.Predefined.MySQL.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_CSV, CSVFormat.Predefined.PostgreSQLCsv.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_TEXT, CSVFormat.Predefined.PostgreSQLText.getFormat());
+        assertSame(CSVFormat.RFC4180, CSVFormat.Predefined.RFC4180.getFormat());
+        assertSame(CSVFormat.TDF, CSVFormat.Predefined.TDF.getFormat());
+    }
+
+    @Test
+    public void testValueOfMatchesNamedConstants() {
+        assertSame(CSVFormat.MYSQL, CSVFormat.valueOf("MySQL"));
+        assertSame(CSVFormat.TDF, CSVFormat.valueOf("TDF"));
+        assertSame(CSVFormat.RFC4180, CSVFormat.valueOf("RFC4180"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValueOfUnknownNameThrowsException() {
+        CSVFormat.valueOf("NoSuchFormat");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValueOfIsCaseSensitive() {
+        CSVFormat.valueOf("mysql");
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. Configuración individual de formatos predefinidos
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testExcelConfiguration() {
+        final CSVFormat f = CSVFormat.EXCEL;
+        assertEquals(',', f.getDelimiter());
+        assertEquals(Character.valueOf('"'), f.getQuoteCharacter());
+        assertEquals("\r\n", f.getRecordSeparator());
+        assertFalse(f.getIgnoreEmptyLines());
+        assertTrue(f.getAllowMissingColumnNames());
+        assertFalse(f.isEscapeCharacterSet());
+        assertNull(f.getQuoteMode());
+        assertFalse(f.isNullStringSet());
+        assertFalse(f.isCommentMarkerSet());
+        assertFalse(f.getIgnoreSurroundingSpaces());
+    }
+
+    @Test
+    public void testExcelFormatsCommaValuesWithQuotes() {
+        assertEquals("a,b", CSVFormat.EXCEL.format("a", "b"));
+        assertEquals("\"x,y\"", CSVFormat.EXCEL.format("x,y"));
+    }
+
+    @Test
+    public void testTdfConfiguration() {
+        final CSVFormat f = CSVFormat.TDF;
+        assertEquals('\t', f.getDelimiter());
+        assertEquals(Character.valueOf('"'), f.getQuoteCharacter());
+        assertEquals("\r\n", f.getRecordSeparator());
+        assertTrue(f.getIgnoreSurroundingSpaces());
+        assertTrue(f.getIgnoreEmptyLines());
+        assertFalse(f.getAllowMissingColumnNames());
+        assertFalse(f.isEscapeCharacterSet());
+    }
+
+    @Test
+    public void testPostgresqlCsvConfiguration() {
+        final CSVFormat f = CSVFormat.POSTGRESQL_CSV;
+        assertEquals(',', f.getDelimiter());
+        assertEquals(Character.valueOf('"'), f.getQuoteCharacter());
+        assertEquals(Character.valueOf('"'), f.getEscapeCharacter());
+        assertTrue(f.isEscapeCharacterSet());
+        assertTrue(f.isNullStringSet());
+        assertEquals("", f.getNullString());
+        assertEquals(QuoteMode.ALL_NON_NULL, f.getQuoteMode());
+        assertEquals("\n", f.getRecordSeparator());
+    }
+}
+```

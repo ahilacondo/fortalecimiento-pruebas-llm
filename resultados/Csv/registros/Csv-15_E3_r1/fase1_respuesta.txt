@@ -1,0 +1,8 @@
+1. Escapado de salida (`printAndEscape`) de CR, LF, delimitador y carácter de escape cuando no hay encapsulado y el formato usa escape.
+2. Encapsulado en modo `MINIMAL`: campos que empiezan o terminan con espacios o caracteres de control, que contienen el delimitador o saltos de línea, y duplicación de comillas internas.
+3. Escritura de valores `null` con `nullString` según el modo de comillas, incluido el caso `QuoteMode.ALL`, que encapsula el texto nulo entre comillas.
+4. Inconsistencia de `equals`/`hashCode`: `equals` ignora `trim`, `trailingDelimiter`, `autoFlush`, `allowMissingColumnNames` y `headerComments`, mientras que `hashCode` incluye `ignoreHeaderCase`, que `equals` no compara.
+5. Efecto de `withTrim` sobre la impresión y de `withTrailingDelimiter` sobre `println`/`printRecord`, así como ausencia de separador de registro cuando `recordSeparator` es `null`.
+6. `CSVFormat.valueOf(String)` y `Predefined.getFormat()` para todas las constantes predefinidas, incluido el caso de nombre inexistente que lanza excepción.
+7. Configuración individual de `EXCEL`, `TDF`, `POSTGRESQL_CSV` e `INFORMIX_UNLOAD_CSV` (delimitador, comillas, escape, `nullString`, modo de comillas y `allowMissingColumnNames`), que no se verifica directamente.
+8. Semántica de `withHeader(null)`, `withHeader((Class) null)` y `withHeader` con `ResultSet`/`ResultSetMetaData` nulos (desactivar cabecera), y la copia defensiva de `headerComments` en `getHeaderComments()`.

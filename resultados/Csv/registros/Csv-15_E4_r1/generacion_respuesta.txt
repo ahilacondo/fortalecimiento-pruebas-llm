@@ -1,0 +1,275 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.Arrays;
+import java.util.function.Function;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVFormat} que cubren requisitos documentados
+ * no verificados por {@code CSVFormatTest}. Solo usan la API pública.
+ */
+public class CSVFormatLLMTest {
+
+    /** Base estable para las pruebas de inmutabilidad. */
+    private static final CSVFormat BASE = CSVFormat.RFC4180;
+
+    /** Enumeración auxiliar para {@code withHeader(Class)}. */
+    public enum LlmHeader {
+        First, Second
+    }
+
+    /**
+     * Construye una representación textual de todos los ajustes públicos del formato,
+     * para comparar el estado antes y después de una operación.
+     */
+    private static String snapshot(final CSVFormat f) {
+        return "delim=" + f.getDelimiter()
+                + ";quote=" + f.getQuoteCharacter()
+                + ";quoteMode=" + f.getQuoteMode()
+                + ";comment=" + f.getCommentMarker()
+                + ";escape=" + f.getEscapeCharacter()
+                + ";nullString=" + f.getNullString()
+                + ";recSep=" + f.getRecordSeparator()
+                + ";header=" + Arrays.toString(f.getHeader())
+                + ";headerComments=" + Arrays.toString(f.getHeaderComments())
+                + ";ignoreEmpty=" + f.getIgnoreEmptyLines()
+                + ";ignoreSpaces=" + f.getIgnoreSurroundingSpaces()
+                + ";ignoreHeaderCase=" + f.getIgnoreHeaderCase()
+                + ";skipHeader=" + f.getSkipHeaderRecord()
+                + ";allowMissing=" + f.getAllowMissingColumnNames()
+                + ";trim=" + f.getTrim()
+                + ";trailingDelim=" + f.getTrailingDelimiter()
+                + ";autoFlush=" + f.getAutoFlush();
+    }
+
+    /**
+     * Verifica que una operación "with" devuelve una instancia nueva, que el original
+     * no cambia y que el resultado refleja un cambio de estado.
+     */
+    private static void assertReturnsNewInstanceAndKeepsOriginal(final String label, final CSVFormat base,
+            final Function<CSVFormat, CSVFormat> op) {
+        final String before = snapshot(base);
+        final CSVFormat derived = op.apply(base);
+        assertNotNull(label + ": el resultado no debe ser null", derived);
+        assertNotSame(label + ": debe devolver una instancia nueva", base, derived);
+        assertEquals(label + ": el formato original no debe modificarse", before, snapshot(base));
+        assertFalse(label + ": el resultado debe reflejar el cambio solicitado", before.equals(snapshot(derived)));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 1: EXCEL
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testExcelDelimiterIsComma() {
+        assertEquals(',', CSVFormat.EXCEL.getDelimiter());
+    }
+
+    @Test
+    public void testExcelQuoteCharacterIsDoubleQuote() {
+        assertEquals(Character.valueOf('"'), CSVFormat.EXCEL.getQuoteCharacter());
+    }
+
+    @Test
+    public void testExcelRecordSeparatorIsCrLf() {
+        assertEquals("\r\n", CSVFormat.EXCEL.getRecordSeparator());
+    }
+
+    @Test
+    public void testExcelDoesNotIgnoreEmptyLines() {
+        assertFalse(CSVFormat.EXCEL.getIgnoreEmptyLines());
+    }
+
+    @Test
+    public void testExcelAllowsMissingColumnNames() {
+        assertTrue(CSVFormat.EXCEL.getAllowMissingColumnNames());
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 2: TDF
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testTdfDelimiterIsTab() {
+        assertEquals('\t', CSVFormat.TDF.getDelimiter());
+    }
+
+    @Test
+    public void testTdfQuoteCharacterIsDoubleQuote() {
+        assertEquals(Character.valueOf('"'), CSVFormat.TDF.getQuoteCharacter());
+    }
+
+    @Test
+    public void testTdfRecordSeparatorIsCrLf() {
+        assertEquals("\r\n", CSVFormat.TDF.getRecordSeparator());
+    }
+
+    @Test
+    public void testTdfIgnoresSurroundingSpaces() {
+        assertTrue(CSVFormat.TDF.getIgnoreSurroundingSpaces());
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 3: INFORMIX_UNLOAD_CSV
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testInformixUnloadCsvDelimiterIsComma() {
+        assertEquals(',', CSVFormat.INFORMIX_UNLOAD_CSV.getDelimiter());
+    }
+
+    @Test
+    public void testInformixUnloadCsvQuoteCharacterIsDoubleQuote() {
+        assertEquals(Character.valueOf('"'), CSVFormat.INFORMIX_UNLOAD_CSV.getQuoteCharacter());
+    }
+
+    @Test
+    public void testInformixUnloadCsvRecordSeparatorIsLf() {
+        assertEquals("\n", CSVFormat.INFORMIX_UNLOAD_CSV.getRecordSeparator());
+    }
+
+    @Test
+    public void testInformixUnloadCsvHasNoEscapeCharacter() {
+        assertFalse(CSVFormat.INFORMIX_UNLOAD_CSV.isEscapeCharacterSet());
+        assertNull(CSVFormat.INFORMIX_UNLOAD_CSV.getEscapeCharacter());
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 4: POSTGRESQL_CSV
+    // (La documentación se contradice sobre el carácter de escape; no se asevera aquí.)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testPostgreSqlCsvNullStringIsEmpty() {
+        assertTrue(CSVFormat.POSTGRESQL_CSV.isNullStringSet());
+        assertEquals("", CSVFormat.POSTGRESQL_CSV.getNullString());
+    }
+
+    @Test
+    public void testPostgreSqlCsvQuoteModeIsAllNonNull() {
+        assertEquals(QuoteMode.ALL_NON_NULL, CSVFormat.POSTGRESQL_CSV.getQuoteMode());
+    }
+
+    @Test
+    public void testPostgreSqlCsvRecordSeparatorIsLf() {
+        assertEquals("\n", CSVFormat.POSTGRESQL_CSV.getRecordSeparator());
+    }
+
+    @Test
+    public void testPostgreSqlCsvQuotesNonNullAndWritesNullAsEmpty() {
+        assertEquals("\"a\",", CSVFormat.POSTGRESQL_CSV.format("a", null));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 5: MYSQL (escapado con barra invertida y nulos como \N)
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testMySqlEscapesTabDelimiter() {
+        // El delimitador de MYSQL es el tabulador: debe escaparse.
+        assertEquals("a\\\tb", CSVFormat.MYSQL.format("a\tb"));
+    }
+
+    @Test
+    public void testMySqlEscapesLineFeed() {
+        assertEquals("l1\\nl2", CSVFormat.MYSQL.format("l1\nl2"));
+    }
+
+    @Test
+    public void testMySqlEscapesCarriageReturn() {
+        assertEquals("c1\\rc2", CSVFormat.MYSQL.format("c1\rc2"));
+    }
+
+    @Test
+    public void testMySqlEscapesEscapeCharacter() {
+        assertEquals("a\\\\b", CSVFormat.MYSQL.format("a\\b"));
+    }
+
+    @Test
+    public void testMySqlDoesNotEscapeCommaWhichIsNotDelimiter() {
+        assertEquals("x,y", CSVFormat.MYSQL.format("x,y"));
+    }
+
+    @Test
+    public void testMySqlWritesNullAsBackslashN() {
+        assertEquals("\\N", CSVFormat.MYSQL.format((Object) null));
+    }
+
+    @Test
+    public void testMySqlWritesNullInsideRecordAsBackslashN() {
+        assertEquals("a\t\\N", CSVFormat.MYSQL.format("a", null));
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 6: Predefined y valueOf
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void testPredefinedGetFormatReturnsMatchingConstant() {
+        assertSame(CSVFormat.DEFAULT, CSVFormat.Predefined.Default.getFormat());
+        assertSame(CSVFormat.EXCEL, CSVFormat.Predefined.Excel.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD, CSVFormat.Predefined.InformixUnload.getFormat());
+        assertSame(CSVFormat.INFORMIX_UNLOAD_CSV, CSVFormat.Predefined.InformixUnloadCsv.getFormat());
+        assertSame(CSVFormat.MYSQL, CSVFormat.Predefined.MySQL.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_CSV, CSVFormat.Predefined.PostgreSQLCsv.getFormat());
+        assertSame(CSVFormat.POSTGRESQL_TEXT, CSVFormat.Predefined.PostgreSQLText.getFormat());
+        assertSame(CSVFormat.RFC4180, CSVFormat.Predefined.RFC4180.getFormat());
+        assertSame(CSVFormat.TDF, CSVFormat.Predefined.TDF.getFormat());
+    }
+
+    @Test
+    public void testValueOfReturnsPredefinedFormatWithSameName() {
+        assertSame(CSVFormat.TDF, CSVFormat.valueOf("TDF"));
+        assertSame(CSVFormat.MYSQL, CSVFormat.valueOf("MySQL"));
+        assertSame(CSVFormat.EXCEL, CSVFormat.valueOf("Excel"));
+        assertSame(CSVFormat.RFC4180, CSVFormat.valueOf("RFC4180"));
+    }
+
+    @Test
+    public void testValueOfMatchesEveryPredefinedName() {
+        for (final CSVFormat.Predefined predefined : CSVFormat.Predefined.values()) {
+            assertSame("valueOf(" + predefined.name() + ")", predefined.getFormat(),
+                    CSVFormat.valueOf(predefined.name()));
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testValueOfUnknownNameThrowsException() {
+        CSVFormat.valueOf("NoSuchPredefinedFormat");
+    }
+
+    // ---------------------------------------------------------------------
+    // Requisito 7: delimitador de salto de línea en newFormat
+    // ---------------------------------------------------------------------
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNewFormatRejectsCarriageReturnDelimiter() {
+        CSVFormat.newF

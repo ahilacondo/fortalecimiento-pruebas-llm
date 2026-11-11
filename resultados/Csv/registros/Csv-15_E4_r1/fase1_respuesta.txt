@@ -1,0 +1,8 @@
+1. EXCEL debe usar coma como delimitador, comilla doble, separador "\r\n", ignorar líneas vacías en `false` y permitir nombres de columna ausentes en `true`.
+2. TDF debe usar tabulador como delimitador, comilla doble, separador "\r\n" e ignorar los espacios que rodean a los valores.
+3. INFORMIX_UNLOAD_CSV debe usar coma como delimitador, comilla doble, LF como separador de registro y no tener carácter de escape.
+4. POSTGRESQL_CSV debe usar cadena nula vacía, modo de comillas ALL_NON_NULL y LF como separador (la documentación contradice el carácter de escape: en el texto es comilla doble y en la lista de ajustes es barra invertida).
+5. Con MYSQL, los caracteres especiales (tabulador, LF, CR, delimitador y escape) deben escaparse con barra invertida al escribir, y un valor nulo debe escribirse como "\N".
+6. Cada constante de `Predefined` debe devolver el formato que le corresponde en `getFormat()` (las pruebas solo verifican `Default`), y `valueOf(String)` debe devolver el formato predefinido con ese nombre.
+7. `newFormat` debe lanzar `IllegalArgumentException` cuando el delimitador es un salto de línea, tanto CR como LF (las pruebas solo verifican LF en `withDelimiter`, no en `newFormat`).
+8. Todos los métodos `with*` deben devolver una instancia nueva sin modificar la original, como exige la inmutabilidad de la clase (las pruebas solo lo comprueban de forma puntual en algunos métodos).
