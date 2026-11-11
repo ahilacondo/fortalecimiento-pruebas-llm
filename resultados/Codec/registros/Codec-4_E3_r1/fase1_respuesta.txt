@@ -1,0 +1,8 @@
+1. Codificación y decodificación en streaming con entrada dividida en varias llamadas a `encode`/`decode` produce el mismo resultado que una sola llamada.
+2. El protocolo de EOF (`inAvail` negativo) en streaming se verifica con llamadas parciales y con datos ya vaciados, no solo con los métodos estáticos.
+3. `readResults` devuelve correctamente un número parcial de bytes cuando `bAvail` es menor que los bytes disponibles, y conserva la posición de lectura para la siguiente extracción.
+4. Reutilizar la misma instancia de `Base64` tras una operación deja de forma correcta el estado interno (`modulus`, `x`, `eof`, `currentLinePos`) sin contaminar la operación siguiente.
+5. Al encontrar el primer carácter de relleno `=` en la decodificación, se ignora todo el contenido posterior, incluidos caracteres base64 válidos.
+6. Una entrada que deja un único carácter Base64 sobrante (longitud módulo 4 igual a 1) se descarta sin excepción y sin producir bytes espurios.
+7. `encodeBase64` con `maxResultSize` exactamente igual al tamaño requerido acepta la entrada; los tests actuales solo verifican casos de rechazo.
+8. `encodeInteger`/`decodeInteger` en casos límite: cero, valores con bit de signo en límite de byte (p. ej. 128 y 255), valores negativos y codificación sin bytes de signo (`testCodeIntegerEdgeCases` está vacío).

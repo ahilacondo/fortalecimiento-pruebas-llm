@@ -1,0 +1,214 @@
+El archivo de pruebas que escribiste no compila. Errores del compilador:
+    [javac] /root/hito2_workdir_otro_Codec/Codec_4_b/.test_suite/org/apache/commons/codec/binary/Base64LLMTest.java:1: error: illegal character: '`'
+
+Archivo anterior:
+```java
+```java
+package org.apache.commons.codec.binary;
+
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Random;
+
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.EncoderException;
+import org.junit.Assert;
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64} que usan únicamente la API pública.
+ */
+public class Base64LLMTest {
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    // ---------------------------------------------------------------
+    // Codificación estándar
+    // ---------------------------------------------------------------
+
+    @Test
+    public void standardEncodingOfOneTwoAndThreeBytesIsCorrect() {
+        Assert.assertEquals("TWFu", str(Base64.encodeBase64(ascii("Man"))));
+        Assert.assertEquals("TWE=", str(Base64.encodeBase64(ascii("Ma"))));
+        Assert.assertEquals("TQ==", str(Base64.encodeBase64(ascii("M"))));
+    }
+
+    @Test
+    public void standardEncodingEmitsPlusAndSlash() {
+        byte[] data = {(byte) 0xfb, (byte) 0xff};
+        Assert.assertEquals("+/8=", str(Base64.encodeBase64(data)));
+    }
+
+    @Test
+    public void encodeBase64StringAddsCrlfChunkSeparator() {
+        Assert.assertEquals("TWFu\r\n", Base64.encodeBase64String(ascii("Man")));
+    }
+
+    @Test
+    public void encodeNullAndEmptyInputs() {
+        Assert.assertNull(Base64.encodeBase64((byte[]) null));
+        Assert.assertEquals(0, Base64.encodeBase64(new byte[0]).length);
+        Assert.assertEquals("", Base64.encodeBase64String(new byte[0]));
+        Assert.assertNull(Base64.encodeBase64URLSafe(null));
+        Assert.assertEquals("", Base64.encodeBase64URLSafeString(new byte[0]));
+    }
+
+    @Test
+    public void noChunkingWhenLineLengthIsZeroOrNullSeparator() {
+        Assert.assertEquals("TWFu", str(new Base64(76, null).encode(ascii("Man"))));
+        Assert.assertEquals("TWFu", str(new Base64(-1, new byte[] {'\n'}).encode(ascii("Man"))));
+    }
+
+    @Test
+    public void customLineLengthInsertsSeparatorAfterEightCharacters() {
+        byte[] encoded = new Base64(8, new byte[] {'\n'}).encode(ascii("foobar"));
+        String result = str(encoded);
+        Assert.assertTrue("Debe empezar por el primer bloque de 8 caracteres",
+                result.startsWith("Zm9vYmFy\n"));
+        Assert.assertEquals("foobar", str(new Base64().decode(encoded)));
+    }
+
+    @Test
+    public void chunkedEncodingBreaksLinesAtSeventySixCharacters() {
+        byte[] data = new byte[100];
+        new Random(42).nextBytes(data);
+        byte[] enc = Base64.encodeBase64Chunked(data);
+
+        Assert.assertEquals('\r', enc[76]);
+        Assert.assertEquals('\n', enc[77]);
+        for (int i = 0; i < 76; i++) {
+            Assert.assertTrue("Carácter base64 esperado en posición " + i, Base64.isBase64(enc[i]));
+        }
+        Assert.assertTrue(Arrays.equals(data, Base64.decodeBase64(enc)));
+    }
+
+    @Test
+    public void constructorAcceptsNonBase64Separators() {
+        Base64 b = new Base64(64, new byte[] {' ', '\t'});
+        Assert.assertNotNull(b);
+    }
+
+    @Test
+    public void constructorRejectsSeparatorsContainingBase64Characters() {
+        byte[][] invalid = {{'+'}, {'/'}, {'='}, {'A'}, {'x', '-'}};
+        for (byte[] sep : invalid) {
+            try {
+                new Base64(64, sep);
+                Assert.fail("Debe rechazar el separador " + Arrays.toString(sep));
+            } catch (IllegalArgumentException expected) {
+                // esperado
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // URL-safe
+    // ---------------------------------------------------------------
+
+    @Test
+    public void urlSafeEncodingEmitsDashAndUnderscoreWithoutPadding() {
+        byte[] twoBytes = {(byte) 0xfb, (byte) 0xff};
+        byte[] oneByte = {(byte) 0xfb};
+        Assert.assertEquals("-_8", Base64.encodeBase64URLSafeString(twoBytes));
+        Assert.assertEquals("-w", Base64.encodeBase64URLSafeString(oneByte));
+    }
+
+    @Test
+    public void urlSafeInstanceEncodeToStringWithoutLineBreaks() {
+        Base64 b = new Base64(0, null, true);
+        Assert.assertTrue(b.isUrlSafe());
+        Assert.assertEquals("-_8", b.encodeToString(new byte[] {(byte) 0xfb, (byte) 0xff}));
+    }
+
+    @Test
+    public void standardInstancesAreNotUrlSafe() {
+        Assert.assertFalse(new Base64().isUrlSafe());
+        Assert.assertFalse(new Base64(0, null).isUrlSafe());
+        Assert.assertFalse(new Base64(false).isUrlSafe());
+        Assert.assertTrue(new Base64(true).isUrlSafe());
+    }
+
+    @Test
+    public void urlSafeAndStandardAlphabetsDecodeToSameBytes() {
+        byte[] expected = {(byte) 0xfb, (byte) 0xff};
+        Assert.assertTrue(Arrays.equals(expected, Base64.decodeBase64(ascii("+/8="))));
+        Assert.assertTrue(Arrays.equals(expected, Base64.decodeBase64(ascii("-_8="))));
+    }
+
+    @Test
+    public void decodeUnpaddedUrlSafeInput() {
+        Assert.assertTrue(Arrays.equals(new byte[] {(byte) 0xfb}, Base64.decodeBase64(ascii("-w"))));
+    }
+
+    @Test
+    public void urlSafeRoundTripForVariousLengths() {
+        Random random = new Random(7);
+        for (int len = 0; len <= 40; len++) {
+            byte[] data = new byte[len];
+            random.nextBytes(data);
+            byte[] enc = Base64.encodeBase64URLSafe(data);
+            Assert.assertFalse("Sin '+' para longitud " + len, Base64.isArrayByteBase64(enc)
+                    && containsAny(enc, '+', '/', '='));
+            Assert.assertFalse(containsAny(enc, '+', '/', '='));
+            Assert.assertTrue("Longitud " + len, Arrays.equals(data, Base64.decodeBase64(enc)));
+        }
+    }
+
+    private static boolean containsAny(byte[] data, char... chars) {
+        for (byte b : data) {
+            for (char c : chars) {
+                if (b == (byte) c) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // ---------------------------------------------------------------
+    // Decodificación
+    // ---------------------------------------------------------------
+
+    @Test
+    public void decodeIgnoresWhitespaceAndInvalidAsciiCharacters() {
+        Assert.assertEquals("Man", str(Base64.decodeBase64(ascii("T W\tF\r\nu!"))));
+    }
+
+    @Test
+    public void decodeIgnoresNonAsciiAndOutOfTableBytes() {
+        byte[] withHighByte = {'T', (byte) 0x80, 'W', 'F', 'u'};
+        byte[] withByte127 = {'T', (byte) 127, 'W', 'F', 'u'};
+        Assert.assertEquals("Man", str(Base64.decodeBase64(withHighByte)));
+        Assert.assertEquals("Man", str(Base64.decodeBase64(withByte127)));
+    }
+
+    @Test
+    public void decodeStopsAtFirstPaddingCharacter() {
+        Assert.assertEquals("M", str(Base64.decodeBase64(ascii("TQ==TWFu"))));
+    }
+
+    @Test
+    public void decodeTwoCharactersYieldsOneByte() {
+        Assert.assertEquals("M", str(Base64.decodeBase64(ascii("TQ"))));
+    }
+
+    @Test
+    public void decodeNullAndEmptyInputs() {
+        Assert.assertNull(Base64.decodeBase64((byte[]) null));
+        Assert.assertEquals(0, Base64.decodeBase64(new byte[0]).length);
+        Assert.assertNull(Base64.decodeBase64((String) null));
+    }
+
+    @Test
+    public void decodeInstanceC
+```
+
+Devuelve el archivo completo corregido, en un bloque ```java, con el paquete `org.apache.commons.codec.binary` y la clase pública `Base64LLMTest`.
+No cambies el comportamiento que verifica cada prueba; solo corrige los errores de compilación.

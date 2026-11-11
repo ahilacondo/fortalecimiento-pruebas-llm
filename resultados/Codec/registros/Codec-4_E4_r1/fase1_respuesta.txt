@@ -1,0 +1,8 @@
+1. Con `lineSeparator == null`, el constructor desactiva el troceado aunque `lineLength > 0`; el test `testBase64` usa "Hello World", cuya salida nunca supera los 76 caracteres, así que el troceado no se ejercita.
+2. Con el constructor `Base64()` (sin argumentos), la codificación de entradas largas no inserta saltos de línea y usa la tabla estándar; las pruebas solo verifican salidas con troceado o con `Base64(0)`.
+3. Con el constructor `Base64(boolean)`, la codificación de entradas largas produce bloques de 76 caracteres separados por CRLF; las pruebas solo validan esto mediante métodos estáticos.
+4. El `lineLength` se ignora al decodificar: el resultado de decodificar no depende del valor de línea configurado en el constructor; no hay pruebas que lo comprueben.
+5. Para valores de `lineLength` distintos de 0, 64, 65 y 76 (por ejemplo 1–3, 4, 10, 13 o negativos), no se verifica que cada línea tenga como máximo el valor redondeado a múltiplo de 4.
+6. El método estático público `isBase64(byte)` no tiene pruebas directas; no se verifica que acepte los caracteres del alfabeto (incluidos `-` y `_`) y rechace el resto de bytes, ni el comportamiento con el carácter de relleno `=`.
+7. El método de codificación en streaming `encode(byte[], int, int)` no se prueba directamente: no se verifica que las llamadas parciales produzcan la misma salida que una única llamada, ni que la llamada con `inAvail = -1` vacíe los bytes pendientes.
+8. El método de decodificación en streaming y la API de buffer (`readResults`, `avail`, `hasData`, `setInitialBuffer`) no tienen pruebas: no se verifica la decodificación de entradas partidas en cualquier punto, ni que `readResults` respete `bAvail` y actualice el estado del buffer.
