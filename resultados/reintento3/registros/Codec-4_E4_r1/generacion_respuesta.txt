@@ -1,0 +1,253 @@
+Este archivo añade pruebas para los requisitos 1 a 8 sin modificar `Base64Test`. Los requisitos 4 y 5 describen el API de streaming (`encode(byte[], int, int)`, `decode(byte[], int, int)`), que es package-private. Como la tarea exige usar solo la API pública, esos requisitos se verifican con propiedades equivalentes que sí son observables desde fuera: concatenación de codificaciones y prefijos de decodificación.
+
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64} que cubren los requisitos no verificados por la suite existente.
+ * Solo usan la API pública de la clase.
+ */
+public class Base64LLMTest {
+
+    private static final byte[] CRLF = {'\r', '\n'};
+
+    // ----------------------------------------------------------------- utilidades
+
+    private static byte[] filled(int n, byte value) {
+        byte[] result = new byte[n];
+        Arrays.fill(result, value);
+        return result;
+    }
+
+    private static byte[] sample(int n) {
+        byte[] result = new byte[n];
+        for (int i = 0; i < n; i++) {
+            result[i] = (byte) (i * 37 + 11);
+        }
+        return result;
+    }
+
+    private static String ascii(byte[] bytes) {
+        return new String(bytes, StandardCharsets.US_ASCII);
+    }
+
+    private static String stripCrlf(String s) {
+        return s.replace("\r\n", "");
+    }
+
+    private static String decodeText(String encoded) {
+        return ascii(new Base64().decode(encoded));
+    }
+
+    private static void assertLinesNoLongerThan(String encoded, int max) {
+        for (String line : encoded.split("\r\n")) {
+            assertTrue("Línea de longitud " + line.length() + " supera " + max, line.length() <= max);
+        }
+    }
+
+    // ------------------------------------------- Requisito 1: URL-safe con fraccionamiento
+
+    @Test
+    public void urlSafeConstructorChunksAt76CharactersWithCrlf() {
+        // 0xFB 0xFB 0xFB -> 6-bit 62 cuatro veces -> '-' en modo URL-safe
+        // 114 bytes -> 152 caracteres, es decir, dos líneas de 76
+        String encoded = new Base64(true).encodeToString(filled(114, (byte) 0xFB));
+
+        assertEquals("La primera línea debe medir 76 caracteres", 76, encoded.indexOf("\r\n"));
+        assertTrue("Debe empezar por 76 guiones y CRLF", encoded.startsWith("-".repeat(76) + "\r\n"));
+        assertTrue("Debe terminar en CRLF", encoded.endsWith("\r\n"));
+        assertEquals("El contenido sin CRLF debe ser 152 guiones", "-".repeat(152), stripCrlf(encoded));
+        assertEquals("No debe aparecer '+'", -1, encoded.indexOf('+'));
+        assertEquals("No debe aparecer '/'", -1, encoded.indexOf('/'));
+        assertLinesNoLongerThan(encoded, 76);
+    }
+
+    @Test
+    public void urlSafeConstructorChunkedOutputUsesUnderscoreForSixtyThree() {
+        // 0xFF 0xFF 0xFF -> 63 cuatro veces -> '_' en modo URL-safe
+        String encoded = new Base64(true).encodeToString(filled(57, (byte) 0xFF));
+
+        assertEquals("_".repeat(76), stripCrlf(encoded));
+        assertEquals("La línea debe partirse en 76 caracteres", 76, encoded.indexOf("\r\n"));
+    }
+
+    // ------------------------------------------- Requisito 2: separador CRLF por defecto
+
+    @Test
+    public void lineLengthOnlyConstructorUsesCrlfAsSeparator() {
+        // 6 bytes a cero -> "AAAAAAAA", con líneas de 4 caracteres
+        String encoded = new Base64(4).encodeToString(new byte[6]);
+
+        assertTrue("Debe partir en líneas de 4 seguidas de CRLF", encoded.startsWith("AAAA\r\nAAAA\r\n"));
+        assertEquals("El separador por defecto debe ser CRLF",
+                new Base64(4, CRLF).encodeToString(new byte[6]), encoded);
+    }
+
+    // ------------------------------------- Requisito 3: redondeo a múltiplo de 4
+
+    @Test
+    public void lineLengthNotMultipleOf4IsRoundedDownToMultipleOf4() {
+        byte[] data = new byte[30];
+        String plain = new Base64(0).encodeToString(data); // 40 caracteres 'A'
+
+        for (int len : new int[]{5, 6, 7}) {
+            String encoded = new Base64(len).encodeToString(data);
+            assertEquals("Longitud " + len + " debe equivaler a 4", 4, encoded.indexOf("\r\n"));
+            assertEquals("Contenido sin saltos para longitud " + len, plain, stripCrlf(encoded));
+            assertLinesNoLongerThan(encoded, 4);
+        }
+    }
+
+    @Test
+    public void lineLengthBelow4DisablesChunking() {
+        byte[] data = sample(100);
+        String plain = new Base64(0).encodeToString(data);
+
+        for (int len : new int[]{1, 2, 3}) {
+            String encoded = new Base64(len).encodeToString(data);
+            assertEquals("Longitud " + len + " no debe fraccionar", plain, encoded);
+            assertFalse("No debe aparecer CR en longitud " + len, encoded.contains("\r"));
+        }
+    }
+
+    @Test
+    public void lineLengthTenIsRoundedDownToEight() {
+        String encoded = new Base64(10).encodeToString(new byte[30]);
+
+        assertEquals("La primera línea debe medir 8 caracteres", 8, encoded.indexOf("\r\n"));
+        assertLinesNoLongerThan(encoded, 8);
+    }
+
+    // ------------------------------- Requisito 4: codificación por partes equivale a la completa
+
+    @Test
+    public void encodingOfConcatenationEqualsConcatenationOfEncodings() {
+        // Con longitudes múltiplo de 3 y sin fraccionamiento, codificar por partes equivale a una sola llamada.
+        byte[] first = sample(9);
+        byte[] second = sample(12);
+        byte[] joined = new byte[first.length + second.length];
+        System.arraycopy(first, 0, joined, 0, first.length);
+        System.arraycopy(second, 0, joined, first.length, second.length);
+
+        Base64 b64 = new Base64(0);
+        String partsEncoded = b64.encodeToString(first) + b64.encodeToString(second);
+
+        assertEquals(partsEncoded, b64.encodeToString(joined));
+    }
+
+    @Test
+    public void encodingPrefixesMultipleOfThreeIsPrefixOfFullEncoding() {
+        byte[] data = sample(30);
+        Base64 b64 = new Base64(0);
+        String full = b64.encodeToString(data);
+
+        for (int k = 3; k <= data.length; k += 3) {
+            String prefixEncoded = b64.encodeToString(Arrays.copyOf(data, k));
+            assertEquals("Longitud esperada para k=" + k, k / 3 * 4, prefixEncoded.length());
+            assertEquals("El prefijo debe coincidir para k=" + k, full.substring(0, prefixEncoded.length()),
+                    prefixEncoded);
+        }
+    }
+
+    @Test
+    public void reusingSameInstanceProducesSameResult() {
+        Base64 b64 = new Base64(4);
+        byte[] a = sample(20);
+        byte[] c = sample(7);
+
+        String first = b64.encodeToString(a);
+        b64.encodeToString(c);
+        b64.encodeToString(sample(1));
+
+        assertEquals("Reutilizar la instancia no debe alterar el resultado", first, b64.encodeToString(a));
+    }
+
+    // ------------------------------- Requisito 5: decodificación por partes equivale a la completa
+
+    @Test
+    public void decodingPrefixesOfFourCharactersIsPrefixOfFullDecoding() {
+        byte[] data = sample(30);
+        String encoded = new Base64(0).encodeToString(data); // 40 caracteres
+        byte[] whole = new Base64().decode(encoded);
+
+        assertArrayEquals("La decodificación completa debe recuperar los datos", data, whole);
+
+        for (int j = 4; j <= encoded.length(); j += 4) {
+            byte[] part = new Base64().decode(encoded.substring(0, j));
+            assertArrayEquals("Prefijo de " + j + " caracteres", Arrays.copyOf(whole, j / 4 * 3), part);
+        }
+    }
+
+    @Test
+    public void decodingWithLineBreaksEqualsDecodingWithoutThem() {
+        String plain = new Base64(0).encodeToString(sample(60));
+        StringBuilder chunked = new StringBuilder();
+        for (int i = 0; i < plain.length(); i += 4) {
+            chunked.append(plain, i, Math.min(i + 4, plain.length())).append("\r\n");
+        }
+
+        assertArrayEquals(new Base64().decode(plain), new Base64().decode(chunked.toString()));
+    }
+
+    // ------------------------------------- Requisito 6: datos tras el primer '=' se ignoran
+
+    @Test
+    public void dataAfterFirstPaddingCharacterIsIgnored() {
+        assertEquals("A", decodeText("QQ==QUJD"));
+        assertEquals("A", decodeText("QQ=QUJD"));
+        assertEquals("ABC", decodeText("QUJD=QQ=="));
+    }
+
+    // ----------------------------------------------- Requisito 7: isBase64(byte)
+
+    @Test
+    public void isBase64AcceptsStandardAndUrlSafeAlphabet() {
+        String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_";
+        for (byte b : alphabet.getBytes(StandardCharsets.US_ASCII)) {
+            assertTrue("Debe aceptar '" + (char) b + "'", Base64.isBase64(b));
+        }
+    }
+
+    @Test
+    public void isBase64RejectsOctetsOutsideAlphabet() {
+        byte[] invalid = {' ', '\t', '\r', '\n', '!', '$', ',', '.', '@', '[', '`', '{',
+            (byte) 0x80, (byte) 0xFF};
+        for (byte b : invalid) {
+            assertFalse("Debe rechazar el octeto " + b, Base64.isBase64(b));
+        }
+    }
+
+    // ----------------------------------------- Requisito 8: padding opcional al decodificar
+
+    @Test
+    public void missingFinalPaddingIsAcceptedWhenDecoding() {
+        assertEquals("AA", decodeText("QUE"));
+        assertEquals("AA", decodeText("QUE="));
+        assertEquals("A", decodeText("QQ"));
+        assertEquals("ABCD", decodeText("QUJDRA"));
+    }
+
+    @Test
+    public void strippedPaddingRoundTripsForAllLengths() {
+        for (int n = 0; n <= 40; n++) {
+            byte[] data = sample(n);
+
+            String standard = new Base64(0).encodeToString(data).replace("=", "");
+            assertArrayEquals("Estándar sin padding, n=" + n, data, new Base64().decode(standard));
+
+            String urlSafe = new Base64(true).encodeToString(data);
+            assertArrayEquals("URL-safe sin padding, n=" + n, data, new Base64().decode(urlSafe));
+        }
+    }
+}
+```

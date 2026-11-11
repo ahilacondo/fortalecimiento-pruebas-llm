@@ -1,0 +1,8 @@
+1. El constructor `Base64(boolean urlSafe=true)` debe codificar en bloques de 76 caracteres separados por CRLF; ninguna prueba combina el modo URL-safe con el fraccionamiento en líneas.
+2. El constructor `Base64(int lineLength)` debe usar CRLF como separador de línea por defecto; las pruebas solo verifican separadores explícitos.
+3. Una longitud de línea no múltiplo de 4 se redondea hacia abajo, y ninguna línea codificada debe superar ese límite; solo hay un caso (65) y no se cubren valores como 1–3 (que equivalen a sin fraccionamiento) ni 5–7.
+4. La codificación por fragmentos (llamadas repetidas a encode con datos parciales y luego con -1) debe producir exactamente el mismo resultado que una sola llamada; no hay pruebas del API de streaming.
+5. La decodificación por fragmentos (llamadas repetidas a decode con partes de la entrada, con o sin -1 final) debe producir el mismo resultado que una sola llamada; no hay pruebas de este comportamiento.
+6. El decodificador trata el primer '=' como fin de datos: los caracteres posteriores deben ignorarse (p. ej., "QQ==QUJD" produce solo "A"); ninguna prueba verifica datos tras el padding.
+7. El método estático isBase64(byte) debe devolver true para el alfabeto estándar y URL-safe ('-' y '_') y false para octetos fuera del alfabeto; no existe prueba directa de este método.
+8. El padding es opcional al decodificar: una entrada sin '=' final (p. ej., "QUE" sin "=") debe decodificarse igual; las pruebas solo usan entradas con padding completo o solo con padding.
