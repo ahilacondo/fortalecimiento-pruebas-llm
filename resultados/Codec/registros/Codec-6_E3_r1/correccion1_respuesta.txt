@@ -1,0 +1,252 @@
+Los errores tenían dos causas:
+
+1. El archivo empezaba con dos líneas ```` ```java ````, y el carácter `` ` `` no es válido en Java.
+2. El archivo estaba truncado en la prueba 5, dentro de un bucle sin cerrar.
+
+Eliminé las marcas de Markdown y completé la prueba 5 con la intención que se ve en el fragmento: decodificar con un flujo subyacente que devuelve bloques de 1, 2, 3 y 5 bytes. Las pruebas 1 a 4 no cambian.
+
+```java
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64InputStream} que cubren comportamientos
+ * no verificados por la suite existente.
+ */
+public class Base64InputStreamLLMTest {
+
+    private static final byte[] CRLF = {(byte) '\r', (byte) '\n'};
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String str(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    /** Lee todo el flujo usando un buffer pequeño y fijo de 7 bytes. */
+    private static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[7];
+        int r;
+        while ((r = in.read(buf, 0, buf.length)) != -1) {
+            out.write(buf, 0, r);
+        }
+        return out.toByteArray();
+    }
+
+    /** Flujo que devuelve como máximo maxChunk bytes por llamada. */
+    static class FragmentedInputStream extends InputStream {
+        private final byte[] data;
+        private final int maxChunk;
+        private int pos;
+
+        FragmentedInputStream(byte[] data, int maxChunk) {
+            this.data = data;
+            this.maxChunk = maxChunk;
+        }
+
+        @Override
+        public int read() {
+            if (pos >= data.length) {
+                return -1;
+            }
+            return data[pos++] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            if (len == 0) {
+                return 0;
+            }
+            if (pos >= data.length) {
+                return -1;
+            }
+            int n = Math.min(Math.min(len, maxChunk), data.length - pos);
+            System.arraycopy(data, pos, b, off, n);
+            pos += n;
+            return n;
+        }
+    }
+
+    /** Flujo que devuelve 0 bytes en las primeras 'zeros' lecturas no vacías. */
+    static class ZeroThenDataInputStream extends InputStream {
+        private final byte[] data;
+        private int pos;
+        private int zerosRemaining;
+        int readCalls;
+
+        ZeroThenDataInputStream(byte[] data, int zeros) {
+            this.data = data;
+            this.zerosRemaining = zeros;
+        }
+
+        @Override
+        public int read() {
+            readCalls++;
+            if (zerosRemaining > 0) {
+                zerosRemaining--;
+                return 0;
+            }
+            if (pos >= data.length) {
+                return -1;
+            }
+            return data[pos++] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            readCalls++;
+            if (len == 0) {
+                return 0;
+            }
+            if (zerosRemaining > 0) {
+                zerosRemaining--;
+                return 0;
+            }
+            if (pos >= data.length) {
+                return -1;
+            }
+            int n = Math.min(len, data.length - pos);
+            System.arraycopy(data, pos, b, off, n);
+            pos += n;
+            return n;
+        }
+    }
+
+    /** ByteArrayInputStream que registra si fue cerrado. */
+    static class ClosableInputStream extends ByteArrayInputStream {
+        boolean closed;
+
+        ClosableInputStream(byte[] data) {
+            super(data);
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            super.close();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 1. read() devuelve valores 128-255 para bytes negativos decodificados
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void singleByteReadReturnsUnsignedValuesForNegativeBytes() throws IOException {
+        // "/wCAfw==" decodifica a FF 00 80 7F
+        Base64InputStream in = new Base64InputStream(new ByteArrayInputStream(ascii("/wCAfw==")));
+        assertEquals(255, in.read());
+        assertEquals(0, in.read());
+        assertEquals(128, in.read());
+        assertEquals(127, in.read());
+        assertEquals(-1, in.read());
+    }
+
+    @Test
+    public void singleByteReadReturnsUnsignedValueForFF() throws IOException {
+        // "/w==" decodifica a FF
+        Base64InputStream in = new Base64InputStream(new ByteArrayInputStream(ascii("/w==")));
+        assertEquals(255, in.read());
+        assertEquals(-1, in.read());
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. read(b, offset, len) con offset > 0 escribe solo en su rango
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void readWithOffsetWritesOnlyRequestedRange() throws IOException {
+        final byte sentinel = 0x55;
+        byte[] buf = new byte[12];
+        Arrays.fill(buf, sentinel);
+
+        Base64InputStream in = new Base64InputStream(new ByteArrayInputStream(ascii("SGVsbG8=")));
+        int total = 0;
+        while (total < 5) {
+            int r = in.read(buf, 3 + total, 5 - total);
+            assertTrue("El flujo terminó antes de lo esperado", r != -1);
+            total += r;
+        }
+
+        assertEquals("Hello", str(Arrays.copyOfRange(buf, 3, 8)));
+        for (int i = 0; i < 3; i++) {
+            assertEquals("Byte previo al offset alterado en " + i, sentinel, buf[i]);
+        }
+        for (int i = 8; i < buf.length; i++) {
+            assertEquals("Byte posterior al rango alterado en " + i, sentinel, buf[i]);
+        }
+        assertEquals(-1, in.read(buf, 8, 4));
+        for (int i = 8; i < buf.length; i++) {
+            assertEquals("Byte posterior al rango alterado tras EOF en " + i, sentinel, buf[i]);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Codificación: lineLength se redondea hacia abajo a múltiplo de 4
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void encodeRoundsLineLengthDownToMultipleOfFour() throws IOException {
+        byte[] data = ascii("ABCDEF");
+        String with6 = str(readAll(
+                new Base64InputStream(new ByteArrayInputStream(data), true, 6, CRLF)));
+        String with4 = str(readAll(
+                new Base64InputStream(new ByteArrayInputStream(data), true, 4, CRLF)));
+
+        assertEquals("lineLength 6 debe comportarse como 4", with4, with6);
+        assertTrue("La primera línea debe tener 4 caracteres: " + with6,
+                with6.startsWith("QUJD\r\nREVG"));
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. En modo decodificación lineLength y lineSeparator se ignoran
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void decodeModeIgnoresLineLengthAndSeparator() throws IOException {
+        String expected = "Hello World";
+        byte[] plain = ascii("SGVsbG8gV29ybGQ=");
+        byte[] chunked = ascii("SGVsbG8g\r\nV29ybGQ=\r\n");
+        byte[] sep = {(byte) '#', (byte) '#'};
+
+        assertEquals(expected,
+                str(readAll(new Base64InputStream(new ByteArrayInputStream(plain), false))));
+        assertEquals(expected,
+                str(readAll(new Base64InputStream(new ByteArrayInputStream(plain), false, 7, sep))));
+        assertEquals(expected,
+                str(readAll(new Base64InputStream(new ByteArrayInputStream(chunked), false, 7, sep))));
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. Flujo subyacente que devuelve bloques parciales o fragmentados
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void decodeIsCorrectWhenUnderlyingStreamReturnsFragments() throws IOException {
+        byte[] encoded = ascii("SGVsbG8gV29ybGQ=");
+        for (int chunk : new int[]{1, 2, 3, 5}) {
+            Base64InputStream in = new Base64InputStream(
+                    new FragmentedInputStream(encoded, chunk), false);
+            assertEquals("Hello World", str(readAll(in)));
+        }
+    }
+}
+```
+
+Notas:
+- Las clases auxiliares `ZeroThenDataInputStream` y `ClosableInputStream` no se usan en las pruebas visibles. No producen errores de compilación, pero si el archivo original tenía pruebas posteriores que las usaban, esas pruebas se perdieron con el truncamiento. Si me pasas el final original, lo restauro.
+- No pude compilar ni ejecutar el archivo; verifiqué a mano la codificación Base64 de las cadenas de las pruebas 1 y 2.

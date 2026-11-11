@@ -1,0 +1,8 @@
+1. read() debe devolver valores en el rango 128–255 para bytes negativos del flujo decodificado, y las pruebas existentes no lo distinguen porque comparan tras un cast a byte.
+2. read(b, offset, len) con offset mayor que 0 debe escribir solo en el rango indicado sin alterar los bytes anteriores ni posteriores.
+3. La codificación debe redondear lineLength hacia abajo a un múltiplo de 4 cuando no lo es, comportamiento documentado y no verificado.
+4. En modo decodificación, lineLength y lineSeparator deben ignorarse; no hay pruebas que lo comprueben.
+5. La lectura debe producir datos correctos cuando el flujo subyacente devuelve bloques parciales o fragmentados, no solo lecturas completas como ByteArrayInputStream.
+6. El bucle de read() que reintenta cuando read(byte[]) devuelve 0 (CODEC-101) no se ejercita con un flujo subyacente que devuelva 0 bytes.
+7. skip() hereda de FilterInputStream y omite la transformación Base64, por lo que no se verifica que avance sobre bytes codificados sin decodificar.
+8. available() hereda de FilterInputStream y delega en el flujo subyacente, sin verificar qué devuelve sobre datos transformados ni que close() cierre el flujo envuelto.

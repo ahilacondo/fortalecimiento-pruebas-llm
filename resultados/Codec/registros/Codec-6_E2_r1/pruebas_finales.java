@@ -1,0 +1,331 @@
+package org.apache.commons.codec.binary;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Random;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link Base64InputStream} usando únicamente su API pública.
+ */
+public class Base64InputStreamLLMTest {
+
+    private static final byte[] CRLF = {(byte) '\r', (byte) '\n'};
+
+    // ---------------------------------------------------------------------
+    // Utilidades
+    // ---------------------------------------------------------------------
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String asciiString(byte[] b) {
+        return new String(b, StandardCharsets.US_ASCII);
+    }
+
+    private static InputStream source(String s) {
+        return new ByteArrayInputStream(ascii(s));
+    }
+
+    /** Lee todo el flujo usando read(byte[], int, int) con el tamaño de bloque indicado. */
+    private static byte[] readAll(InputStream in, int chunk) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[chunk];
+        int n;
+        while ((n = in.read(buf, 0, chunk)) != -1) {
+            if (n > 0) {
+                out.write(buf, 0, n);
+            }
+        }
+        return out.toByteArray();
+    }
+
+    /** Lee todo el flujo usando read() byte a byte. */
+    private static byte[] readAllSingle(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int c;
+        while ((c = in.read()) != -1) {
+            out.write(c);
+        }
+        return out.toByteArray();
+    }
+
+    // ---------------------------------------------------------------------
+    // Decodificación
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void defaultConstructorDecodesBase64() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("SGVsbG8gV29ybGQ="));
+        assertEquals("Hello World", asciiString(readAll(in, 1024)));
+    }
+
+    @Test
+    public void doEncodeFalseConstructorDecodesBase64() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("SGVsbG8gV29ybGQ="), false);
+        assertEquals("Hello World", asciiString(readAll(in, 1024)));
+    }
+
+    @Test
+    public void decodeEmptyInputReturnsEndOfStream() throws IOException {
+        Base64InputStream in = new Base64InputStream(source(""));
+        assertEquals(-1, in.read());
+        assertEquals(-1, in.read(new byte[8], 0, 8));
+    }
+
+    @Test
+    public void readSingleByteReturnsUnsignedValues() throws IOException {
+        // 0xFF codificado es "/w==", y 0x00 codificado es "AA=="
+        Base64InputStream high = new Base64InputStream(source("/w=="));
+        assertEquals(255, high.read());
+        assertEquals(-1, high.read());
+
+        Base64InputStream zero = new Base64InputStream(source("AA=="));
+        assertEquals(0, zero.read());
+        assertEquals(-1, zero.read());
+    }
+
+    @Test
+    public void decodeIgnoresWhitespaceInsideEncodedData() throws IOException {
+        // Un espacio intercalado no forma parte del alfabeto Base64 y debe ignorarse
+        Base64InputStream in = new Base64InputStream(source("SGVs bG8g"));
+        assertEquals("Hello ", asciiString(readAll(in, 16)));
+    }
+
+    @Test
+    public void decodedOutputIsIndependentOfReadChunkSize() throws IOException {
+        String encoded = "SGVsbG8gV29ybGQ=";
+        int[] chunkSizes = {1, 2, 3, 7, 11, 64, 8192};
+        for (int chunk : chunkSizes) {
+            Base64InputStream in = new Base64InputStream(source(encoded));
+            assertEquals("chunk=" + chunk, "Hello World", asciiString(readAll(in, chunk)));
+        }
+    }
+
+    @Test
+    public void readIntoExactSizedBufferDecodesAllData() throws IOException {
+        // Cuando len coincide con b.length se usa la ruta de optimización setInitialBuffer
+        Base64InputStream in = new Base64InputStream(source("SGVsbG8gV29ybGQ="));
+        byte[] buf = new byte[11];
+        int total = 0;
+        int n;
+        while (total < buf.length && (n = in.read(buf, total, buf.length - total)) != -1) {
+            assertTrue("read debe devolver al menos un byte", n > 0);
+            total += n;
+        }
+        assertEquals(11, total);
+        assertEquals("Hello World", asciiString(buf));
+        assertEquals(-1, in.read());
+    }
+
+    @Test
+    public void readHonorsOffsetAndLengthWithoutTouchingOtherPositions() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("SGVsbG8gV29ybGQ="));
+        byte[] buf = new byte[8];
+        Arrays.fill(buf, (byte) 0x7F);
+
+        int n = in.read(buf, 2, 3);
+
+        assertEquals(3, n);
+        assertEquals((byte) 0x7F, buf[0]);
+        assertEquals((byte) 0x7F, buf[1]);
+        assertEquals("Hel", asciiString(Arrays.copyOfRange(buf, 2, 5)));
+        assertEquals((byte) 0x7F, buf[5]);
+        assertEquals((byte) 0x7F, buf[6]);
+        assertEquals((byte) 0x7F, buf[7]);
+    }
+
+    @Test
+    public void readAfterEndOfStreamKeepsReturningMinusOne() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("AA=="));
+        assertEquals(0, in.read());
+        assertEquals(-1, in.read());
+        assertEquals(-1, in.read());
+        assertEquals(-1, in.read(new byte[4], 0, 4));
+    }
+
+    @Test
+    public void readWithZeroLengthReturnsZeroEvenAtEnd() throws IOException {
+        Base64InputStream in = new Base64InputStream(source(""));
+        byte[] buf = new byte[4];
+        assertEquals(0, in.read(buf, 0, 0));
+        assertEquals(0, in.read(buf, buf.length, 0));
+    }
+
+    @Test
+    public void readNullBufferThrowsNullPointerException() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("AA=="));
+        try {
+            in.read(null, 0, 4);
+            fail("Se esperaba NullPointerException");
+        } catch (NullPointerException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void readNegativeOffsetThrowsIndexOutOfBounds() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("AA=="));
+        try {
+            in.read(new byte[4], -1, 1);
+            fail("Se esperaba IndexOutOfBoundsException");
+        } catch (IndexOutOfBoundsException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void readOffsetPlusLengthBeyondArrayThrowsIndexOutOfBounds() throws IOException {
+        Base64InputStream in = new Base64InputStream(source("AA=="));
+        byte[] buf = new byte[4];
+        try {
+            in.read(buf, buf.length, 1);
+            fail("Se esperaba IndexOutOfBoundsException");
+        } catch (IndexOutOfBoundsException expected) {
+            // esperado
+        }
+    }
+
+    @Test
+    public void markIsNotSupportedByDefaultConstructor() {
+        Base64InputStream in = new Base64InputStream(source("AA=="));
+        assertFalse(in.markSupported());
+    }
+
+    @Test
+    public void markIsNotSupportedInEncodeMode() {
+        Base64InputStream in = new Base64InputStream(source("abc"), true);
+        assertFalse(in.markSupported());
+    }
+
+    // ---------------------------------------------------------------------
+    // Codificación
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void encodeWithoutLineLengthProducesSingleLine() throws IOException {
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(ascii("Hello World")), true, 0, CRLF);
+        assertEquals("SGVsbG8gV29ybGQ=", asciiString(readAll(in, 1024)));
+    }
+
+    @Test
+    public void encodeWithLineLengthSplitsLinesAndTerminatesEachWithSeparator() throws IOException {
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(ascii("Hello World")), true, 4, CRLF);
+        assertEquals("SGVs\r\nbG8g\r\nV29y\r\nbGQ=\r\n", asciiString(readAll(in, 1024)));
+    }
+
+    @Test
+    public void encodeLineLengthIsRoundedDownToMultipleOfFour() throws IOException {
+        // Una longitud de 6 se redondea a 4
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(ascii("Hello World")), true, 6, CRLF);
+        assertEquals("SGVs\r\nbG8g\r\nV29y\r\nbGQ=\r\n", asciiString(readAll(in, 1024)));
+    }
+
+    @Test
+    public void defaultEncodeConstructorProducesNoLineBreaks() throws IOException {
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(new byte[]{(byte) 0xFF}), true);
+        assertEquals("/w==", asciiString(readAll(in, 16)));
+    }
+
+    @Test
+    public void encodeProducesPlusAndSlashForHighBitPatterns() throws IOException {
+        // 0xFB 0xFF -> "+/8="
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(new byte[]{(byte) 0xFB, (byte) 0xFF}), true, 0, CRLF);
+        assertEquals("+/8=", asciiString(readAll(in, 16)));
+    }
+
+    @Test
+    public void encodeEmptyInputProducesEmptyOutput() throws IOException {
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(new byte[0]), true, 4, CRLF);
+        assertEquals(-1, in.read());
+        assertEquals(0, readAll(new Base64InputStream(
+                new ByteArrayInputStream(new byte[0]), true, 4, CRLF), 8).length);
+    }
+
+    @Test
+    public void encodeSingleByteReadsAsExpectedCharacters() throws IOException {
+        Base64InputStream in = new Base64InputStream(
+                new ByteArrayInputStream(ascii("Hello World")), true, 0, CRLF);
+        byte[] out = readAllSingle(in);
+        assertEquals("SGVsbG8gV29ybGQ=", asciiString(out));
+    }
+
+    // ---------------------------------------------------------------------
+    // Ida y vuelta
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void allByteValuesRoundTripThroughEncodeThenDecode() throws IOException {
+        byte[] original = new byte[256];
+        for (int i = 0; i < original.length; i++) {
+            original[i] = (byte) i;
+        }
+
+        Base64InputStream encoder = new Base64InputStream(
+                new ByteArrayInputStream(original), true, 0, CRLF);
+        byte[] encoded = readAll(encoder, 17);
+
+        Base64InputStream decoder = new Base64InputStream(new ByteArrayInputStream(encoded));
+        byte[] decoded = readAll(decoder, 5);
+
+        assertArrayEquals(original, decoded);
+    }
+
+    @Test
+    public void largeRandomDataRoundTripsAndLinesRespectLineLength() throws IOException {
+        byte[] original = new byte[1000];
+        new Random(42L).nextBytes(original);
+
+        Base64InputStream encoder = new Base64InputStream(
+                new ByteArrayInputStream(original), true, 76, CRLF);
+        byte[] encoded = readAll(encoder, 13);
+
+        // 1000 bytes -> 1336 caracteres Base64 -> 17 líneas de 76 y una de 44, cada una terminada en CRLF
+        String text = asciiString(encoded);
+        String[] lines = text.split("\r\n", -1);
+        assertEquals("", lines[lines.length - 1]);
+        for (int i = 0; i < lines.length - 2; i++) {
+            assertEquals("longitud de la línea " + i, 76, lines[i].length());
+        }
+        assertEquals(44, lines[lines.length - 2].length());
+        assertEquals(1372, encoded.length);
+
+        Base64InputStream decoder = new Base64InputStream(new ByteArrayInputStream(encoded));
+        byte[] decoded = readAll(decoder, 7);
+        assertArrayEquals(original, decoded);
+    }
+
+    @Test
+    public void encodeThenDecodeWithDifferentChunkSizesProducesSameOutput() throws IOException {
+        byte[] original = ascii("The quick brown fox jumps over the lazy dog");
+
+        Base64InputStream encoder = new Base64InputStream(
+                new ByteArrayInputStream(original), true, 0, CRLF);
+        String encoded = asciiString(readAll(encoder, 1024));
+        assertEquals("VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==", encoded);
+
+        int[] chunkSizes = {1, 4, 9, 64};
+        for (int chunk : chunkSizes) {
+            Base64InputStream decoder = new Base64InputStream(source(encoded));
+            assertArrayEquals("chunk=" + chunk, original, readAll(decoder, chunk));
+        }
+    }
+}

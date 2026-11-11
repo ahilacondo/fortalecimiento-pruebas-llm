@@ -1,0 +1,8 @@
+1. El constructor `(in, doEncode=true)` debe codificar con longitud de línea por defecto de 76 caracteres y finalizador de línea CRLF, pero ninguna prueba usa ese constructor con valores por defecto.
+2. Un `lineLength` que no es múltiplo de 4 debe redondearse hacia abajo al múltiplo de 4 inferior; ninguna prueba lo verifica.
+3. Un `lineLength` negativo (no solo 0) debe producir salida sin saltos de línea y sin usar el separador; solo se prueba el valor 0.
+4. Con `doEncode=false`, el parámetro `lineLength` debe ignorarse; no hay pruebas que lo confirmen.
+5. Con `doEncode=false`, el parámetro `lineSeparator` debe ignorarse; no hay pruebas que lo confirmen.
+6. `read()` debe devolver valores en el rango 0 a 255 para bytes con signo negativo; las pruebas hacen cast a `byte` y no comprueban ese rango.
+7. `read(b, offset, len)` no debe escribir bytes fuera del intervalo [offset, offset+len) del array destino; ninguna prueba verifica que el resto del buffer quede intacto.
+8. `read(b, offset, len)` debe devolver como máximo `len` bytes por llamada; las pruebas no comprueban explícitamente que el número devuelto no exceda `len`.
