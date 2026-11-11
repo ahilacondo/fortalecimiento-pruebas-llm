@@ -1,0 +1,2 @@
+caso,estrategia,pruebas_detectoras,n_detectoras,veredicto,comentario
+Cli-27,E3,reselectingSameOptionByLongNameDoesNotThrow,1,,

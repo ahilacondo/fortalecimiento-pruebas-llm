@@ -1,0 +1,5 @@
+caso,estrategia,pruebas_detectoras,n_detectoras,veredicto,comentario
+Lang-63,E1,testFormatPeriodAcrossMonthWithTimeFields,1,,
+Lang-63,E3,testFormatPeriodDefaultOverloadMatchesExplicitDefaultTimeZone;testFormatPeriodExactly28DaysUsesCalendarPath,2,,
+Lang-33,E2,toClassReturnsClassesOfElementsAndNullForNullElements,1,,
+Lang-33,E4,testToClass_ElementoNulo_InsertaNull,1,,
