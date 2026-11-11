@@ -53,5 +53,5 @@ junit.framework.AssertionFailedError: expected:<import> but was:<null>
 
 ## Veredicto del revisor
 
-- [ ] La prueba falla en b por el defecto que corrige el parche
+- [x] La prueba falla en b por el defecto que corrige el parche
 - [ ] Falla por otro motivo (inestable, dependiente del entorno, otra diferencia)

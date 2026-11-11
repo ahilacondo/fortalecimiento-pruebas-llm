@@ -122,5 +122,7 @@ junit.framework.AssertionFailedError: expected:<[56]> but was:<[28]>
 
 ## Veredicto del revisor
 
-- [ ] La prueba falla en b por el defecto que corrige el parche
+- [x] La prueba falla en b por el defecto que corrige el parche
 - [ ] Falla por otro motivo (inestable, dependiente del entorno, otra diferencia)
+
+Nota del revisor: la corrida es una detección válida por `testFormatPeriodDefaultOverloadMatchesExplicitDefaultTimeZone` (espera 60 días entre el 1 de enero y el 1 de marzo de 2000; la versión con fallo devuelve 0). La otra prueba detectora, `testFormatPeriodExactly28DaysUsesCalendarPath`, fija como esperado un valor anómalo de la versión corregida (56 para 28 días, según su propio comentario) y falla en b porque b devuelve 28, que es el valor correcto; no se cuenta como evidencia del defecto.

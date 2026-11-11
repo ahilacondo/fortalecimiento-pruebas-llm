@@ -167,4 +167,12 @@ scripts/               instalador de Defects4J para WSL2/Ubuntu
 - **`ANTHROPIC_API_KEY` vacía o error 401**: revise `.env`; no deje espacios ni comillas alrededor de la clave.
 - **Error 429 o de saldo**: el cliente reintenta hasta 5 veces con espera; si persiste, revise el saldo en la consola y relance el mismo comando (retoma).
 - **El modelo rechaza `temperature`**: el cliente reintenta sin ese parámetro y lo avisa en pantalla. Si ocurre, anótelo en el informe (sección 3.5), porque la temperatura del CSV ya no se aplicó.
+- **Cli: `NoClassDefFoundError: org/hamcrest/SelfDescribing` (casi todo da falso positivo o sin detección)**: Defects4J define para todo el proyecto Cli la librería `junit-4.12.jar`, que no incluye Hamcrest. Apunte la configuración de Cli al jar que ya viene instalado, antes de ejecutar o de revisar corridas de Cli. Esta edición es local de cada instalación de Defects4J y no está en este repositorio:
+
+  ```bash
+  sed -i '32s#junit-4.12.jar#junit-4.12-hamcrest-1.3.jar#' ~/defects4j/framework/projects/Cli/Cli.build.xml
+  sed -n '32p' ~/defects4j/framework/projects/Cli/Cli.build.xml    # debe mostrar junit-4.12-hamcrest-1.3.jar
+  ```
+
+- **Revisión manual de las detecciones**: `python analisis/revisar.py --proyecto Lang --registros resultados/registros` (y `--proyecto Cli`). Los registros de todas las corridas de Lang y Cli están en `resultados/registros/` y los de Codec y Csv en `resultados/<proyecto>/registros/`. Las fichas quedan en `resultados/revision/`.
 - **Un caso queda descartado**: es normal; el selector lo registra en `casos/descartados.csv` con el motivo y pasa al siguiente.

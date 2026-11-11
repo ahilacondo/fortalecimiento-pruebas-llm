@@ -86,5 +86,5 @@ junit.framework.AssertionFailedError: expected:<[31] days 12:30:45.250> but was:
 
 ## Veredicto del revisor
 
-- [ ] La prueba falla en b por el defecto que corrige el parche
+- [x] La prueba falla en b por el defecto que corrige el parche
 - [ ] Falla por otro motivo (inestable, dependiente del entorno, otra diferencia)

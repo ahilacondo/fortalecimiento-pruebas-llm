@@ -45,5 +45,5 @@ java.lang.StringIndexOutOfBoundsException: index 3,length 3
 
 ## Veredicto del revisor
 
-- [ ] La prueba falla en b por el defecto que corrige el parche
+- [x] La prueba falla en b por el defecto que corrige el parche
 - [ ] Falla por otro motivo (inestable, dependiente del entorno, otra diferencia)
