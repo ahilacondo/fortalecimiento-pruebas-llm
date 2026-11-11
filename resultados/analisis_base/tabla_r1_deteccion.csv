@@ -1,5 +1,5 @@
 Estrategia,Casos con fallo detectado,Tasa media ± DE,IC 95 %,Pruebas nuevas por caso (mediana)
 E1 Sin guía,4 de 40,0.100 ± 0.304,[0.025; 0.200],30.5
 E2 Cobertura,3 de 40,0.075 ± 0.267,[0.000; 0.175],21.5
-E3 Análisis de código y pruebas,4 de 40,0.100 ± 0.304,[0.025; 0.200],16.0
+E3 Análisis de código y pruebas,4 de 40,0.100 ± 0.304,[0.025; 0.200],17.0
 E4 Documentación,6 de 40,0.150 ± 0.362,[0.050; 0.275],17.0
