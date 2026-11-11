@@ -1,0 +1,8 @@
+1. El método get(String) debe devolver null cuando el nombre de columna no existe en el mapeo; las pruebas solo consultan nombres existentes.
+2. El Javadoc de get(String) documenta que lanza IllegalArgumentException si el registro es inconsistente; ninguna prueba lo verifica, y el código actual no lo implementa, lo que debe reportarse como discrepancia.
+3. isSet debe devolver false cuando la columna está mapeada pero su índice no tiene valor asociado (índice mayor o igual que el número de valores); no se prueba este caso.
+4. getComment debe devolver el comentario del registro o null si no hay comentario; no existe ninguna prueba para este método.
+5. getRecordNumber debe devolver el número de registro indicado en la construcción; no existe ninguna prueba para este método.
+6. size debe devolver el número de valores del registro; no existe ninguna prueba para este método.
+7. iterator debe devolver todos los valores del registro; el test actual itera sin verificar que el número de elementos recorridos coincida con el tamaño del registro.
+8. La clase documenta que implementa Serializable; no hay ninguna prueba que verifique la serialización y deserialización del registro.

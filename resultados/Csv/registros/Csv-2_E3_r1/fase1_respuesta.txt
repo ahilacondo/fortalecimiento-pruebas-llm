@@ -1,0 +1,8 @@
+1. `get(int)` lanza `ArrayIndexOutOfBoundsException` con un índice negativo o igual/mayor que el número de valores.
+2. `get(String)` devuelve `null` cuando el nombre de columna no está en el mapeo.
+3. `get(String)` lanza `ArrayIndexOutOfBoundsException` cuando el índice mapeado es mayor o igual que el número de valores (registro inconsistente).
+4. `isSet(String)` devuelve `false` cuando el nombre está mapeado pero su índice es mayor o igual que `values.length`.
+5. `isConsistent()` devuelve `false` cuando el mapeo tiene menos columnas que valores del registro.
+6. El constructor con `values` nulo sustituye por un array vacío: `size()` devuelve 0, el iterador no tiene elementos y `get(int)` lanza excepción.
+7. `size()` devuelve el número de valores y `toString()` devuelve la representación de `Arrays.toString` de los valores.
+8. `getComment()` y `getRecordNumber()` devuelven exactamente los valores pasados al constructor, incluido un comentario `null`.

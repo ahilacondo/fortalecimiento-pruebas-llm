@@ -1,0 +1,313 @@
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.StringReader;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+
+import org.junit.Test;
+
+/**
+ * Pruebas adicionales para {@link CSVRecord} que usan únicamente su API pública.
+ * Los registros se obtienen mediante {@link CSVFormat} y {@link CSVParser}.
+ */
+public class CSVRecordLLMTest {
+
+    private static List<CSVRecord> parse(final String input, final CSVFormat format) throws IOException {
+        try (CSVParser parser = format.parse(new StringReader(input))) {
+            return parser.getRecords();
+        }
+    }
+
+    private static CSVRecord parseSingle(final String input, final CSVFormat format) throws IOException {
+        final List<CSVRecord> records = parse(input, format);
+        assertEquals("Se esperaba exactamente un registro", 1, records.size());
+        return records.get(0);
+    }
+
+    @Test
+    public void testGetByIndexReturnsValuesInOrder() throws IOException {
+        final CSVRecord record = parseSingle("alpha,beta,gamma\n", CSVFormat.DEFAULT);
+        assertEquals("alpha", record.get(0));
+        assertEquals("beta", record.get(1));
+        assertEquals("gamma", record.get(2));
+    }
+
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetByIndexOutOfBoundsThrows() throws IOException {
+        final CSVRecord record = parseSingle("a,b,c\n", CSVFormat.DEFAULT);
+        record.get(3);
+    }
+
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetByNegativeIndexThrows() throws IOException {
+        final CSVRecord record = parseSingle("a,b,c\n", CSVFormat.DEFAULT);
+        record.get(-1);
+    }
+
+    @Test
+    public void testGetByIndexReturnsEmptyStringForEmptyField() throws IOException {
+        final CSVRecord record = parseSingle("a,,c\n", CSVFormat.DEFAULT);
+        assertEquals("", record.get(1));
+    }
+
+    @Test
+    public void testGetByIndexReturnsUnquotedValueWithDelimiter() throws IOException {
+        final CSVRecord record = parseSingle("\"x,y\",z\n", CSVFormat.DEFAULT);
+        assertEquals("x,y", record.get(0));
+        assertEquals("z", record.get(1));
+    }
+
+    @Test
+    public void testGetByNameReturnsMappedValue() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertEquals("1", record.get("a"));
+        assertEquals("2", record.get("b"));
+        assertEquals("3", record.get("c"));
+    }
+
+    @Test
+    public void testGetByNameUnknownColumnReturnsNull() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertNull(record.get("unknown"));
+    }
+
+    @Test
+    public void testGetByNameIsCaseSensitive() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertNull(record.get("A"));
+        assertEquals("1", record.get("a"));
+    }
+
+    @Test
+    public void testGetByNameAndIndexAgreeOnSameColumn() throws IOException {
+        final CSVRecord record = parseSingle("x,y,z\n", CSVFormat.DEFAULT.withHeader("first", "second", "third"));
+        assertEquals(record.get(1), record.get("second"));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testGetByNameWithoutHeaderThrowsIllegalState() throws IOException {
+        final CSVRecord record = parseSingle("a,b,c\n", CSVFormat.DEFAULT);
+        record.get("a");
+    }
+
+    @Test
+    public void testSizeCountsAllValuesIncludingEmpty() throws IOException {
+        final CSVRecord record = parseSingle("a,,c,\n", CSVFormat.DEFAULT);
+        assertEquals(4, record.size());
+    }
+
+    @Test
+    public void testSizeOfSingleValueRecord() throws IOException {
+        final CSVRecord record = parseSingle("solo\n", CSVFormat.DEFAULT);
+        assertEquals(1, record.size());
+    }
+
+    @Test
+    public void testToStringRepresentsValuesAsArray() throws IOException {
+        final CSVRecord record = parseSingle("a,b,c\n", CSVFormat.DEFAULT);
+        assertEquals("[a, b, c]", record.toString());
+    }
+
+    @Test
+    public void testIteratorReturnsAllValuesInOrder() throws IOException {
+        final CSVRecord record = parseSingle("one,two,three\n", CSVFormat.DEFAULT);
+        final Iterator<String> it = record.iterator();
+        assertTrue(it.hasNext());
+        assertEquals("one", it.next());
+        assertEquals("two", it.next());
+        assertEquals("three", it.next());
+        assertFalse(it.hasNext());
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void testIteratorThrowsWhenExhausted() throws IOException {
+        final CSVRecord record = parseSingle("only\n", CSVFormat.DEFAULT);
+        final Iterator<String> it = record.iterator();
+        it.next();
+        it.next();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testIteratorRemoveIsNotSupported() throws IOException {
+        final CSVRecord record = parseSingle("a,b\n", CSVFormat.DEFAULT);
+        final Iterator<String> it = record.iterator();
+        it.next();
+        it.remove();
+    }
+
+    @Test
+    public void testIteratorOfEmptyFieldYieldsEmptyString() throws IOException {
+        final CSVRecord record = parseSingle("a,,c\n", CSVFormat.DEFAULT);
+        final Iterator<String> it = record.iterator();
+        assertEquals("a", it.next());
+        assertEquals("", it.next());
+        assertEquals("c", it.next());
+        assertFalse(it.hasNext());
+    }
+
+    @Test
+    public void testIsMappedReturnsTrueForHeaderNames() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertTrue(record.isMapped("a"));
+        assertTrue(record.isMapped("c"));
+    }
+
+    @Test
+    public void testIsMappedReturnsFalseForUnknownName() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertFalse(record.isMapped("z"));
+    }
+
+    @Test
+    public void testIsMappedReturnsFalseWithoutHeader() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT);
+        assertFalse(record.isMapped("a"));
+    }
+
+    @Test
+    public void testIsSetTrueWhenMappedValueExists() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertTrue(record.isSet("a"));
+        assertTrue(record.isSet("c"));
+    }
+
+    @Test
+    public void testIsSetFalseWhenMappedColumnHasNoValue() throws IOException {
+        final CSVRecord record = parseSingle("1,2\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertTrue(record.isSet("b"));
+        assertFalse(record.isSet("c"));
+    }
+
+    @Test
+    public void testIsSetFalseForUnmappedName() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertFalse(record.isSet("zzz"));
+    }
+
+    @Test
+    public void testIsSetFalseWithoutHeader() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT);
+        assertFalse(record.isSet("a"));
+    }
+
+    @Test
+    public void testIsConsistentTrueWhenHeaderMatchesValues() throws IOException {
+        final CSVRecord record = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertTrue(record.isConsistent());
+    }
+
+    @Test
+    public void testIsConsistentFalseWhenRecordIsShorterThanHeader() throws IOException {
+        final CSVRecord record = parseSingle("1,2\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+        assertFalse(record.isConsistent());
+    }
+
+    @Test
+    public void testIsConsistentTrueWithoutHeader() throws IOException {
+        final CSVRecord record = parseSingle("1,2\n", CSVFormat.DEFAULT);
+        assertTrue(record.isConsistent());
+    }
+
+    @Test
+    public void testGetCommentIsNullWhenNoCommentPresent() throws IOException {
+        final CSVRecord record = parseSingle("a,b,c\n", CSVFormat.DEFAULT);
+        assertNull(record.getComment());
+    }
+
+    @Test
+    public void testGetCommentReturnsCommentPrecedingRecord() throws IOException {
+        final CSVRecord record = parseSingle("#mi comentario\na,b,c\n", CSVFormat.DEFAULT.withCommentMarker('#'));
+        assertNotNull(record.getComment());
+        assertEquals("mi comentario", record.getComment());
+        assertEquals("a", record.get(0));
+    }
+
+    @Test
+    public void testGetRecordNumberIncreasesAcrossRecords() throws IOException {
+        final List<CSVRecord> records = parse("a,b\nc,d\ne,f\n", CSVFormat.DEFAULT);
+        assertEquals(3, records.size());
+        assertTrue(records.get(0).getRecordNumber() < records.get(1).getRecordNumber());
+        assertTrue(records.get(1).getRecordNumber() < records.get(2).getRecordNumber());
+    }
+
+    @Test
+    public void testSerializationPreservesValues() throws Exception {
+        final CSVRecord original = parseSingle("1,2,3\n", CSVFormat.DEFAULT.withHeader("a", "b", "c"));
+
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+
+        final CSVRecord copy;
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            copy = (CSVRecord) in.readObject();
+        }
+
+        assertEquals(original.size(), copy.size());
+        assertEquals(original.get(0), copy.get(0));
+        assertEquals(original.get(2), copy.get(2));
+        assertEquals("2", copy.get("b"));
+        assertEquals(original.toString(), copy.toString());
+    }
+
+    @Test
+    public void testRecordIsIterableOverItsValues() throws IOException {
+        final CSVRecord record = parseSingle("p,q\n", CSVFormat.DEFAULT);
+        final StringBuilder sb = new StringBuilder();
+        for (final String value : record) {
+            sb.append(value);
+        }
+        assertEquals("pq", sb.toString());
+    }
+
+    @Test
+    public void testGetByIndexOnEmptyFieldRecordReturnsEmptyString() throws IOException {
+        final CSVRecord record = parseSingle(",\n", CSVFormat.DEFAULT);
+        assertEquals(2, record.size());
+        assertEquals("", record.get(0));
+        assertEquals("", record.get(1));
+    }
+
+    @Test
+    public void testFailMessageGuardNotNeededForValidAccess() throws IOException {
+        final CSVRecord record = parseSingle("a,b\n", CSVFormat.DEFAULT);
+        try {
+            record.get(1);
+        } catch (final ArrayIndexOutOfBoundsException e) {
+            fail("No debería lanzarse excepción para un índice válido");
+        }
+        assertEquals("b", record.get(1));
+    }
+}
+```

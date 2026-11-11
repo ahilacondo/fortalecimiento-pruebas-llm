@@ -1,0 +1,139 @@
+package org.apache.commons.csv;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.junit.Test;
+
+public class CSVRecordLLMTest {
+
+    private static final String[] VALUES = { "first", "second", "third" };
+
+    private static Map<String, Integer> header(final String... names) {
+        final Map<String, Integer> map = new HashMap<>();
+        for (int i = 0; i < names.length; i++) {
+            map.put(names[i], Integer.valueOf(i));
+        }
+        return map;
+    }
+
+    // 1. get(int) con índice negativo lanza ArrayIndexOutOfBoundsException
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetIntNegativeIndexThrows() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        record.get(-1);
+    }
+
+    // 1. get(int) con índice igual al número de valores lanza ArrayIndexOutOfBoundsException
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetIntIndexEqualToSizeThrows() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        record.get(VALUES.length);
+    }
+
+    // 1. get(int) con índice mayor que el número de valores lanza ArrayIndexOutOfBoundsException
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetIntIndexGreaterThanSizeThrows() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        record.get(VALUES.length + 5);
+    }
+
+    // 2. get(String) devuelve null si el nombre no está en el mapeo
+    @Test
+    public void testGetStringUnmappedNameReturnsNull() {
+        final CSVRecord record = new CSVRecord(VALUES, header("first", "second", "third"), null, 0);
+        assertNull(record.get("missing"));
+    }
+
+    // 3. get(String) lanza ArrayIndexOutOfBoundsException si el índice mapeado excede los valores
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testGetStringMappedIndexOutOfRangeThrows() {
+        final CSVRecord record = new CSVRecord(VALUES, header("first", "second", "third", "fourth"), null, 0);
+        record.get("fourth");
+    }
+
+    // 4. isSet(String) devuelve false si está mapeado pero el índice >= values.length
+    @Test
+    public void testIsSetMappedButIndexOutOfRangeReturnsFalse() {
+        final CSVRecord record = new CSVRecord(VALUES, header("first", "second", "third", "fourth"), null, 0);
+        assertTrue(record.isMapped("fourth"));
+        assertFalse(record.isSet("fourth"));
+    }
+
+    // 5. isConsistent() devuelve false si el mapeo tiene menos columnas que los valores
+    @Test
+    public void testIsConsistentFalseWhenMappingSmallerThanValues() {
+        final CSVRecord record = new CSVRecord(VALUES, header("first", "second"), null, 0);
+        assertFalse(record.isConsistent());
+    }
+
+    // 6. Constructor con values nulo: size() es 0
+    @Test
+    public void testNullValuesSizeIsZero() {
+        final CSVRecord record = new CSVRecord(null, null, null, 0);
+        assertEquals(0, record.size());
+    }
+
+    // 6. Constructor con values nulo: el iterador no tiene elementos
+    @Test
+    public void testNullValuesIteratorIsEmpty() {
+        final CSVRecord record = new CSVRecord(null, null, null, 0);
+        final Iterator<String> itr = record.iterator();
+        assertFalse(itr.hasNext());
+    }
+
+    // 6. Constructor con values nulo: get(int) lanza excepción
+    @Test(expected = ArrayIndexOutOfBoundsException.class)
+    public void testNullValuesGetIntThrows() {
+        final CSVRecord record = new CSVRecord(null, null, null, 0);
+        record.get(0);
+    }
+
+    // 6. Constructor con values nulo: toString() es "[]"
+    @Test
+    public void testNullValuesToStringIsEmptyBrackets() {
+        final CSVRecord record = new CSVRecord(null, null, null, 0);
+        assertEquals("[]", record.toString());
+    }
+
+    // 7. size() devuelve el número de valores
+    @Test
+    public void testSizeReturnsNumberOfValues() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        assertEquals(VALUES.length, record.size());
+    }
+
+    // 7. toString() devuelve la representación de Arrays.toString de los valores
+    @Test
+    public void testToStringMatchesValues() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        assertEquals("[first, second, third]", record.toString());
+    }
+
+    // 8. getComment() devuelve exactamente el comentario pasado al constructor
+    @Test
+    public void testGetCommentReturnsConstructorValue() {
+        final CSVRecord record = new CSVRecord(VALUES, null, "a comment", 0);
+        assertEquals("a comment", record.getComment());
+    }
+
+    // 8. getComment() devuelve null cuando el comentario pasado es null
+    @Test
+    public void testGetCommentNullReturnsNull() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 0);
+        assertNull(record.getComment());
+    }
+
+    // 8. getRecordNumber() devuelve exactamente el número pasado al constructor
+    @Test
+    public void testGetRecordNumberReturnsConstructorValue() {
+        final CSVRecord record = new CSVRecord(VALUES, null, null, 42L);
+        assertEquals(42L, record.getRecordNumber());
+    }
+}
