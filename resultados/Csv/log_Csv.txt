@@ -1,0 +1,43 @@
+Casos: 10; estrategias: ['E1', 'E2', 'E3', 'E4']; repeticiones: 1; corridas: 40; modelo: claude-haiku-5-5
+AVISO: no se puede enviar 'temperature'; se continúa sin ese parámetro (temperatura por defecto del modelo). Anótelo en el informe.
+[1/40] Csv-10 E1 r1: detecta=0 estables=17/17 llamadas=2 sin_diferencia
+[2/40] Csv-10 E2 r1: detecta=0 estables=0/2 llamadas=3 no_compila
+[3/40] Csv-10 E3 r1: detecta=0 estables=20/20 llamadas=2 sin_diferencia
+[4/40] Csv-10 E4 r1: detecta=0 estables=17/17 llamadas=2 sin_diferencia
+[5/40] Csv-11 E1 r1: detecta=0 estables=27/27 llamadas=1 sin_diferencia
+[6/40] Csv-11 E2 r1: detecta=0 estables=28/28 llamadas=1 sin_diferencia
+[7/40] Csv-11 E3 r1: detecta=0 estables=11/11 llamadas=2 sin_diferencia
+[8/40] Csv-11 E4 r1: detecta=0 estables=10/10 llamadas=3 sin_diferencia
+[9/40] Csv-2 E1 r1: detecta=0 estables=0/34 llamadas=3 no_compila
+[10/40] Csv-2 E2 r1: detecta=0 estables=18/18 llamadas=1 sin_diferencia
+[11/40] Csv-2 E3 r1: detecta=0 estables=16/16 llamadas=2 sin_diferencia
+[12/40] Csv-2 E4 r1: detecta=0 estables=18/18 llamadas=2 sin_diferencia
+[13/40] Csv-1 E1 r1: detecta=0 estables=27/27 llamadas=1 sin_diferencia
+[14/40] Csv-1 E2 r1: detecta=0 estables=21/21 llamadas=1 sin_diferencia
+[15/40] Csv-1 E3 r1: detecta=0 estables=11/11 llamadas=2 sin_diferencia
+[16/40] Csv-1 E4 r1: detecta=1 estables=24/24 llamadas=2 ok
+[17/40] Csv-5 E1 r1: detecta=0 estables=38/38 llamadas=1 sin_diferencia
+[18/40] Csv-5 E2 r1: detecta=0 estables=4/4 llamadas=2 sin_diferencia
+[19/40] Csv-5 E3 r1: detecta=0 estables=18/18 llamadas=2 sin_diferencia
+[20/40] Csv-5 E4 r1: detecta=0 estables=20/20 llamadas=2 sin_diferencia
+[21/40] Csv-12 E1 r1: detecta=0 estables=53/53 llamadas=1 sin_diferencia
+[22/40] Csv-12 E2 r1: detecta=0 estables=55/55 llamadas=1 sin_diferencia
+[23/40] Csv-12 E3 r1: detecta=0 estables=42/42 llamadas=3 sin_diferencia
+[24/40] Csv-12 E4 r1: detecta=1 estables=30/30 llamadas=2 ok
+[25/40] Csv-15 E1 r1: detecta=0 estables=67/67 llamadas=2 sin_diferencia
+[26/40] Csv-15 E2 r1: detecta=0 estables=7/7 llamadas=2 sin_diferencia
+[27/40] Csv-15 E3 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[28/40] Csv-15 E4 r1: detecta=0 estables=29/29 llamadas=3 sin_diferencia
+[29/40] Csv-16 E1 r1: detecta=0 estables=22/22 llamadas=1 sin_diferencia
+[30/40] Csv-16 E2 r1: detecta=0 estables=29/29 llamadas=1 sin_diferencia
+[31/40] Csv-16 E3 r1: detecta=0 estables=2/2 llamadas=2 sin_diferencia
+[32/40] Csv-16 E4 r1: detecta=0 estables=18/18 llamadas=2 sin_diferencia
+[33/40] Csv-6 E1 r1: detecta=0 estables=0/25 llamadas=3 no_compila
+[34/40] Csv-6 E2 r1: detecta=0 estables=0/18 llamadas=3 no_compila
+[35/40] Csv-6 E3 r1: detecta=0 estables=11/11 llamadas=2 sin_diferencia
+[36/40] Csv-6 E4 r1: detecta=0 estables=0/5 llamadas=4 no_compila
+[37/40] Csv-14 E1 r1: detecta=0 estables=49/49 llamadas=2 sin_diferencia
+[38/40] Csv-14 E2 r1: detecta=0 estables=0/0 llamadas=0 limite_o_error
+[39/40] Csv-14 E3 r1: detecta=0 estables=0/0 llamadas=1 limite_o_error
+[40/40] Csv-14 E4 r1: detecta=0 estables=47/47 llamadas=2 sin_diferencia
+Resultados en resultados/Csv/ejecuciones_Csv.csv
