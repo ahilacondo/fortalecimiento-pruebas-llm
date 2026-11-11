@@ -1,5 +1,5 @@
 estrategia,Detectó el fallo,Pasa en ambas versiones,No compila,Sin respuesta (tope de tokens)
 E1,4,34,2,0
 E2,3,33,2,2
-E3,4,35,0,1
-E4,6,31,1,2
+E3,4,36,0,0
+E4,6,33,1,0
