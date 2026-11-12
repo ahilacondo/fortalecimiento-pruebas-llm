@@ -14,7 +14,9 @@ Al terminar, en Word: *Referencias → Actualizar tabla* para el índice y leer 
 
 Un párrafo corto que remite a la sección 2, sin datos nuevos:
 
-> La revisión focalizada de la literatura (sección 2) siguió el protocolo registrado en Parsifal, con búsquedas en Scopus y Web of Science. Se analizaron 11 estudios, todos publicados entre 2024 y 2026. Los estudios ubican las debilidades de una suite de pruebas de seis maneras distintas y ninguna domina. Como cada estudio usa su propio banco de pruebas, métricas y línea base, no es posible afirmar cuál es la más efectiva. Ese vacío motiva el experimento que se presenta en la sección 5.2.
+> La revisión focalizada de la literatura (sección 2) siguió el protocolo registrado en Parsifal, con búsquedas en Scopus y Web of Science. Se evaluaron a texto completo 7 estudios (Tabla 8), todos publicados entre 2024 y 2026. El Hito 1 había identificado seis formas de ubicar los puntos débiles de una suite de pruebas, sin que ninguna domine; la revisión focalizada confirma que ningún estudio compara esas señales entre sí y contra un control sin guía con el mismo LLM, presupuesto y casos (sección 2.5). Ese vacío motiva el experimento que se presenta en la sección 5.2.
+
+> *Corrección:* una versión anterior de esta guía decía «11 estudios». Esa cifra pertenece a la revisión del Hito 1 (359 registros, 11 estudios primarios); la revisión focalizada de la sección 2 evaluó 7.
 
 ## 2. Sección 5.2 Resultados del experimento
 
